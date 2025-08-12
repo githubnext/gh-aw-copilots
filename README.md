@@ -67,6 +67,8 @@ Keep responses concise and helpful.
 
 > **💡 Learn more**: For complete workflow configuration details, see the [Documentation](docs/index.md)
 
+> **📚 Workflow commands**: See [Commands Documentation](docs/commands.md) for complete workflow management commands including `list`, `status`, `enable`, `disable`, and more.
+
 ## 📖 Deep Dive
 
 ### What's this extension for?
@@ -118,23 +120,6 @@ gh aw compile
 
 You will see the changes reflected in the `.lock.yml` file, which is the actual workflow that will run on GitHub Actions. You should commit changes to both files to your repository.
 
-### Generated code marking
-
-When workflows are compiled, gh-aw automatically creates or updates a `.gitattributes` file in your repository root to mark `.lock.yml` files as generated code:
-
-```
-.github/workflows/*.lock.yml linguist-generated=true
-```
-
-This ensures that GitHub properly recognizes these files as generated code, which:
-- Collapses them in pull request diffs for better readability
-- Excludes them from repository language statistics  
-- Marks them as machine-generated in the GitHub UI
-
-The `.gitattributes` file is automatically managed - you don't need to create or maintain it manually.
-
-> **📚 Workflow commands**: See [Commands Documentation](docs/commands.md) for complete workflow management commands including `list`, `status`, `enable`, `disable`, and more.
-
 ### Configuring the agentic processor
 
 By default Claude Code is used as the agentic processor. You can configure the agentic processor by editing the frontmatter of the markdown workflow files.
@@ -155,7 +140,7 @@ This will override the `engine` setting in the frontmatter of the markdown file.
 
 Security is a key consideration when using agentic workflows.
 
-This repository is for demonstration purposes and the workflows are not intended to be run in production. The workflows are designed to be run in a controlled environment, and should not be used in production.
+This repository is for demonstration purposes and the workflows are not intended to be run in production. The workflows are designed to be run in a controlled environment.
 
 ⚠️ You should carefully review the contents of any workflow before installing it, especially if you have not authored it, as it may contain workflows that you do not want to run in your repository.
 
