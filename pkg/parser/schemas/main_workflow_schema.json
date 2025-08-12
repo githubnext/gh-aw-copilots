@@ -1,0 +1,510 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the workflow"
+    },
+    "on": {
+      "description": "GitHub Actions workflow triggers",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple trigger event name"
+        },
+        {
+          "type": "object",
+          "description": "Complex trigger configuration",
+          "properties": {
+            "alias": {
+              "description": "Alias trigger configuration for @mentions",
+              "oneOf": [
+                {
+                  "type": "null",
+                  "description": "Null alias (defaults to filename)"
+                },
+                {
+                  "type": "object",
+                  "description": "Alias configuration object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Alias name (defaults to filename without .md extension)"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "push": {
+              "description": "Push event trigger",
+              "additionalProperties": true
+            },
+            "pull_request": {
+              "description": "Pull request event trigger",
+              "type": "object",
+              "properties": {
+                "types": {
+                  "type": "array",
+                  "description": "Types of pull request events",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "branches": {
+                  "type": "array", 
+                  "description": "Branches to filter on",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "branches-ignore": {
+                  "type": "array",
+                  "description": "Branches to ignore",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "paths": {
+                  "type": "array",
+                  "description": "Paths to filter on",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "paths-ignore": {
+                  "type": "array",
+                  "description": "Paths to ignore",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "draft": {
+                  "type": "boolean",
+                  "description": "Filter by draft state. Set to false to ignore draft PRs"
+                }
+              },
+              "additionalProperties": true
+            },
+            "issues": {
+              "description": "Issues event trigger",
+              "additionalProperties": true
+            },
+            "issue_comment": {
+              "description": "Issue comment event trigger",
+              "additionalProperties": true
+            },
+            "schedule": {
+              "type": "array",
+              "description": "Scheduled trigger events",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cron": {
+                    "type": "string",
+                    "description": "Cron expression for schedule"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "workflow_dispatch": {
+              "description": "Manual workflow dispatch trigger",
+              "additionalProperties": true
+            },
+            "workflow_run": {
+              "description": "Workflow run trigger",
+              "additionalProperties": true
+            },
+            "release": {
+              "description": "Release event trigger",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "permissions": {
+      "description": "Permissions for the workflow",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple permissions string"
+        },
+        {
+          "type": "object",
+          "description": "Detailed permissions object",
+          "properties": {
+            "contents": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "issues": {
+              "type": "string", 
+              "enum": ["read", "write", "none"]
+            },
+            "pull-requests": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "discussions": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "actions": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "checks": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "statuses": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "models": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "deployments": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            },
+            "security-events": {
+              "type": "string",
+              "enum": ["read", "write", "none"]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "run-name": {
+      "type": "string",
+      "description": "Custom run name for the workflow"
+    },
+    "runs-on": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Runner type as string"
+        },
+        {
+          "type": "array",
+          "description": "Runner type as array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "description": "Runner type as object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "timeout_minutes": {
+      "type": "integer",
+      "description": "Timeout in minutes for the workflow"
+    },
+    "concurrency": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple concurrency group name"
+        },
+        {
+          "type": "object",
+          "description": "Concurrency configuration object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "env": {
+      "description": "Environment variables for the workflow",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "if": {
+      "type": "string",
+      "description": "Conditional execution expression"
+    },
+    "steps": {
+      "description": "Custom workflow steps",
+      "additionalProperties": true
+    },
+    "post-steps": {
+      "description": "Custom workflow steps to run after AI execution",
+      "additionalProperties": true
+    },
+    "engine": {
+      "description": "AI engine configuration",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["claude", "codex", "opencode", "ai-inference", "gemini", "genaiscript"],
+          "description": "Simple engine name (claude, codex, opencode, ai-inference, gemini, or genaiscript)"
+        },
+        {
+          "type": "object",
+          "description": "Extended engine configuration object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": ["claude", "codex", "opencode", "ai-inference", "gemini", "genaiscript"],
+              "description": "Agent CLI identifier (claude, codex, opencode, ai-inference, gemini, or genaiscript)"
+            },
+            "version": {
+              "type": "string",
+              "description": "Optional version of the action"
+            },
+            "model": {
+              "type": "string", 
+              "description": "Optional LLM model to use"
+            }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "claude": {
+      "description": "Claude-specific configuration",
+      "additionalProperties": true
+    },
+    "tools": {
+      "type": "object",
+      "description": "Tools configuration for the workflow",
+      "properties": {
+        "github": {
+          "description": "GitHub tools configuration",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Simple github tool string"
+            },
+            {
+              "type": "object",
+              "description": "GitHub tools object configuration",
+              "properties": {
+                "allowed": {
+                  "type": "array",
+                  "description": "List of allowed GitHub tools",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        },
+        "claude": {
+          "description": "Claude tools configuration",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Simple claude tool string"
+            },
+            {
+              "type": "object",
+              "description": "Claude tools object configuration",
+              "properties": {
+                "allowed": {
+                  "description": "Allowed Claude tools",
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "description": "Custom tool configuration",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Simple tool string"
+          },
+          {
+            "type": "object",
+            "description": "Custom tool object configuration",
+            "properties": {
+              "mcp": {
+                "description": "MCP server configuration",
+                "additionalProperties": true
+              },
+              "allowed": {
+                "type": "array",
+                "description": "List of allowed tool functions",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "max-runs": {
+      "type": "integer",
+      "description": "Maximum number of workflow runs"
+    },
+    "stop-time": {
+      "type": "string",
+      "description": "Time when workflow should stop running"
+    },
+    "alias": {
+      "type": "string",
+      "description": "Alias name for the workflow"
+    },
+    "ai-reaction": {
+      "type": "string",
+      "enum": ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
+      "default": "eyes",
+      "description": "AI reaction to add/remove on triggering item (one of: +1, -1, laugh, confused, heart, hooray, rocket, eyes). Defaults to 'eyes' if not specified."
+    },
+    "cache": {
+      "description": "Cache configuration for workflow (uses actions/cache syntax)",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Single cache configuration",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "An explicit key for restoring and saving the cache"
+            },
+            "path": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "A single path to cache"
+                },
+                {
+                  "type": "array",
+                  "description": "Multiple paths to cache",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "restore-keys": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "A single restore key"
+                },
+                {
+                  "type": "array",
+                  "description": "Multiple restore keys",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "upload-chunk-size": {
+              "type": "integer",
+              "description": "The chunk size used to split up large files during upload, in bytes"
+            },
+            "fail-on-cache-miss": {
+              "type": "boolean",
+              "description": "Fail the workflow if cache entry is not found"
+            },
+            "lookup-only": {
+              "type": "boolean",
+              "description": "If true, only checks if cache entry exists and skips download"
+            }
+          },
+          "required": ["key", "path"],
+          "additionalProperties": false
+        },
+        {
+          "type": "array",
+          "description": "Multiple cache configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "An explicit key for restoring and saving the cache"
+              },
+              "path": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "A single path to cache"
+                  },
+                  {
+                    "type": "array",
+                    "description": "Multiple paths to cache",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "restore-keys": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "A single restore key"
+                  },
+                  {
+                    "type": "array",
+                    "description": "Multiple restore keys",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "upload-chunk-size": {
+                "type": "integer",
+                "description": "The chunk size used to split up large files during upload, in bytes"
+              },
+              "fail-on-cache-miss": {
+                "type": "boolean",
+                "description": "Fail the workflow if cache entry is not found"
+              },
+              "lookup-only": {
+                "type": "boolean",
+                "description": "If true, only checks if cache entry exists and skips download"
+              }
+            },
+            "required": ["key", "path"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
