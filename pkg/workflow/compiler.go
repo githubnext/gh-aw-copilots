@@ -481,6 +481,11 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 			return nil, fmt.Errorf("invalid MCP configuration: %w", err)
 		}
 
+		// Validate HTTP transport support for the current engine
+		if err := c.validateHTTPTransportSupport(tools, agenticEngine); err != nil {
+			return nil, fmt.Errorf("HTTP transport not supported: %w", err)
+		}
+
 		// Apply default GitHub MCP tools (only for engines that support MCP)
 		if agenticEngine.SupportsToolsWhitelist() {
 			tools = c.applyDefaultGitHubMCPTools(tools)
@@ -1928,7 +1933,15 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 		// Add environment variables
 		if len(executionConfig.Environment) > 0 {
 			yaml.WriteString("        env:\n")
-			for key, value := range executionConfig.Environment {
+			// Sort environment keys for consistent output
+			envKeys := make([]string, 0, len(executionConfig.Environment))
+			for key := range executionConfig.Environment {
+				envKeys = append(envKeys, key)
+			}
+			sort.Strings(envKeys)
+
+			for _, key := range envKeys {
+				value := executionConfig.Environment[key]
 				yaml.WriteString(fmt.Sprintf("          %s: %s\n", key, value))
 			}
 		}
@@ -1977,4 +1990,23 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 		yaml.WriteString("          # Ensure log file exists\n")
 		yaml.WriteString("          touch " + logFile + "\n")
 	}
+}
+
+// validateHTTPTransportSupport validates that HTTP MCP servers are only used with engines that support HTTP transport
+func (c *Compiler) validateHTTPTransportSupport(tools map[string]any, engine AgenticEngine) error {
+	if engine.SupportsHTTPTransport() {
+		// Engine supports HTTP transport, no validation needed
+		return nil
+	}
+
+	// Engine doesn't support HTTP transport, check for HTTP MCP servers
+	for toolName, toolConfig := range tools {
+		if config, ok := toolConfig.(map[string]any); ok {
+			if hasMcp, mcpType := hasMCPConfig(config); hasMcp && mcpType == "http" {
+				return fmt.Errorf("tool '%s' uses HTTP transport which is not supported by engine '%s' (only stdio transport is supported)", toolName, engine.GetID())
+			}
+		}
+	}
+
+	return nil
 }
