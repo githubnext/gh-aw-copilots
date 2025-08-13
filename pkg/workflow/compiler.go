@@ -19,6 +19,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// FileTracker interface for tracking files created during compilation
+type FileTracker interface {
+	TrackCreated(filePath string)
+}
+
 //go:embed templates/reaction_action.yaml
 var reactionActionTemplate string
 
@@ -37,6 +42,7 @@ type Compiler struct {
 	skipValidation bool            // If true, skip schema validation
 	jobManager     *JobManager     // Manages jobs and dependencies
 	engineRegistry *EngineRegistry // Registry of available agentic engines
+	fileTracker    FileTracker     // Optional file tracker for tracking created files
 }
 
 // generateSafeFileName converts a workflow name to a safe filename for logs
@@ -88,6 +94,11 @@ func NewCompiler(verbose bool, engineOverride string, version string) *Compiler 
 // SetSkipValidation configures whether to skip schema validation
 func (c *Compiler) SetSkipValidation(skip bool) {
 	c.skipValidation = skip
+}
+
+// SetFileTracker sets the file tracker for tracking created files
+func (c *Compiler) SetFileTracker(tracker FileTracker) {
+	c.fileTracker = tracker
 }
 
 // NewCompilerWithCustomOutput creates a new workflow compiler with custom output path
@@ -179,18 +190,20 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 		}
 	}
 
-	// Write shared reaction action (always generated since reactions are always enabled)
-	if err := c.writeReactionAction(markdownPath); err != nil {
-		formattedErr := console.FormatError(console.CompilerError{
-			Position: console.ErrorPosition{
-				File:   markdownPath,
-				Line:   1,
-				Column: 1,
-			},
-			Type:    "error",
-			Message: fmt.Sprintf("failed to write reaction action: %v", err),
-		})
-		return errors.New(formattedErr)
+	// Write shared reaction action only if ai-reaction is configured
+	if workflowData.AIReaction != "" {
+		if err := c.writeReactionAction(markdownPath); err != nil {
+			formattedErr := console.FormatError(console.CompilerError{
+				Position: console.ErrorPosition{
+					File:   markdownPath,
+					Line:   1,
+					Column: 1,
+				},
+				Type:    "error",
+				Message: fmt.Sprintf("failed to write reaction action: %v", err),
+			})
+			return errors.New(formattedErr)
+		}
 	}
 
 	// Write shared compute-text action (only if needed for task job)
@@ -550,11 +563,6 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.Alias = c.extractAliasName(result.Frontmatter)
 	workflowData.AIReaction = c.extractYAMLValue(result.Frontmatter, "ai-reaction")
 	workflowData.Jobs = c.extractJobsFromFrontmatter(result.Frontmatter)
-
-	// Set default ai-reaction to "eyes" if not specified
-	if workflowData.AIReaction == "" {
-		workflowData.AIReaction = "eyes"
-	}
 
 	// Check if "alias" is used as a trigger in the "on" section
 	var hasAlias bool
@@ -1371,13 +1379,15 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		return fmt.Errorf("failed to add task job: %w", err)
 	}
 
-	// Build add-reaction job
-	addReactionJob, err := c.buildAddReactionJob(data)
-	if err != nil {
-		return fmt.Errorf("failed to build add-reaction job: %w", err)
-	}
-	if err := c.jobManager.AddJob(addReactionJob); err != nil {
-		return fmt.Errorf("failed to add add-reaction job: %w", err)
+	// Build add-reaction job only if ai-reaction is configured
+	if data.AIReaction != "" {
+		addReactionJob, err := c.buildAddReactionJob(data)
+		if err != nil {
+			return fmt.Errorf("failed to build add-reaction job: %w", err)
+		}
+		if err := c.jobManager.AddJob(addReactionJob); err != nil {
+			return fmt.Errorf("failed to add add-reaction job: %w", err)
+		}
 	}
 
 	// Build main workflow job
@@ -1678,6 +1688,10 @@ func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, con
 		if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write %s action: %w", actionName, err)
 		}
+		// Track the created file
+		if c.fileTracker != nil {
+			c.fileTracker.TrackCreated(actionFile)
+		}
 	} else {
 		// Check if the content is different and update if needed
 		existing, err := os.ReadFile(actionFile)
@@ -1690,6 +1704,10 @@ func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, con
 			}
 			if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
 				return fmt.Errorf("failed to update %s action: %w", actionName, err)
+			}
+			// Track the updated file
+			if c.fileTracker != nil {
+				c.fileTracker.TrackCreated(actionFile)
 			}
 		}
 	}
