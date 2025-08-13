@@ -75,6 +75,7 @@ func setupIntegrationTest(t *testing.T) *integrationTestSetup {
 	if err := copyFile(srcBinary, binaryPath); err != nil {
 		t.Fatalf("Failed to copy gh-aw binary to temp directory: %v", err)
 	}
+
 	// Make the binary executable
 	if err := os.Chmod(binaryPath, 0755); err != nil {
 		t.Fatalf("Failed to make binary executable: %v", err)
