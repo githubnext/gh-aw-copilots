@@ -44,8 +44,8 @@ func (e *CodexEngine) GetInstallationSteps(engineConfig *EngineConfig) []GitHubA
 }
 
 func (e *CodexEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig) ExecutionConfig {
-	// Use model from engineConfig if available, otherwise default to gpt-4o
-	model := "gpt-4o"
+	// Use model from engineConfig if available, otherwise default to o4-mini
+	model := "o4-mini"
 	if engineConfig != nil && engineConfig.Model != "" {
 		model = engineConfig.Model
 	}
@@ -59,13 +59,14 @@ mkdir -p /tmp/aw-logs
 # Run codex with log capture
 codex exec \
   -c model=%s \
-  --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/aw-logs/%s.log`, model, logFile)
+  --full-auto "$INSTRUCTION" 2>&1 | tee %s`, model, logFile)
 
 	return ExecutionConfig{
 		StepName: "Run Codex",
 		Command:  command,
 		Environment: map[string]string{
-			"OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+			"OPENAI_API_KEY":      "${{ secrets.OPENAI_API_KEY }}",
+			"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
 		},
 	}
 }
