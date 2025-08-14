@@ -39,9 +39,9 @@ gh aw run weekly-research
 
 You can explore other samples at [githubnext/agentics](https://github.com/githubnext/agentics). You can also copy those samples and write your own workflows. Any repository that has a "workflows" directory can be used as a source of workflows.
 
-## 📝 Agent Workflow Example
+## 📝 Agentic Workflow Example
 
-Here's what a simple agent workflow looks like. This example automatically triages new issues:
+Here's what a simple agentic workflow looks like. This example automatically triages new issues:
 
 ```markdown
 ---
