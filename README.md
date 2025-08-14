@@ -27,7 +27,7 @@ Your repository will also need an ANTHROPIC_API_KEY (for Claude) or OPENAI_API_K
 # For Claude engine (default)
 gh secret set ANTHROPIC_API_KEY -a actions --body <your-anthropic-api-key>
 
-# For Codex engine (experimental, requires "--engine ai")
+# For Codex engine (experimental, requires "--engine codex")
 gh secret set OPENAI_API_KEY -a actions --body <your-openai-api-key>
 ```
 
