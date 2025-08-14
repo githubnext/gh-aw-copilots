@@ -73,11 +73,11 @@ jobs:
 
 ### Human in the Loop
 
-GitHub Actions workflows are not designed to be fully autonomous. Some critical operations should always involve human review:
+GitHub Actions workflows are designed to be steps within a larger process. Some critical operations should always involve human review:
 
 - **Approval gates**: Use manual approval steps for high-risk operations like deployments, secret management, or external tool invocations
 - **Pull requests require humans**: GitHub Actions cannot approve or merge pull requests. This means a human will always be involved in reviewing and merging pull requests that contain agentic workflows.
-- **Plan-apply separation**: Implement a "plan" phase that generates a preview of actions before execution. This allows human reviewers to assess the impact of changes. This is usually done via a pull request.
+- **Plan-apply separation**: Implement a "plan" phase that generates a preview of actions before execution. This allows human reviewers to assess the impact of changes. This is usually done via an output issue or pull request.
 - **Review and audit**: Regularly review workflow history, permissions, and tool usage to ensure compliance with security policies.
 
 ### MCP Tool Hardening
