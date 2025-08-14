@@ -1,4 +1,4 @@
-# 🤖 GitHub Agentic Workflows
+# ✨ GitHub Agentic Workflows
 
 Write agentic workflows in natural language markdown, and run them in GitHub Actions. From [GitHub Next](https://githubnext.com/).
 
