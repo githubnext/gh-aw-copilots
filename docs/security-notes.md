@@ -66,17 +66,13 @@ Configure GitHub Actions with defense in depth:
 
 #### Permission Configuration
 
-Set minimal top-level permissions and elevate only where necessary:
+Set minimal permissions for the agentic processing:
 
 ```yaml
+# Applies to the agentic processing
 permissions:
-  contents: read  # Minimal baseline
-  # All others default to none
-
-jobs:
-  comment:
-    permissions:
-      issues: write  # Job-scoped elevation
+  issues: write
+  contents: read
 ```
 
 ### Human in the Loop
