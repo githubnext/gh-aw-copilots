@@ -46,7 +46,6 @@ This means they inherit the security model of GitHub Actions, which includes:
 In addition, the compilation step of Agentic Workflows enforces additional security measures:
 
 - **Expression restrictions** - only a limited set of expressions are allowed in the workflow frontmatter, preventing arbitrary code execution
-- **Tool allowlisting** - only explicitly allowed tools can be used in the workflow
 - **Highly restricted commands** - by default, no commands are allowed to be executed, and any commands that are allowed must be explicitly specified in the workflow
 - **Explicit tool allowlisting** - only tools explicitly allowed in the workflow can be used
 - **Limit workflow longevity** - workflows can be configured to stop triggering after a certain time period
