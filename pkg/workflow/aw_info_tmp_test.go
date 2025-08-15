@@ -65,16 +65,7 @@ This workflow tests that aw_info.json is generated in /tmp directory.
 		t.Error("Expected upload artifact path to be '/tmp/aw_info.json' in generated workflow")
 	}
 
-	// Test 3: Verify cleanup step is added
-	if !strings.Contains(lockStr, "- name: Clean up aw_info.json") {
-		t.Error("Expected cleanup step for aw_info.json to be in generated workflow")
-	}
-
-	if !strings.Contains(lockStr, "run: rm -f /tmp/aw_info.json") {
-		t.Error("Expected cleanup command 'rm -f /tmp/aw_info.json' to be in generated workflow")
-	}
-
-	// Test 4: Verify the old hardcoded path is not present
+	// Test 3: Verify the old hardcoded path is not present
 	if strings.Contains(lockStr, "fs.writeFileSync('aw_info.json'") {
 		t.Error("Found old hardcoded path 'aw_info.json' in generated workflow, should use /tmp/aw_info.json")
 	}

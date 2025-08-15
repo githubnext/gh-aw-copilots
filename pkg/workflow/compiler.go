@@ -1904,9 +1904,6 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	yaml.WriteString("          name: aw_info.json\n")
 	yaml.WriteString("          path: /tmp/aw_info.json\n")
 	yaml.WriteString("          if-no-files-found: warn\n")
-	yaml.WriteString("      - name: Clean up aw_info.json\n")
-	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        run: rm -f /tmp/aw_info.json\n")
 }
 
 // generatePostSteps generates the post-steps section that runs after AI execution
