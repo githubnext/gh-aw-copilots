@@ -16,8 +16,8 @@ import (
 	"github.com/githubnext/gh-aw/pkg/console"
 	"github.com/githubnext/gh-aw/pkg/constants"
 	"github.com/githubnext/gh-aw/pkg/parser"
+	"github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
-	"gopkg.in/yaml.v3"
 )
 
 // validateExpressionSafety checks that all GitHub Actions expressions in the markdown content
@@ -481,7 +481,12 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Parse frontmatter and markdown
 	result, err := parser.ExtractFrontmatterFromContent(string(content))
 	if err != nil {
-		return nil, c.createFrontmatterError(markdownPath, string(content), err)
+		// Use FrontmatterStart from result if available, otherwise default to line 2 (after opening ---)
+		frontmatterStart := 2
+		if result != nil && result.FrontmatterStart > 0 {
+			frontmatterStart = result.FrontmatterStart
+		}
+		return nil, c.createFrontmatterError(markdownPath, string(content), err, frontmatterStart)
 	}
 
 	if len(result.Frontmatter) == 0 {
@@ -810,6 +815,12 @@ func (c *Compiler) extractYAMLValue(frontmatter map[string]any, key string) stri
 		if num, ok := value.(int); ok {
 			return fmt.Sprintf("%d", num)
 		}
+		if num, ok := value.(int64); ok {
+			return fmt.Sprintf("%d", num)
+		}
+		if num, ok := value.(uint64); ok {
+			return fmt.Sprintf("%d", num)
+		}
 		if float, ok := value.(float64); ok {
 			return fmt.Sprintf("%.0f", float)
 		}
@@ -985,7 +996,7 @@ func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
 	}
 
 	if data.TimeoutMinutes == "" {
-		data.TimeoutMinutes = `timeout_minutes: "5"`
+		data.TimeoutMinutes = `timeout_minutes: 5`
 	}
 
 	if data.RunsOn == "" {
