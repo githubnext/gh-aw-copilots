@@ -99,6 +99,9 @@ var computeTextActionTemplate string
 //go:embed templates/check_team_member.yaml
 var checkTeamMemberTemplate string
 
+//go:embed js/create_issue.js
+var createIssueScript string
+
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
 	verbose        bool
@@ -208,6 +211,18 @@ type WorkflowData struct {
 	Jobs             map[string]any // custom job configurations with dependencies
 	Cache            string         // cache configuration
 	NeedsTextOutput  bool           // whether the workflow uses ${{ needs.task.outputs.text }}
+	Output           *OutputConfig  // output configuration for automatic output routes
+}
+
+// OutputConfig holds configuration for automatic output routes
+type OutputConfig struct {
+	Issue *IssueConfig `yaml:"issue,omitempty"`
+}
+
+// IssueConfig holds configuration for creating GitHub issues from agent output
+type IssueConfig struct {
+	TitlePrefix string   `yaml:"title-prefix,omitempty"`
+	Labels      []string `yaml:"labels,omitempty"`
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -676,6 +691,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.Alias = c.extractAliasName(result.Frontmatter)
 	workflowData.AIReaction = c.extractYAMLValue(result.Frontmatter, "ai-reaction")
 	workflowData.Jobs = c.extractJobsFromFrontmatter(result.Frontmatter)
+
+	// Parse output configuration
+	workflowData.Output = c.extractOutputConfig(result.Frontmatter)
 
 	// Check if "alias" is used as a trigger in the "on" section
 	var hasAlias bool
@@ -1525,6 +1543,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		return fmt.Errorf("failed to add main job: %w", err)
 	}
 
+	// Build create_output_issue job if output.issue is configured
+	if data.Output != nil && data.Output.Issue != nil {
+		createIssueJob, err := c.buildCreateOutputIssueJob(data)
+		if err != nil {
+			return fmt.Errorf("failed to build create_output_issue job: %w", err)
+		}
+		if err := c.jobManager.AddJob(createIssueJob); err != nil {
+			return fmt.Errorf("failed to add create_output_issue job: %w", err)
+		}
+	}
+
 	// Build additional custom jobs from frontmatter jobs section
 	if err := c.buildCustomJobs(data); err != nil {
 		return fmt.Errorf("failed to build custom jobs: %w", err)
@@ -1623,6 +1652,65 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData) (*Job, error) {
 		Steps:       steps,
 		Outputs:     outputs,
 		Depends:     []string{"task"}, // Depend on the task job
+	}
+
+	return job, nil
+}
+
+// buildCreateOutputIssueJob creates the create_output_issue job
+func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData) (*Job, error) {
+	if data.Output == nil || data.Output.Issue == nil {
+		return nil, fmt.Errorf("output.issue configuration is required")
+	}
+
+	var steps []string
+	steps = append(steps, "      - name: Create Output Issue\n")
+	steps = append(steps, "        id: create_issue\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Determine the main job name to get output from
+	mainJobName := c.generateJobName(data.Name)
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	// Pass the agent output content from the main job
+	steps = append(steps, fmt.Sprintf("          AGENT_OUTPUT_CONTENT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	if data.Output.Issue.TitlePrefix != "" {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_TITLE_PREFIX: %q\n", data.Output.Issue.TitlePrefix))
+	}
+	if len(data.Output.Issue.Labels) > 0 {
+		labelsStr := strings.Join(data.Output.Issue.Labels, ",")
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_LABELS: %q\n", labelsStr))
+	}
+
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	scriptLines := strings.Split(createIssueScript, "\n")
+	for _, line := range scriptLines {
+		if strings.TrimSpace(line) == "" {
+			steps = append(steps, "\n")
+		} else {
+			steps = append(steps, fmt.Sprintf("            %s\n", line))
+		}
+	}
+
+	// Create outputs for the job
+	outputs := map[string]string{
+		"issue_number": "${{ steps.create_issue.outputs.issue_number }}",
+		"issue_url":    "${{ steps.create_issue.outputs.issue_url }}",
+	}
+
+	job := &Job{
+		Name:           "create_output_issue",
+		If:             "", // No conditional execution
+		RunsOn:         "runs-on: ubuntu-latest",
+		Permissions:    "permissions:\n      contents: read\n      issues: write",
+		TimeoutMinutes: 10, // 10-minute timeout as required
+		Steps:          steps,
+		Outputs:        outputs,
+		Depends:        []string{mainJobName}, // Depend on the main workflow job
 	}
 
 	return job, nil
@@ -1968,6 +2056,47 @@ func (c *Compiler) extractJobsFromFrontmatter(frontmatter map[string]any) map[st
 		}
 	}
 	return make(map[string]any)
+}
+
+// extractOutputConfig extracts output configuration from frontmatter
+func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig {
+	if output, exists := frontmatter["output"]; exists {
+		if outputMap, ok := output.(map[string]any); ok {
+			config := &OutputConfig{}
+
+			// Parse issue configuration
+			if issue, exists := outputMap["issue"]; exists {
+				if issueMap, ok := issue.(map[string]any); ok {
+					issueConfig := &IssueConfig{}
+
+					// Parse title-prefix
+					if titlePrefix, exists := issueMap["title-prefix"]; exists {
+						if titlePrefixStr, ok := titlePrefix.(string); ok {
+							issueConfig.TitlePrefix = titlePrefixStr
+						}
+					}
+
+					// Parse labels
+					if labels, exists := issueMap["labels"]; exists {
+						if labelsArray, ok := labels.([]any); ok {
+							var labelStrings []string
+							for _, label := range labelsArray {
+								if labelStr, ok := label.(string); ok {
+									labelStrings = append(labelStrings, labelStr)
+								}
+							}
+							issueConfig.Labels = labelStrings
+						}
+					}
+
+					config.Issue = issueConfig
+				}
+			}
+
+			return config
+		}
+	}
+	return nil
 }
 
 // buildCustomJobs creates custom jobs defined in the frontmatter jobs section
