@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -19,71 +18,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
-
-// validateExpressionSafety checks that all GitHub Actions expressions in the markdown content
-// are in the allowed list and returns an error if any unauthorized expressions are found
-func validateExpressionSafety(markdownContent string) error {
-	// Regular expression to match GitHub Actions expressions: ${{ ... }}
-	// Use (?s) flag to enable dotall mode so . matches newlines to capture multiline expressions
-	// Use non-greedy matching with .*? to handle nested braces properly
-	expressionRegex := regexp.MustCompile(`(?s)\$\{\{(.*?)\}\}`)
-	needsStepsRegex := regexp.MustCompile(`^(needs|steps)\.[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$`)
-	inputsRegex := regexp.MustCompile(`^github\.event\.inputs\.[a-zA-Z0-9_-]+$`)
-	envRegex := regexp.MustCompile(`^env\.[a-zA-Z0-9_-]+$`)
-
-	// Find all expressions in the markdown content
-	matches := expressionRegex.FindAllStringSubmatch(markdownContent, -1)
-
-	var unauthorizedExpressions []string
-
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-
-		// Extract the expression content (everything between ${{ and }})
-		expression := strings.TrimSpace(match[1])
-
-		// Reject expressions that span multiple lines (contain newlines)
-		if strings.Contains(match[1], "\n") {
-			unauthorizedExpressions = append(unauthorizedExpressions, expression)
-			continue
-		}
-
-		// Check if this expression is in the allowed list
-		allowed := false
-
-		// Check if this expression starts with "needs." or "steps." and is a simple property access
-		if needsStepsRegex.MatchString(expression) {
-			allowed = true
-		} else if inputsRegex.MatchString(expression) {
-			// Check if this expression matches github.event.inputs.* pattern
-			allowed = true
-		} else if envRegex.MatchString(expression) {
-			// check if this expression matches env.* pattern
-			allowed = true
-		} else {
-			for _, allowedExpr := range constants.AllowedExpressions {
-				if expression == allowedExpr {
-					allowed = true
-					break
-				}
-			}
-		}
-
-		if !allowed {
-			unauthorizedExpressions = append(unauthorizedExpressions, expression)
-		}
-	}
-
-	// If we found unauthorized expressions, return an error
-	if len(unauthorizedExpressions) > 0 {
-		return fmt.Errorf("unauthorized expressions: %v. allowed: %v",
-			unauthorizedExpressions, constants.AllowedExpressions)
-	}
-
-	return nil
-}
 
 // FileTracker interface for tracking files created during compilation
 type FileTracker interface {
@@ -98,12 +32,6 @@ var computeTextActionTemplate string
 
 //go:embed templates/check_team_member.yaml
 var checkTeamMemberTemplate string
-
-//go:embed js/create_issue.js
-var createIssueScript string
-
-//go:embed js/create_comment.js
-var createCommentScript string
 
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
@@ -219,8 +147,9 @@ type WorkflowData struct {
 
 // OutputConfig holds configuration for automatic output routes
 type OutputConfig struct {
-	Issue   *IssueConfig   `yaml:"issue,omitempty"`
-	Comment *CommentConfig `yaml:"comment,omitempty"`
+	Issue       *IssueConfig       `yaml:"issue,omitempty"`
+	Comment     *CommentConfig     `yaml:"comment,omitempty"`
+	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -232,6 +161,12 @@ type IssueConfig struct {
 // CommentConfig holds configuration for creating GitHub issue/PR comments from agent output
 type CommentConfig struct {
 	// Empty struct for now, as per requirements, but structured for future expansion
+}
+
+// PullRequestConfig holds configuration for creating GitHub pull requests from agent output
+type PullRequestConfig struct {
+	TitlePrefix string   `yaml:"title-prefix,omitempty"`
+	Labels      []string `yaml:"labels,omitempty"`
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1532,14 +1467,14 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		return fmt.Errorf("failed to add task job: %w", err)
 	}
 
-	// Build add-reaction job only if ai-reaction is configured
+	// Build add_reaction job only if ai-reaction is configured
 	if data.AIReaction != "" {
 		addReactionJob, err := c.buildAddReactionJob(data)
 		if err != nil {
-			return fmt.Errorf("failed to build add-reaction job: %w", err)
+			return fmt.Errorf("failed to build add_reaction job: %w", err)
 		}
 		if err := c.jobManager.AddJob(addReactionJob); err != nil {
-			return fmt.Errorf("failed to add add-reaction job: %w", err)
+			return fmt.Errorf("failed to add add_reaction job: %w", err)
 		}
 	}
 
@@ -1552,25 +1487,36 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		return fmt.Errorf("failed to add main job: %w", err)
 	}
 
-	// Build create_output_issue job if output.issue is configured
+	// Build create_issue job if output.issue is configured
 	if data.Output != nil && data.Output.Issue != nil {
-		createIssueJob, err := c.buildCreateOutputIssueJob(data)
+		createIssueJob, err := c.buildCreateOutputIssueJob(data, jobName)
 		if err != nil {
-			return fmt.Errorf("failed to build create_output_issue job: %w", err)
+			return fmt.Errorf("failed to build create_issue job: %w", err)
 		}
 		if err := c.jobManager.AddJob(createIssueJob); err != nil {
-			return fmt.Errorf("failed to add create_output_issue job: %w", err)
+			return fmt.Errorf("failed to add create_issue job: %w", err)
 		}
 	}
 
 	// Build create_issue_comment job if output.comment is configured
 	if data.Output != nil && data.Output.Comment != nil {
-		createCommentJob, err := c.buildCreateOutputCommentJob(data)
+		createCommentJob, err := c.buildCreateOutputCommentJob(data, jobName)
 		if err != nil {
 			return fmt.Errorf("failed to build create_issue_comment job: %w", err)
 		}
 		if err := c.jobManager.AddJob(createCommentJob); err != nil {
 			return fmt.Errorf("failed to add create_issue_comment job: %w", err)
+		}
+	}
+
+	// Build create_pull_request job if output.pull-request is configured
+	if data.Output != nil && data.Output.PullRequest != nil {
+		createPullRequestJob, err := c.buildCreateOutputPullRequestJob(data, jobName)
+		if err != nil {
+			return fmt.Errorf("failed to build create_pull_request job: %w", err)
+		}
+		if err := c.jobManager.AddJob(createPullRequestJob); err != nil {
+			return fmt.Errorf("failed to add create_pull_request job: %w", err)
 		}
 	}
 
@@ -1644,7 +1590,7 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 	return job, nil
 }
 
-// buildAddReactionJob creates the add-reaction job
+// buildAddReactionJob creates the add_reaction job
 func (c *Compiler) buildAddReactionJob(data *WorkflowData) (*Job, error) {
 	reactionCondition := buildReactionCondition()
 
@@ -1665,7 +1611,7 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData) (*Job, error) {
 	}
 
 	job := &Job{
-		Name:        "add-reaction",
+		Name:        "add_reaction",
 		If:          fmt.Sprintf("if: %s", reactionCondition.Render()),
 		RunsOn:      "runs-on: ubuntu-latest",
 		Permissions: "permissions:\n      contents: write # Read .github\n      issues: write\n      pull-requests: write",
@@ -1677,8 +1623,8 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData) (*Job, error) {
 	return job, nil
 }
 
-// buildCreateOutputIssueJob creates the create_output_issue job
-func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData) (*Job, error) {
+// buildCreateOutputIssueJob creates the create_issue job
+func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName string) (*Job, error) {
 	if data.Output == nil || data.Output.Issue == nil {
 		return nil, fmt.Errorf("output.issue configuration is required")
 	}
@@ -1688,13 +1634,10 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData) (*Job, error) {
 	steps = append(steps, "        id: create_issue\n")
 	steps = append(steps, "        uses: actions/github-script@v7\n")
 
-	// Determine the main job name to get output from
-	mainJobName := c.generateJobName(data.Name)
-
 	// Add environment variables
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
-	steps = append(steps, fmt.Sprintf("          AGENT_OUTPUT_CONTENT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
 	if data.Output.Issue.TitlePrefix != "" {
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_TITLE_PREFIX: %q\n", data.Output.Issue.TitlePrefix))
 	}
@@ -1723,7 +1666,7 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData) (*Job, error) {
 	}
 
 	job := &Job{
-		Name:           "create_output_issue",
+		Name:           "create_issue",
 		If:             "", // No conditional execution
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      issues: write",
@@ -1737,7 +1680,7 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData) (*Job, error) {
 }
 
 // buildCreateOutputCommentJob creates the create_issue_comment job
-func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData) (*Job, error) {
+func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName string) (*Job, error) {
 	if data.Output == nil || data.Output.Comment == nil {
 		return nil, fmt.Errorf("output.comment configuration is required")
 	}
@@ -1747,13 +1690,10 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData) (*Job, error)
 	steps = append(steps, "        id: create_comment\n")
 	steps = append(steps, "        uses: actions/github-script@v7\n")
 
-	// Determine the main job name to get output from
-	mainJobName := c.generateJobName(data.Name)
-
 	// Add environment variables
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
-	steps = append(steps, fmt.Sprintf("          AGENT_OUTPUT_CONTENT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -1779,6 +1719,82 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData) (*Job, error)
 		If:             "if: github.event.issue.number || github.event.pull_request.number", // Only run in issue or PR context
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      issues: write\n      pull-requests: write",
+		TimeoutMinutes: 10, // 10-minute timeout as required
+		Steps:          steps,
+		Outputs:        outputs,
+		Depends:        []string{mainJobName}, // Depend on the main workflow job
+	}
+
+	return job, nil
+}
+
+// buildCreateOutputPullRequestJob creates the create_pull_request job
+func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobName string) (*Job, error) {
+	if data.Output == nil || data.Output.PullRequest == nil {
+		return nil, fmt.Errorf("output.pull-request configuration is required")
+	}
+
+	var steps []string
+
+	// Step 1: Download patch artifact
+	steps = append(steps, "      - name: Download patch artifact\n")
+	steps = append(steps, "        uses: actions/download-artifact@v4\n")
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          name: aw.patch\n")
+	steps = append(steps, "          path: /tmp/\n")
+
+	// Step 2: Checkout repository
+	steps = append(steps, "      - name: Checkout repository\n")
+	steps = append(steps, "        uses: actions/checkout@v4\n")
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          fetch-depth: 0\n")
+
+	// Step 3: Create pull request
+	steps = append(steps, "      - name: Create Pull Request\n")
+	steps = append(steps, "        id: create_pull_request\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	// Pass the agent output content from the main job
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass the workflow ID for branch naming
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_WORKFLOW_ID: %q\n", mainJobName))
+	// Pass the base branch from GitHub context
+	steps = append(steps, "          GITHUB_AW_BASE_BRANCH: ${{ github.ref_name }}\n")
+	if data.Output.PullRequest.TitlePrefix != "" {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_TITLE_PREFIX: %q\n", data.Output.PullRequest.TitlePrefix))
+	}
+	if len(data.Output.PullRequest.Labels) > 0 {
+		labelsStr := strings.Join(data.Output.PullRequest.Labels, ",")
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_LABELS: %q\n", labelsStr))
+	}
+
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	scriptLines := strings.Split(createPullRequestScript, "\n")
+	for _, line := range scriptLines {
+		if strings.TrimSpace(line) == "" {
+			steps = append(steps, "\n")
+		} else {
+			steps = append(steps, fmt.Sprintf("            %s\n", line))
+		}
+	}
+
+	// Create outputs for the job
+	outputs := map[string]string{
+		"pull_request_number": "${{ steps.create_pull_request.outputs.pull_request_number }}",
+		"pull_request_url":    "${{ steps.create_pull_request.outputs.pull_request_url }}",
+		"branch_name":         "${{ steps.create_pull_request.outputs.branch_name }}",
+	}
+
+	job := &Job{
+		Name:           "create_pull_request",
+		If:             "", // No conditional execution
+		RunsOn:         "runs-on: ubuntu-latest",
+		Permissions:    "permissions:\n      contents: write\n      issues: write\n      pull-requests: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
 		Steps:          steps,
 		Outputs:        outputs,
@@ -2200,6 +2216,35 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 				if _, ok := comment.(map[string]any); ok {
 					// For now, CommentConfig is an empty struct
 					config.Comment = &CommentConfig{}
+				}
+			}
+
+			// Parse pull-request configuration
+			if pullRequest, exists := outputMap["pull-request"]; exists {
+				if pullRequestMap, ok := pullRequest.(map[string]any); ok {
+					pullRequestConfig := &PullRequestConfig{}
+
+					// Parse title-prefix
+					if titlePrefix, exists := pullRequestMap["title-prefix"]; exists {
+						if titlePrefixStr, ok := titlePrefix.(string); ok {
+							pullRequestConfig.TitlePrefix = titlePrefixStr
+						}
+					}
+
+					// Parse labels
+					if labels, exists := pullRequestMap["labels"]; exists {
+						if labelsArray, ok := labels.([]any); ok {
+							var labelStrings []string
+							for _, label := range labelsArray {
+								if labelStr, ok := label.(string); ok {
+									labelStrings = append(labelStrings, labelStr)
+								}
+							}
+							pullRequestConfig.Labels = labelStrings
+						}
+					}
+
+					config.PullRequest = pullRequestConfig
 				}
 			}
 
