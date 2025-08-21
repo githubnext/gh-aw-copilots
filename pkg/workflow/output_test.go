@@ -564,9 +564,164 @@ This workflow tests the create_pull_request job generation.
 		t.Error("Expected automation label to be set as environment variable")
 	}
 
+	// Verify draft setting defaults to true
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_DRAFT: \"true\"") {
+		t.Error("Expected draft to default to true when not specified")
+	}
+
 	// Verify job dependencies
 	if !strings.Contains(lockContentStr, "needs: test-output-pull-request-job-generation") {
 		t.Error("Expected create_pull_request job to depend on main job")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContentStr)
+}
+
+func TestOutputPullRequestDraftFalse(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-pr-draft-false-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.pull-request configuration with draft: false
+	testContent := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+output:
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    draft: false
+---
+
+# Test Output Pull Request with Draft False
+
+This workflow tests the create_pull_request job generation with draft: false.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-pr-draft-false.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with output pull-request draft: false: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	// Convert to string for easier testing
+	lockContentStr := string(lockContent)
+
+	// Verify create_pull_request job is present
+	if !strings.Contains(lockContentStr, "create_pull_request:") {
+		t.Error("Expected 'create_pull_request' job to be in generated workflow")
+	}
+
+	// Verify draft setting is false
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_DRAFT: \"false\"") {
+		t.Error("Expected draft to be set to false when explicitly specified")
+	}
+
+	// Verify other expected environment variables are still present
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_TITLE_PREFIX: \"[agent] \"") {
+		t.Error("Expected title prefix to be set as environment variable")
+	}
+
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_LABELS: \"automation\"") {
+		t.Error("Expected automation label to be set as environment variable")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContentStr)
+}
+
+func TestOutputPullRequestDraftTrue(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-pr-draft-true-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.pull-request configuration with draft: true
+	testContent := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+output:
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    draft: true
+---
+
+# Test Output Pull Request with Draft True
+
+This workflow tests the create_pull_request job generation with draft: true.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-pr-draft-true.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with output pull-request draft: true: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	// Convert to string for easier testing
+	lockContentStr := string(lockContent)
+
+	// Verify create_pull_request job is present
+	if !strings.Contains(lockContentStr, "create_pull_request:") {
+		t.Error("Expected 'create_pull_request' job to be in generated workflow")
+	}
+
+	// Verify draft setting is true
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_DRAFT: \"true\"") {
+		t.Error("Expected draft to be set to true when explicitly specified")
+	}
+
+	// Verify other expected environment variables are still present
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_TITLE_PREFIX: \"[agent] \"") {
+		t.Error("Expected title prefix to be set as environment variable")
+	}
+
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_LABELS: \"automation\"") {
+		t.Error("Expected automation label to be set as environment variable")
 	}
 
 	t.Logf("Generated workflow content:\n%s", lockContentStr)
