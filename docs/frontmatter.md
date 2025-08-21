@@ -248,7 +248,14 @@ ai-reaction: "eyes"
 
 ## Output Processing (`output:`)
 
-Configure automatic output processing from AI agent results:
+Configure automatic output processing from AI agent results. The output system enables agents to create GitHub issues, comments, or pull requests from their analysis without requiring write permissions in the main workflow job.
+
+### How Output Processing Works
+
+1. **Output File Creation**: The main job creates a secure temporary file (`/tmp/aw_output_${randomId}.txt`) accessible via the `GITHUB_AW_OUTPUT` environment variable
+2. **Content Sanitization**: Agent output is automatically sanitized to prevent adversarial attacks (removes control characters, limits size to 0.5MB and 65k lines, strips ANSI codes)
+3. **Job Separation**: Separate jobs handle write operations, providing security isolation and precise permission scoping
+4. **Artifact Flow**: Output content flows between jobs via GitHub Actions outputs and artifacts
 
 ```yaml
 output:
@@ -261,6 +268,14 @@ output:
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
     draft: true                     # Optional: create as draft PR (defaults to true)
 ```
+
+### Security Considerations
+
+- **Content Sanitization**: All agent output is automatically sanitized to remove potentially malicious content
+- **Size Limits**: Content is limited to 0.5MB total and 65,000 lines to prevent resource exhaustion
+- **Permission Isolation**: Only output-specific jobs receive write permissions, never the main agent job
+- **Branch Security**: Pull request branches use cryptographically secure random naming (`{workflowId}/{randomHex}`)
+- **Timeout Protection**: All output jobs have 10-minute timeouts to prevent hanging workflows
 
 ### Issue Creation (`output.issue`)
 
@@ -279,6 +294,17 @@ output:
 - **Environment Variables**: Configuration passed via `GITHUB_AW_ISSUE_TITLE_PREFIX` and `GITHUB_AW_ISSUE_LABELS`
 - **Outputs**: Returns `issue_number` and `issue_url` for downstream jobs
 
+**Content Processing:**
+- **Title Extraction**: First non-empty line becomes the issue title (markdown headers are stripped)
+- **Body Creation**: Remaining content forms the issue body, preserving formatting
+- **Parent Issue Linking**: When triggered by an issue event, creates a bi-directional link to the parent issue
+- **Workflow Attribution**: Automatically adds a reference to the generating workflow run
+
+**Artifact Integration:**
+- Agent output is uploaded as `aw_output.txt` artifact for debugging
+- Output appears in GitHub Actions step summary for visibility
+- Issue creation details are added to the workflow run summary
+
 ### Comment Creation (`output.comment`)
 
 **Behavior:**
@@ -295,6 +321,16 @@ output:
 - **Permissions**: Only the comment creation job has `issues: write` and `pull-requests: write` permissions
 - **Timeout**: 10-minute timeout to prevent hanging
 - **Outputs**: Returns `comment_id` and `comment_url` for downstream jobs
+
+**Context Detection:**
+- **Issue Context**: Triggered by `issues` or `issue_comment` events
+- **Pull Request Context**: Triggered by `pull_request`, `pull_request_review`, or `pull_request_review_comment` events
+- **Automatic Skipping**: For other trigger types (e.g., `push`, `schedule`), the job runs but exits early
+
+**Content Processing:**
+- **Direct Output**: The entire sanitized agent output becomes the comment body
+- **Workflow Attribution**: Automatically appends a reference to the generating workflow run
+- **Format Preservation**: Original formatting and markdown in agent output is preserved
 
 **Example workflow using issue creation:**
 ```yaml
@@ -343,21 +379,37 @@ This automatically creates GitHub issues or comments from the agent's analysis w
 ### Pull Request Creation (`output.pull-request`)
 
 **Behavior:**
-- When `output.pull-request` is configured, the compiler automatically generates a separate `create_output_pull_request` job
+- When `output.pull-request` is configured, the compiler automatically generates a separate `create_pull_request` job
 - This job runs after the main AI agent job completes
 - The agent's output content flows from the main job to the pull request creation job via job output variables
 - The job creates a new branch, applies git patches from the agent's output, and creates a pull request
 - **Important**: With output processing, the main job **does not** need `contents: write` permission since the write operation is performed in the separate job
 
 **Generated Job Properties:**
-- **Job Name**: `create_output_pull_request`
+- **Job Name**: `create_pull_request`
 - **Dependencies**: Runs after the main agent job (`needs: [main-job-name]`)
 - **Permissions**: Only the pull request creation job has `contents: write` and `pull-requests: write` permissions
 - **Timeout**: 10-minute timeout to prevent hanging
 - **Environment Variables**: Configuration passed via `GITHUB_AW_PR_TITLE_PREFIX`, `GITHUB_AW_PR_LABELS`, `GITHUB_AW_PR_DRAFT`, `GITHUB_AW_WORKFLOW_ID`, and `GITHUB_AW_BASE_BRANCH`
 - **Branch Creation**: Uses cryptographic random hex for secure branch naming (`{workflowId}/{randomHex}`)
 - **Git Operations**: Creates branch using git CLI, applies patches, commits changes, and pushes to GitHub
-- **Outputs**: Returns `pr_number` and `pr_url` for downstream jobs
+- **Outputs**: Returns `pull_request_number`, `pull_request_url`, and `branch_name` for downstream jobs
+
+**Patch Requirements:**
+- **Patch File**: The agent must create git patches in `/tmp/aw.patch` for the changes to be applied
+- **Validation**: The pull request creation job validates patch existence and content before proceeding
+- **Error Handling**: Job fails gracefully if no valid patch is found, preventing empty pull requests
+
+**Branch and Commit Management:**
+- **Branch Naming**: `{workflowId}/{8-character-random-hex}` for uniqueness and security
+- **Git Configuration**: Automatically configures git with GitHub Action credentials
+- **Commit Message**: Uses extracted title from agent output or defaults to "Add agent output: {title}"
+- **Base Branch**: Uses `github.ref_name` from the triggering workflow context
+
+**Content Processing:**
+- **Title/Body Extraction**: Same logic as issue creation - first line becomes title, rest becomes body
+- **Label Application**: Labels are applied after PR creation using the GitHub Issues API
+- **Draft Handling**: Respects the `draft` setting, defaulting to `true` for safety
 
 **Configuration:**
 ```yaml
@@ -368,25 +420,215 @@ output:
     draft: true                     # Optional: create as draft PR (defaults to true)
 ```
 
-**Example workflow using pull request creation:**
+## Practical Examples
+
+### Multi-Output Workflow
 ```yaml
 ---
-on: push
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [opened, synchronize]
 permissions:
-  actions: read       # Main job only needs minimal permissions
+  contents: read      # Main job only needs read permissions
+  actions: read
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[bot] "
-    labels: [automation, ai-generated]
+  issue:              # Create follow-up issues from analysis
+    title-prefix: "[analysis] "
+    labels: [automation, analysis]
+  comment:            # Also comment on the original issue/PR
+  pull-request:       # Create PRs with fixes when applicable
+    title-prefix: "[fix] "
+    labels: [automation, fix]
+    draft: false
 ---
 
-# Code Improvement Agent
+# Comprehensive Code Analysis Agent
 
-Analyze the latest commit and suggest improvements.
-Generate patches and write them to /tmp/aw.patch.
-Write a summary to ${{ env.GITHUB_AW_OUTPUT }} with title and description.
+Analyze the code and provide:
+1. Summary comment on the original issue/PR
+2. Detailed analysis in a new issue
+3. Automated fixes in a pull request (when applicable)
+
+Write your summary to ${{ env.GITHUB_AW_OUTPUT }}.
+Generate patches to /tmp/aw.patch for any fixes.
 ```
+
+### Issue Analysis with Parent Linking
+```yaml
+---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+engine: claude
+output:
+  issue:
+    title-prefix: "[breakdown] "
+    labels: [automation, task-breakdown]
+---
+
+# Task Breakdown Agent
+
+Break down complex issues into smaller actionable tasks.
+Each task will be created as a separate issue linked to this one.
+
+Write your breakdown to ${{ env.GITHUB_AW_OUTPUT }} with:
+- First line: Summary title
+- Remaining lines: Detailed breakdown
+```
+
+### Code Review with Pull Request
+```yaml
+---
+on: 
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+engine: claude
+output:
+  comment: {}         # Provide review comments
+  pull-request:       # Suggest improvements
+    title-prefix: "[suggestions] "
+    labels: [review, improvements]
+    draft: true
+---
+
+# Code Review Agent
+
+Review the pull request and provide feedback.
+Create suggested improvements as a draft PR.
+
+1. Write review comments to ${{ env.GITHUB_AW_OUTPUT }}
+2. Generate improvement patches to /tmp/aw.patch
+```
+
+## Troubleshooting Output Processing
+
+### Common Issues
+
+**Output Job Not Running:**
+- Check that the main job completed successfully and produced output
+- Verify the main job has the correct dependencies (`needs: [main-job-name]`)
+- Ensure required permissions are granted to the output job, not the main job
+
+**Empty or Missing Output:**
+- Verify agent writes to `${{ env.GITHUB_AW_OUTPUT }}` file, not stdout
+- Check that content is written before the main job completes
+- Review the "Collect agent output" step logs for sanitization warnings
+
+**Pull Request Creation Fails:**
+- Ensure `/tmp/aw.patch` exists and contains valid git patches
+- Verify patch content doesn't include error messages or invalid formats
+- Check that the base branch exists and is accessible
+
+**Comment Job Skips Unexpectedly:**
+- Comment jobs only run for issue and pull request contexts
+- Verify the triggering event provides `github.event.issue.number` or `github.event.pull_request.number`
+- Check the conditional execution logic in job logs
+
+**Permission Denied Errors:**
+- Output jobs need write permissions, not the main job
+- Verify `issues: write` for issue/comment jobs
+- Verify `contents: write` and `pull-requests: write` for PR jobs
+
+### Debug Information
+
+All workflows with output processing include automatic debugging aids:
+
+- **Step Summary**: Agent output appears in the GitHub Actions run summary
+- **Artifacts**: Output content is uploaded as `aw_output.txt` for inspection
+- **Verbose Logging**: All output jobs include detailed console logging
+- **Job Outputs**: Created resources return URLs and IDs for downstream use
+
+### Performance Considerations
+
+- **Content Size**: Large outputs (>0.5MB) are automatically truncated
+- **Job Timeouts**: Output jobs timeout after 10 minutes to prevent hanging
+- **Parallel Execution**: Multiple output jobs run in parallel when possible
+- **Rate Limiting**: Consider GitHub API rate limits when creating many outputs
+
+**Required Patch Format:**
+The agent must create git patches in `/tmp/aw.patch` for the changes to be applied. The pull request creation job validates patch existence and content before proceeding.
+
+## Technical Implementation Details
+
+### Output File Mechanics
+
+The output system uses a secure temporary file approach:
+
+1. **File Creation**: A unique output file is created at `/tmp/aw_output_${randomId}.txt` using cryptographic random generation
+2. **Environment Variable**: The file path is made available via `GITHUB_AW_OUTPUT` environment variable
+3. **Agent Integration**: Agents write their final output to this file using: `echo "content" >> $GITHUB_AW_OUTPUT`
+4. **Collection**: A separate step reads and sanitizes the content for downstream jobs
+
+### Content Sanitization Pipeline
+
+All agent output undergoes automatic sanitization to prevent security issues:
+
+```javascript
+// Sanitization process applied to all output
+function sanitizeContent(content) {
+  // Remove control characters (except newlines and tabs)
+  let sanitized = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // Limit total length to prevent DoS (0.5MB max)
+  const maxLength = 524288;
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.substring(0, maxLength) + '\n[Content truncated due to length]';
+  }
+  
+  // Limit number of lines to prevent log flooding (65k max)
+  const lines = sanitized.split('\n');
+  const maxLines = 65000;
+  if (lines.length > maxLines) {
+    sanitized = lines.slice(0, maxLines).join('\n') + '\n[Content truncated due to line count]';
+  }
+  
+  // Remove ANSI escape sequences
+  sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+  
+  return sanitized.trim();
+}
+```
+
+### Job Dependency Flow
+
+Output processing uses a multi-job architecture for security and reliability:
+
+```
+Main Agent Job
+├── Outputs: { output: "sanitized-content" }
+├── Artifacts: { aw_output.txt, aw.patch }
+└── Step Summary: Agent output preview
+
+Output Jobs (run in parallel)
+├── create_issue (if configured)
+│   ├── Inputs: needs.main-job.outputs.output
+│   ├── Permissions: issues: write
+│   └── Outputs: { issue_number, issue_url }
+├── create_issue_comment (if configured + context)
+│   ├── Inputs: needs.main-job.outputs.output  
+│   ├── Permissions: issues: write, pull-requests: write
+│   └── Outputs: { comment_id, comment_url }
+└── create_pull_request (if configured)
+    ├── Inputs: needs.main-job.outputs.output + aw.patch artifact
+    ├── Permissions: contents: write, pull-requests: write
+    └── Outputs: { pull_request_number, pull_request_url, branch_name }
+```
+
+### Error Handling and Resilience
+
+- **Empty Output**: Jobs gracefully handle empty or missing agent output
+- **Invalid Patches**: Pull request job validates patch content before attempting to apply
+- **Context Mismatches**: Comment job automatically skips when not in issue/PR context  
+- **Timeout Protection**: All output jobs have 10-minute timeouts to prevent workflow hanging
+- **Permission Failures**: Clear error messages when required permissions are missing
+- **Debugging Support**: All output is preserved in artifacts and step summaries for troubleshooting
 
 **Required Patch Format:**
 The agent must create git patches in `/tmp/aw.patch` for the changes to be applied. The pull request creation job validates patch existence and content before proceeding.
