@@ -167,6 +167,7 @@ type CommentConfig struct {
 type PullRequestConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
+	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1769,6 +1770,12 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		labelsStr := strings.Join(data.Output.PullRequest.Labels, ",")
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_LABELS: %q\n", labelsStr))
 	}
+	// Pass draft setting - default to true for backwards compatibility
+	draftValue := true // Default value
+	if data.Output.PullRequest.Draft != nil {
+		draftValue = *data.Output.PullRequest.Draft
+	}
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_DRAFT: %q\n", fmt.Sprintf("%t", draftValue)))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -2243,6 +2250,13 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 								}
 							}
 							pullRequestConfig.Labels = labelStrings
+						}
+					}
+
+					// Parse draft
+					if draft, exists := pullRequestMap["draft"]; exists {
+						if draftBool, ok := draft.(bool); ok {
+							pullRequestConfig.Draft = &draftBool
 						}
 					}
 

@@ -259,6 +259,7 @@ output:
   pull-request:
     title-prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
+    draft: true                     # Optional: create as draft PR (defaults to true)
 ```
 
 ### Issue Creation (`output.issue`)
@@ -353,7 +354,7 @@ This automatically creates GitHub issues or comments from the agent's analysis w
 - **Dependencies**: Runs after the main agent job (`needs: [main-job-name]`)
 - **Permissions**: Only the pull request creation job has `contents: write` and `pull-requests: write` permissions
 - **Timeout**: 10-minute timeout to prevent hanging
-- **Environment Variables**: Configuration passed via `GITHUB_AW_PR_TITLE_PREFIX`, `GITHUB_AW_PR_LABELS`, `GITHUB_AW_WORKFLOW_ID`, and `GITHUB_AW_BASE_BRANCH`
+- **Environment Variables**: Configuration passed via `GITHUB_AW_PR_TITLE_PREFIX`, `GITHUB_AW_PR_LABELS`, `GITHUB_AW_PR_DRAFT`, `GITHUB_AW_WORKFLOW_ID`, and `GITHUB_AW_BASE_BRANCH`
 - **Branch Creation**: Uses cryptographic random hex for secure branch naming (`{workflowId}/{randomHex}`)
 - **Git Operations**: Creates branch using git CLI, applies patches, commits changes, and pushes to GitHub
 - **Outputs**: Returns `pr_number` and `pr_url` for downstream jobs
@@ -364,6 +365,7 @@ output:
   pull-request:
     title-prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
+    draft: true                     # Optional: create as draft PR (defaults to true)
 ```
 
 **Example workflow using pull request creation:**
