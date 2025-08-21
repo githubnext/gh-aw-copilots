@@ -84,8 +84,13 @@ async function main() {
   const labelsEnv = process.env.GITHUB_AW_PR_LABELS;
   const labels = labelsEnv ? labelsEnv.split(',').map(label => label.trim()).filter(label => label) : [];
 
+  // Parse draft setting from environment variable (defaults to true)
+  const draftEnv = process.env.GITHUB_AW_PR_DRAFT;
+  const draft = draftEnv ? draftEnv.toLowerCase() === 'true' : true;
+
   console.log('Creating pull request with title:', title);
   console.log('Labels:', labels);
+  console.log('Draft:', draft);
   console.log('Body length:', body.length);
 
   // Generate unique branch name using cryptographic random hex
@@ -124,7 +129,8 @@ async function main() {
     title: title,
     body: body,
     head: branchName,
-    base: baseBranch
+    base: baseBranch,
+    draft: draft
   });
 
   console.log('Created pull request #' + pullRequest.number + ': ' + pullRequest.html_url);
