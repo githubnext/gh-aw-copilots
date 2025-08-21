@@ -280,11 +280,8 @@ output:
 ### Issue Creation (`output.issue`)
 
 **Behavior:**
-- When `output.issue` is configured, the compiler automatically generates a separate `create_issue` job
-- This job runs after the main AI agent job completes
-- The agent's output content flows from the main job to the issue creation job via job output variables
-- The issue creation job parses the output content, using the first non-empty line as the title and the remainder as the body
-- **Important**: With output processing, the main job **does not** need `issues: write` permission since the write operation is performed in the separate job
+
+When `output.issue` is configured, the compiler automatically generates a separate `create_issue` job that runs after the main AI agent job completes. The agent's output content flows from the main job to the issue creation job via job output variables. The issue creation job parses the output content, using the first non-empty line as the title and the remainder as the body. An important security benefit is that the main job does not need `issues: write` permission since the write operation is performed in the separate job.
 
 **Generated Job Properties:**
 - **Job Name**: `create_issue`
@@ -295,24 +292,18 @@ output:
 - **Outputs**: Returns `issue_number` and `issue_url` for downstream jobs
 
 **Content Processing:**
-- **Title Extraction**: First non-empty line becomes the issue title (markdown headers are stripped)
-- **Body Creation**: Remaining content forms the issue body, preserving formatting
-- **Parent Issue Linking**: When triggered by an issue event, creates a bi-directional link to the parent issue
-- **Workflow Attribution**: Automatically adds a reference to the generating workflow run
+
+The system extracts the title from the first non-empty line, automatically stripping any markdown headers. The remaining content forms the issue body, preserving all original formatting. When triggered by an issue event, it creates a bi-directional link to the parent issue and automatically adds a reference to the generating workflow run.
 
 **Artifact Integration:**
-- Agent output is uploaded as `aw_output.txt` artifact for debugging
-- Output appears in GitHub Actions step summary for visibility
-- Issue creation details are added to the workflow run summary
+
+Agent output is uploaded as `aw_output.txt` artifact for debugging purposes and appears in GitHub Actions step summary for visibility. Issue creation details are also added to the workflow run summary.
 
 ### Comment Creation (`output.comment`)
 
 **Behavior:**
-- When `output.comment` is configured, the compiler automatically generates a separate `create_issue_comment` job
-- This job runs after the main AI agent job completes and **only** if the workflow is triggered by an issue or pull request event
-- The agent's output content flows from the main job to the comment creation job via job output variables
-- The comment creation job posts the entire agent output as a comment on the triggering issue or pull request
-- **Conditional Execution**: The job automatically skips if not running in an issue or pull request context
+
+When `output.comment` is configured, the compiler automatically generates a separate `create_issue_comment` job that runs after the main AI agent job completes and only if the workflow is triggered by an issue or pull request event. The agent's output content flows from the main job to the comment creation job via job output variables. The comment creation job posts the entire agent output as a comment on the triggering issue or pull request. The job automatically skips if not running in an issue or pull request context.
 
 **Generated Job Properties:**
 - **Job Name**: `create_issue_comment`
@@ -323,14 +314,12 @@ output:
 - **Outputs**: Returns `comment_id` and `comment_url` for downstream jobs
 
 **Context Detection:**
-- **Issue Context**: Triggered by `issues` or `issue_comment` events
-- **Pull Request Context**: Triggered by `pull_request`, `pull_request_review`, or `pull_request_review_comment` events
-- **Automatic Skipping**: For other trigger types (e.g., `push`, `schedule`), the job runs but exits early
+
+The system detects issue context from `issues` or `issue_comment` events, and pull request context from `pull_request`, `pull_request_review`, or `pull_request_review_comment` events. For other trigger types (e.g., `push`, `schedule`), the job runs but exits early with automatic skipping.
 
 **Content Processing:**
-- **Direct Output**: The entire sanitized agent output becomes the comment body
-- **Workflow Attribution**: Automatically appends a reference to the generating workflow run
-- **Format Preservation**: Original formatting and markdown in agent output is preserved
+
+The entire sanitized agent output becomes the comment body with original formatting and markdown preserved. The system automatically appends a reference to the generating workflow run for attribution.
 
 **Example workflow using issue creation:**
 ```yaml
@@ -379,11 +368,8 @@ This automatically creates GitHub issues or comments from the agent's analysis w
 ### Pull Request Creation (`output.pull-request`)
 
 **Behavior:**
-- When `output.pull-request` is configured, the compiler automatically generates a separate `create_pull_request` job
-- This job runs after the main AI agent job completes
-- The agent's output content flows from the main job to the pull request creation job via job output variables
-- The job creates a new branch, applies git patches from the agent's output, and creates a pull request
-- **Important**: With output processing, the main job **does not** need `contents: write` permission since the write operation is performed in the separate job
+
+When `output.pull-request` is configured, the compiler automatically generates a separate `create_pull_request` job that runs after the main AI agent job completes. The agent's output content flows from the main job to the pull request creation job via job output variables. The job creates a new branch, applies git patches from the agent's output, and creates a pull request. With output processing, the main job does not need `contents: write` permission since the write operation is performed in the separate job.
 
 **Generated Job Properties:**
 - **Job Name**: `create_pull_request`
@@ -396,20 +382,16 @@ This automatically creates GitHub issues or comments from the agent's analysis w
 - **Outputs**: Returns `pull_request_number`, `pull_request_url`, and `branch_name` for downstream jobs
 
 **Patch Requirements:**
-- **Patch File**: The agent must create git patches in `/tmp/aw.patch` for the changes to be applied
-- **Validation**: The pull request creation job validates patch existence and content before proceeding
-- **Error Handling**: Job fails gracefully if no valid patch is found, preventing empty pull requests
+
+The agent must create git patches in `/tmp/aw.patch` for the changes to be applied. The pull request creation job validates patch existence and content before proceeding, failing gracefully if no valid patch is found to prevent empty pull requests.
 
 **Branch and Commit Management:**
-- **Branch Naming**: `{workflowId}/{8-character-random-hex}` for uniqueness and security
-- **Git Configuration**: Automatically configures git with GitHub Action credentials
-- **Commit Message**: Uses extracted title from agent output or defaults to "Add agent output: {title}"
-- **Base Branch**: Uses `github.ref_name` from the triggering workflow context
+
+Branch naming follows the pattern `{workflowId}/{8-character-random-hex}` for uniqueness and security. The system automatically configures git with GitHub Action credentials, uses extracted title from agent output or defaults to "Add agent output: {title}" for commit messages, and uses `github.ref_name` from the triggering workflow context as the base branch.
 
 **Content Processing:**
-- **Title/Body Extraction**: Same logic as issue creation - first line becomes title, rest becomes body
-- **Label Application**: Labels are applied after PR creation using the GitHub Issues API
-- **Draft Handling**: Respects the `draft` setting, defaulting to `true` for safety
+
+The system uses the same logic as issue creation, where the first line becomes the title and the rest becomes the body. Labels are applied after PR creation using the GitHub Issues API, and the draft setting is respected, defaulting to `true` for safety.
 
 **Configuration:**
 ```yaml
@@ -538,19 +520,11 @@ Create suggested improvements as a draft PR.
 
 ### Debug Information
 
-All workflows with output processing include automatic debugging aids:
-
-- **Step Summary**: Agent output appears in the GitHub Actions run summary
-- **Artifacts**: Output content is uploaded as `aw_output.txt` for inspection
-- **Verbose Logging**: All output jobs include detailed console logging
-- **Job Outputs**: Created resources return URLs and IDs for downstream use
+All workflows with output processing include automatic debugging aids. Agent output appears in the GitHub Actions run summary, output content is uploaded as `aw_output.txt` for inspection, all output jobs include detailed console logging, and created resources return URLs and IDs for downstream use.
 
 ### Performance Considerations
 
-- **Content Size**: Large outputs (>0.5MB) are automatically truncated
-- **Job Timeouts**: Output jobs timeout after 10 minutes to prevent hanging
-- **Parallel Execution**: Multiple output jobs run in parallel when possible
-- **Rate Limiting**: Consider GitHub API rate limits when creating many outputs
+Large outputs over 0.5MB are automatically truncated, and output jobs timeout after 10 minutes to prevent hanging. Multiple output jobs run in parallel when possible, but consider GitHub API rate limits when creating many outputs.
 
 **Required Patch Format:**
 The agent must create git patches in `/tmp/aw.patch` for the changes to be applied. The pull request creation job validates patch existence and content before proceeding.
@@ -559,12 +533,7 @@ The agent must create git patches in `/tmp/aw.patch` for the changes to be appli
 
 ### Output File Mechanics
 
-The output system uses a secure temporary file approach:
-
-1. **File Creation**: A unique output file is created at `/tmp/aw_output_${randomId}.txt` using cryptographic random generation
-2. **Environment Variable**: The file path is made available via `GITHUB_AW_OUTPUT` environment variable
-3. **Agent Integration**: Agents write their final output to this file using: `echo "content" >> $GITHUB_AW_OUTPUT`
-4. **Collection**: A separate step reads and sanitizes the content for downstream jobs
+The output system uses a secure temporary file approach. A unique output file is created at `/tmp/aw_output_${randomId}.txt` using cryptographic random generation, and the file path is made available via `GITHUB_AW_OUTPUT` environment variable. Agents write their final output to this file using: `echo "content" >> $GITHUB_AW_OUTPUT`, and a separate step reads and sanitizes the content for downstream jobs.
 
 ### Content Sanitization Pipeline
 
