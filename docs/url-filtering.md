@@ -5,8 +5,8 @@ The `allow-domains` feature provides security by filtering URLs in generated age
 ## Behavior
 
 - **Always**: Remove any URL that is not HTTPS
-- **No restrictions**: If `allow-domains` is not configured, all HTTPS URLs are preserved
-- **Domain restrictions**: If `allow-domains` is configured, only HTTPS URLs matching allowed domain patterns are preserved
+- **Default restrictions**: If `allow-domains` is not configured, only GitHub-owned domains (`github.com`, `github.io`, `githubusercontent.com`, `githubassets.com`, `githubapp.com`, `github.dev`) are allowed
+- **Custom restrictions**: If `allow-domains` is configured, only HTTPS URLs matching those domain patterns are preserved
 
 ## Configuration
 
@@ -43,6 +43,12 @@ export GH_AW_ALLOW_DOMAINS="github.com,example.org"
 ```
 Visit https://github.com for code and http://malicious.com for bad stuff.
 Also check [API docs](https://api.github.com/docs) and [bad link](https://evil.example.com).
+```
+
+### With default behavior (no `allow-domains` configured)
+```
+Visit https://github.com for code and [filtered] for bad stuff.
+Also check [API docs](https://api.github.com/docs) and bad link [filtered].
 ```
 
 ### With `allow-domains: [github.com]`

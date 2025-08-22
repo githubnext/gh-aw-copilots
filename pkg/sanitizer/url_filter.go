@@ -40,10 +40,10 @@ func FilterURLs(content string, config *FilterURLsConfig) *URLFilterResult {
 		if len(submatches) != 3 {
 			return match
 		}
-		
+
 		linkText := submatches[1]
 		linkURL := submatches[2]
-		
+
 		if shouldFilterURL(linkURL, config) {
 			removedURLs = append(removedURLs, linkURL)
 			// Convert to plain text with filtered indicator
@@ -52,7 +52,7 @@ func FilterURLs(content string, config *FilterURLsConfig) *URLFilterResult {
 			}
 			return "[filtered]"
 		}
-		
+
 		return match
 	})
 
@@ -71,6 +71,18 @@ func FilterURLs(content string, config *FilterURLsConfig) *URLFilterResult {
 	}
 }
 
+// getDefaultAllowedDomains returns the default GitHub-owned domains
+func getDefaultAllowedDomains() []string {
+	return []string{
+		"github.com",
+		"github.io",
+		"githubusercontent.com",
+		"githubassets.com",
+		"githubapp.com",
+		"github.dev",
+	}
+}
+
 // shouldFilterURL determines if a URL should be filtered based on the configuration
 func shouldFilterURL(rawURL string, config *FilterURLsConfig) bool {
 	// Parse the URL
@@ -85,9 +97,12 @@ func shouldFilterURL(rawURL string, config *FilterURLsConfig) bool {
 		return true
 	}
 
-	// If no domain restrictions, allow all HTTPS URLs
+	// Get allowed domains - use default GitHub domains if none configured
+	var allowedDomains []string
 	if config == nil || len(config.AllowDomains) == 0 {
-		return false
+		allowedDomains = getDefaultAllowedDomains()
+	} else {
+		allowedDomains = config.AllowDomains
 	}
 
 	// Check if hostname matches any allowed domain pattern
@@ -96,30 +111,30 @@ func shouldFilterURL(rawURL string, config *FilterURLsConfig) bool {
 		return true
 	}
 
-	return !isHostnameAllowed(hostname, config.AllowDomains)
+	return !isHostnameAllowed(hostname, allowedDomains)
 }
 
 // isHostnameAllowed checks if a hostname matches any of the allowed domain patterns
 func isHostnameAllowed(hostname string, allowedDomains []string) bool {
 	hostname = strings.ToLower(hostname)
-	
+
 	for _, allowedDomain := range allowedDomains {
 		allowedDomain = strings.ToLower(strings.TrimSpace(allowedDomain))
 		if allowedDomain == "" {
 			continue
 		}
-		
+
 		// Exact match
 		if hostname == allowedDomain {
 			return true
 		}
-		
+
 		// Subdomain match (e.g., "example.com" matches "api.example.com")
 		if strings.HasSuffix(hostname, "."+allowedDomain) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -127,7 +142,7 @@ func isHostnameAllowed(hostname string, allowedDomains []string) bool {
 // This creates the JavaScript function that can be embedded in GitHub Actions workflows
 func GenerateJavaScriptURLFilter(allowDomains []string) string {
 	var js strings.Builder
-	
+
 	js.WriteString("// URL filtering function\n")
 	js.WriteString("function filterURLs(content, allowDomains) {\n")
 	js.WriteString("  if (!content || typeof content !== 'string') {\n")
@@ -136,6 +151,9 @@ func GenerateJavaScriptURLFilter(allowDomains []string) string {
 	js.WriteString("  \n")
 	js.WriteString("  let removedURLs = [];\n")
 	js.WriteString("  let filteredContent = content;\n")
+	js.WriteString("  \n")
+	js.WriteString("  // Default GitHub-owned domains when no domains are configured\n")
+	js.WriteString("  const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev'];\n")
 	js.WriteString("  \n")
 	js.WriteString("  // Helper function to determine if URL should be filtered\n")
 	js.WriteString("  function shouldFilterURL(rawURL) {\n")
@@ -147,10 +165,8 @@ func GenerateJavaScriptURLFilter(allowDomains []string) string {
 	js.WriteString("        return true;\n")
 	js.WriteString("      }\n")
 	js.WriteString("      \n")
-	js.WriteString("      // If no domain restrictions, allow all HTTPS URLs\n")
-	js.WriteString("      if (!allowDomains || allowDomains.length === 0) {\n")
-	js.WriteString("        return false;\n")
-	js.WriteString("      }\n")
+	js.WriteString("      // Use default GitHub domains if no domains are configured\n")
+	js.WriteString("      const domainsToCheck = (allowDomains && allowDomains.length > 0) ? allowDomains : defaultGitHubDomains;\n")
 	js.WriteString("      \n")
 	js.WriteString("      // Check if hostname matches any allowed domain pattern\n")
 	js.WriteString("      const hostname = url.hostname.toLowerCase();\n")
@@ -158,7 +174,7 @@ func GenerateJavaScriptURLFilter(allowDomains []string) string {
 	js.WriteString("        return true;\n")
 	js.WriteString("      }\n")
 	js.WriteString("      \n")
-	js.WriteString("      for (const allowedDomain of allowDomains) {\n")
+	js.WriteString("      for (const allowedDomain of domainsToCheck) {\n")
 	js.WriteString("        const domain = allowedDomain.toLowerCase().trim();\n")
 	js.WriteString("        if (!domain) continue;\n")
 	js.WriteString("        \n")
@@ -202,6 +218,6 @@ func GenerateJavaScriptURLFilter(allowDomains []string) string {
 	js.WriteString("  \n")
 	js.WriteString("  return { filteredContent, removedURLs };\n")
 	js.WriteString("}\n")
-	
+
 	return js.String()
 }

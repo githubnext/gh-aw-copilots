@@ -437,6 +437,9 @@ jobs:
               let removedURLs = [];
               let filteredContent = content;
               
+              // Default GitHub-owned domains when no domains are configured
+              const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev'];
+              
               // Helper function to determine if URL should be filtered
               function shouldFilterURL(rawURL) {
                 try {
@@ -447,10 +450,8 @@ jobs:
                     return true;
                   }
                   
-                  // If no domain restrictions, allow all HTTPS URLs
-                  if (!allowDomains || allowDomains.length === 0) {
-                    return false;
-                  }
+                  // Use default GitHub domains if no domains are configured
+                  const domainsToCheck = (allowDomains && allowDomains.length > 0) ? allowDomains : defaultGitHubDomains;
                   
                   // Check if hostname matches any allowed domain pattern
                   const hostname = url.hostname.toLowerCase();
@@ -458,7 +459,7 @@ jobs:
                     return true;
                   }
                   
-                  for (const allowedDomain of allowDomains) {
+                  for (const allowedDomain of domainsToCheck) {
                     const domain = allowedDomain.toLowerCase().trim();
                     if (!domain) continue;
                     

@@ -25,6 +25,8 @@ engine: claude
 			markdown: "# Test\nThis workflow tests URL filtering.",
 			expectedInOutput: []string{
 				"const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : null;",
+				"const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev']",
+				"const domainsToCheck = (allowDomains && allowDomains.length > 0) ? allowDomains : defaultGitHubDomains",
 				"function filterURLs(content, allowDomains)",
 				"const urlFilterResult = filterURLs(sanitized, allowDomains);",
 				"sanitized = urlFilterResult.filteredContent;",
@@ -128,13 +130,13 @@ allow-domains: github.com
 
 func TestAllowDomainsExtraction(t *testing.T) {
 	tests := []struct {
-		name           string
-		frontmatter    map[string]any
+		name            string
+		frontmatter     map[string]any
 		expectedDomains []string
 	}{
 		{
-			name:           "no allow-domains",
-			frontmatter:    map[string]any{},
+			name:            "no allow-domains",
+			frontmatter:     map[string]any{},
 			expectedDomains: nil,
 		},
 		{
@@ -164,12 +166,12 @@ func TestAllowDomainsExtraction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			compiler := NewCompiler(false, "", "test")
 			result := compiler.extractStringArray(tt.frontmatter, "allow-domains")
-			
+
 			if len(result) != len(tt.expectedDomains) {
 				t.Errorf("Expected %d domains, got %d", len(tt.expectedDomains), len(result))
 				return
 			}
-			
+
 			for i, expected := range tt.expectedDomains {
 				if i >= len(result) || result[i] != expected {
 					t.Errorf("Expected domain[%d] = %q, got %q", i, expected, result[i])
