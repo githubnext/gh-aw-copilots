@@ -392,8 +392,8 @@ jobs:
                 .replace(/'/g, '&apos;');
             
               // URI filtering - replace non-https protocols with "(redacted)"
-              // This regex matches common URI schemes at word boundaries
-              sanitized = sanitized.replace(/\b(?:http|ftp|file|data|javascript|vbscript|mailto|tel|ssh|ldap|jdbc|chrome|edge|safari|firefox|opera):[^\s\])}'"<>&\x00-\x1f]+/gi, '(redacted)');
+              // This regex matches common URI schemes at word boundaries, specifically excluding https
+              sanitized = sanitized.replace(/\b(?:http:\/\/|ftp:|file:|data:|javascript:|vbscript:|mailto:|tel:|ssh:|ldap:|jdbc:|chrome:|edge:|safari:|firefox:|opera:)[^\s\])}'"<>&\x00-\x1f]+/gi, '(redacted)');
             
               // Domain filtering for HTTPS URIs
               // Match https:// URIs and check if domain is in allowlist
