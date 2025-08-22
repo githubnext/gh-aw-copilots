@@ -150,6 +150,7 @@ type OutputConfig struct {
 	Issue          *IssueConfig       `yaml:"issue,omitempty"`
 	Comment        *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest    *PullRequestConfig `yaml:"pull-request,omitempty"`
+	Labels      *LabelConfig       `yaml:"labels,omitempty"`
 	AllowedDomains []string           `yaml:"allowed-domains,omitempty"`
 }
 
@@ -169,6 +170,12 @@ type PullRequestConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
 	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
+}
+
+// LabelConfig holds configuration for adding labels to issues/PRs from agent output
+type LabelConfig struct {
+	Allowed  []string `yaml:"allowed"`             // Mandatory list of allowed labels
+	MaxCount *int     `yaml:"max-count,omitempty"` // Optional maximum number of labels to add (default: 3)
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1535,6 +1542,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		}
 	}
 
+	// Build add_labels job if output.labels is configured
+	if data.Output != nil && data.Output.Labels != nil {
+		addLabelsJob, err := c.buildCreateOutputLabelJob(data, jobName)
+		if err != nil {
+			return fmt.Errorf("failed to build add_labels job: %w", err)
+		}
+		if err := c.jobManager.AddJob(addLabelsJob); err != nil {
+			return fmt.Errorf("failed to add add_labels job: %w", err)
+		}
+	}
+
 	// Build additional custom jobs from frontmatter jobs section
 	if err := c.buildCustomJobs(data); err != nil {
 		return fmt.Errorf("failed to build custom jobs: %w", err)
@@ -2295,6 +2313,51 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 						}
 					}
 					config.AllowedDomains = domainStrings
+      }
+        
+			// Parse labels configuration
+			if labels, exists := outputMap["labels"]; exists {
+				if labelsMap, ok := labels.(map[string]any); ok {
+					labelConfig := &LabelConfig{}
+
+					// Parse allowed labels (mandatory)
+					if allowed, exists := labelsMap["allowed"]; exists {
+						if allowedArray, ok := allowed.([]any); ok {
+							var allowedStrings []string
+							for _, label := range allowedArray {
+								if labelStr, ok := label.(string); ok {
+									allowedStrings = append(allowedStrings, labelStr)
+								}
+							}
+							labelConfig.Allowed = allowedStrings
+						}
+					}
+
+					// Parse max-count (optional)
+					if maxCount, exists := labelsMap["max-count"]; exists {
+						// Handle different numeric types that YAML parsers might return
+						var maxCountInt int
+						var validMaxCount bool
+						switch v := maxCount.(type) {
+						case int:
+							maxCountInt = v
+							validMaxCount = true
+						case int64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						case uint64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						case float64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						}
+						if validMaxCount {
+							labelConfig.MaxCount = &maxCountInt
+						}
+					}
+
+					config.Labels = labelConfig
 				}
 			}
 

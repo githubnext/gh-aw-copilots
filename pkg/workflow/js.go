@@ -15,3 +15,6 @@ var createCommentScript string
 
 //go:embed js/sanitize_output.cjs
 var sanitizeOutputScript string
+
+//go:embed js/add_labels.cjs
+var addLabelsScript string

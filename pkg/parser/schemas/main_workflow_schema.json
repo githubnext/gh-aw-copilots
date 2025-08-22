@@ -1004,6 +1004,27 @@
             }
           },
           "additionalProperties": false
+        },
+        "labels": {
+          "type": "object",
+          "description": "Configuration for adding labels to issues/PRs from agent output",
+          "properties": {
+            "allowed": {
+              "type": "array",
+              "description": "Mandatory list of allowed labels that can be added",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "max-count": {
+              "type": "integer",
+              "description": "Optional maximum number of labels to add (default: 3)",
+              "minimum": 1
+            }
+          },
+          "required": ["allowed"],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
