@@ -2,11 +2,11 @@
 // These globals are provided by the github-script action environment
 // Based on @actions/github-script AsyncFunctionArguments interface
 
-import * as core from '@actions/core';
-import * as exec from '@actions/exec';
-import * as github from '@actions/github';
-import * as glob from '@actions/glob';
-import * as io from '@actions/io';
+import * as actionsCore from '@actions/core';
+import * as actionsExec from '@actions/exec';
+import * as actionsGithub from '@actions/github';
+import * as actionsGlob from '@actions/glob';
+import * as actionsIo from '@actions/io';
 import { Context } from '@actions/github/lib/context';
 import { GitHub } from '@actions/github/lib/utils';
 
@@ -33,25 +33,25 @@ declare global {
    * Actions core utilities provided by github-script action
    * For setting outputs, logging, and other workflow operations
    */
-  const core: typeof core;
+  const core: typeof actionsCore;
   
   /**
    * Actions exec utilities provided by github-script action
    * For executing shell commands and tools
    */
-  const exec: typeof exec;
+  const exec: typeof actionsExec;
   
   /**
    * Actions glob utilities provided by github-script action
    * For file pattern matching and globbing
    */
-  const glob: typeof glob;
+  const glob: typeof actionsGlob;
   
   /**
    * Actions io utilities provided by github-script action
    * For file and directory operations
    */
-  const io: typeof io;
+  const io: typeof actionsIo;
   
   /**
    * Console object for logging (available in Node.js environment)
