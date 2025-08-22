@@ -31,6 +31,11 @@ func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName str
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass allowed domains configuration
+	if len(data.AllowDomains) > 0 {
+		domainsStr := strings.Join(data.AllowDomains, ",")
+		steps = append(steps, fmt.Sprintf("          GH_AW_ALLOW_DOMAINS: %q\n", domainsStr))
+	}
 	// Pass the allowed labels list
 	allowedLabelsStr := strings.Join(data.Output.Labels.Allowed, ",")
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_LABELS_ALLOWED: %q\n", allowedLabelsStr))

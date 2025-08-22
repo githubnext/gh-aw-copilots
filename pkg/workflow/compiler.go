@@ -15,7 +15,6 @@ import (
 	"github.com/githubnext/gh-aw/pkg/console"
 	"github.com/githubnext/gh-aw/pkg/constants"
 	"github.com/githubnext/gh-aw/pkg/parser"
-	"github.com/githubnext/gh-aw/pkg/sanitizer"
 	"github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -149,10 +148,11 @@ type WorkflowData struct {
 
 // OutputConfig holds configuration for automatic output routes
 type OutputConfig struct {
-	Issue       *IssueConfig       `yaml:"issue,omitempty"`
-	Comment     *CommentConfig     `yaml:"comment,omitempty"`
-	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
-	Labels      *LabelConfig       `yaml:"labels,omitempty"`
+	Issue         *IssueConfig       `yaml:"issue,omitempty"`
+	Comment       *CommentConfig     `yaml:"comment,omitempty"`
+	PullRequest   *PullRequestConfig `yaml:"pull-request,omitempty"`
+	Labels        *LabelConfig       `yaml:"labels,omitempty"`
+	AllowedDomains []string          `yaml:"allowed-domains,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -651,8 +651,10 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Parse output configuration
 	workflowData.Output = c.extractOutputConfig(result.Frontmatter)
 
-	// Parse allow-domains configuration
-	workflowData.AllowDomains = c.extractStringArray(result.Frontmatter, "allow-domains")
+	// Parse allow-domains configuration from output.allowed-domains
+	if workflowData.Output != nil && len(workflowData.Output.AllowedDomains) > 0 {
+		workflowData.AllowDomains = workflowData.Output.AllowedDomains
+	}
 
 	// Check if "alias" is used as a trigger in the "on" section
 	var hasAlias bool
@@ -812,19 +814,26 @@ func (c *Compiler) extractYAMLValue(frontmatter map[string]any, key string) stri
 // extractStringArray extracts a string array from the frontmatter map
 func (c *Compiler) extractStringArray(frontmatter map[string]any, key string) []string {
 	if value, exists := frontmatter[key]; exists {
-		if strArray, ok := value.([]any); ok {
-			var result []string
-			for _, item := range strArray {
-				if str, ok := item.(string); ok {
-					result = append(result, str)
-				}
+		return c.parseStringArrayFromAny(value)
+	}
+	return nil
+}
+
+// parseStringArrayFromAny converts an interface{} value to a string array
+// Supports both []any (array) and string (single value) formats
+func (c *Compiler) parseStringArrayFromAny(value any) []string {
+	if strArray, ok := value.([]any); ok {
+		var result []string
+		for _, item := range strArray {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
 			}
-			return result
 		}
-		// Handle single string value
-		if str, ok := value.(string); ok {
-			return []string{str}
-		}
+		return result
+	}
+	// Handle single string value
+	if str, ok := value.(string); ok {
+		return []string{str}
 	}
 	return nil
 }
@@ -1699,6 +1708,11 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass allowed domains configuration
+	if len(data.AllowDomains) > 0 {
+		domainsStr := strings.Join(data.AllowDomains, ",")
+		steps = append(steps, fmt.Sprintf("          GH_AW_ALLOW_DOMAINS: %q\n", domainsStr))
+	}
 	if data.Output.Issue.TitlePrefix != "" {
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_TITLE_PREFIX: %q\n", data.Output.Issue.TitlePrefix))
 	}
@@ -1755,6 +1769,11 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName s
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass allowed domains configuration
+	if len(data.AllowDomains) > 0 {
+		domainsStr := strings.Join(data.AllowDomains, ",")
+		steps = append(steps, fmt.Sprintf("          GH_AW_ALLOW_DOMAINS: %q\n", domainsStr))
+	}
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -1819,6 +1838,11 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass allowed domains configuration
+	if len(data.AllowDomains) > 0 {
+		domainsStr := strings.Join(data.AllowDomains, ",")
+		steps = append(steps, fmt.Sprintf("          GH_AW_ALLOW_DOMAINS: %q\n", domainsStr))
+	}
 	// Pass the workflow ID for branch naming
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_WORKFLOW_ID: %q\n", mainJobName))
 	// Pass the base branch from GitHub context
@@ -2375,6 +2399,11 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 				}
 			}
 
+			// Parse allowed-domains configuration
+			if allowedDomains, exists := outputMap["allowed-domains"]; exists {
+				config.AllowedDomains = c.parseStringArrayFromAny(allowedDomains)
+			}
+
 			return config
 		}
 	}
@@ -2693,28 +2722,9 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("              // Remove ANSI escape sequences\n")
 	yaml.WriteString("              sanitized = sanitized.replace(/\\x1b\\[[0-9;]*[mGKH]/g, '');\n")
 	yaml.WriteString("              \n")
-	yaml.WriteString("              // Filter URLs based on allow-domains configuration\n")
-	yaml.WriteString("              const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : ")
-	if len(data.AllowDomains) > 0 {
-		domainsJSON, _ := json.Marshal(data.AllowDomains)
-		yaml.WriteString(string(domainsJSON))
-	} else {
-		yaml.WriteString("null")
-	}
-	yaml.WriteString(";\n")
-	yaml.WriteString("              const urlFilterResult = filterURLs(sanitized, allowDomains);\n")
-	yaml.WriteString("              sanitized = urlFilterResult.filteredContent;\n")
-	yaml.WriteString("              if (urlFilterResult.removedURLs.length > 0) {\n")
-	yaml.WriteString("                console.log('Filtered URLs:', urlFilterResult.removedURLs);\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
 	yaml.WriteString("              // Trim excessive whitespace\n")
 	yaml.WriteString("              return sanitized.trim();\n")
 	yaml.WriteString("            }\n")
-	yaml.WriteString("            \n")
-	// Add URL filtering function
-	urlFilterJS := sanitizer.GenerateJavaScriptURLFilter(data.AllowDomains)
-	yaml.WriteString("            " + strings.ReplaceAll(urlFilterJS, "\n", "\n            ") + "\n")
 	yaml.WriteString("            \n")
 	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
 	yaml.WriteString("            if (!outputFile) {\n")

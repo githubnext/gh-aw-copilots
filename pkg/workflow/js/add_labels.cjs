@@ -1,3 +1,79 @@
+// URL filtering function
+function filterURLs(content, allowDomains) {
+  if (!content || typeof content !== 'string') {
+    return { filteredContent: '', removedURLs: [] };
+  }
+  
+  let removedURLs = [];
+  let filteredContent = content;
+  
+  // Default GitHub-owned domains when no domains are configured
+  const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev'];
+  
+  // Helper function to determine if URL should be filtered
+  function shouldFilterURL(rawURL) {
+    try {
+      const url = new URL(rawURL);
+      
+      // Always filter non-HTTPS URLs
+      if (url.protocol !== 'https:') {
+        return true;
+      }
+      
+      // Use default GitHub domains if no domains are configured
+      const domainsToCheck = (allowDomains && allowDomains.length > 0) ? allowDomains : defaultGitHubDomains;
+      
+      // Check if hostname matches any allowed domain pattern
+      const hostname = url.hostname.toLowerCase();
+      if (!hostname) {
+        return true;
+      }
+      
+      for (const allowedDomain of domainsToCheck) {
+        const domain = allowedDomain.toLowerCase().trim();
+        if (!domain) continue;
+        
+        // Exact match
+        if (hostname === domain) {
+          return false;
+        }
+        
+        // Subdomain match
+        if (hostname.endsWith('.' + domain)) {
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      // If we can't parse it, filter it out for safety
+      return true;
+    }
+  }
+  
+  // Handle markdown links: [text](url)
+  const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+  filteredContent = filteredContent.replace(markdownLinkRegex, (match, linkText, linkURL) => {
+    if (shouldFilterURL(linkURL)) {
+      removedURLs.push(linkURL);
+      return linkText ? linkText + ' [filtered]' : '[filtered]';
+    }
+    return match;
+  });
+  
+  // Handle plain URLs (including all protocols)
+  const urlRegex = /[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s<>"'\[\]{}()]+/g;
+  filteredContent = filteredContent.replace(urlRegex, (match) => {
+    if (shouldFilterURL(match)) {
+      removedURLs.push(match);
+      return '[filtered]';
+    }
+    return match;
+  });
+  
+  return { filteredContent, removedURLs };
+}
+
 async function main() {
   // Read the agent output content from environment variable
   const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT;
@@ -12,6 +88,16 @@ async function main() {
   }
 
   console.log('Agent output content length:', outputContent.length);
+
+  // Get allowed domains from environment variable
+  const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : null;
+  
+  // Filter URLs in the content
+  const urlFilterResult = filterURLs(outputContent, allowDomains);
+  const filteredContent = urlFilterResult.filteredContent;
+  if (urlFilterResult.removedURLs.length > 0) {
+    console.log('Filtered URLs:', urlFilterResult.removedURLs);
+  }
 
   // Read the allowed labels from environment variable (mandatory)
   const allowedLabelsEnv = process.env.GITHUB_AW_LABELS_ALLOWED;
@@ -75,7 +161,7 @@ async function main() {
   }
 
   // Parse labels from agent output (one per line, ignore empty lines)
-  const lines = outputContent.split('\n');
+  const lines = filteredContent.split('\n');
   const requestedLabels = [];
 
   for (const line of lines) {

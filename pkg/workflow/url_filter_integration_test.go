@@ -16,53 +16,60 @@ func TestURLFilteringIntegration(t *testing.T) {
 		notInOutput      []string
 	}{
 		{
-			name: "URL filtering with no allow-domains config",
+			name: "URL filtering with no output.allowed-domains config",
 			frontmatter: `---
 name: Test Workflow
 on: push
 engine: claude
+output:
+  comment: {}
 ---`,
 			markdown: "# Test\nThis workflow tests URL filtering.",
 			expectedInOutput: []string{
-				"const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : null;",
+				"GITHUB_AW_AGENT_OUTPUT:", // Environment variable should be set
+				"actions/github-script@v7", // Should use github-script action
+				"function filterURLs(content, allowDomains)", // Should have embedded filtering function
 				"const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev']",
-				"const domainsToCheck = (allowDomains && allowDomains.length > 0) ? allowDomains : defaultGitHubDomains",
-				"function filterURLs(content, allowDomains)",
-				"const urlFilterResult = filterURLs(sanitized, allowDomains);",
-				"sanitized = urlFilterResult.filteredContent;",
 			},
-			notInOutput: []string{},
+			notInOutput: []string{
+				"GH_AW_ALLOW_DOMAINS:", // Should not have custom domains env var when not configured
+			},
 		},
 		{
-			name: "URL filtering with allow-domains config",
+			name: "URL filtering with output.allowed-domains config",
 			frontmatter: `---
 name: Test Workflow
 on: push
 engine: claude
-allow-domains:
-  - github.com
-  - example.org
+output:
+  comment: {}
+  allowed-domains:
+    - github.com
+    - example.org
 ---`,
 			markdown: "# Test\nThis workflow tests URL filtering with domains.",
 			expectedInOutput: []string{
-				"const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : [\"github.com\",\"example.org\"];",
+				"GITHUB_AW_AGENT_OUTPUT:",
+				"GH_AW_ALLOW_DOMAINS: \"github.com,example.org\"", // Should set custom domains env var
 				"function filterURLs(content, allowDomains)",
-				"const urlFilterResult = filterURLs(sanitized, allowDomains);",
-				"console.log('Filtered URLs:', urlFilterResult.removedURLs);",
+				"const defaultGitHubDomains = ['github.com', 'github.io', 'githubusercontent.com', 'githubassets.com', 'githubapp.com', 'github.dev']",
 			},
 			notInOutput: []string{},
 		},
 		{
-			name: "URL filtering with single allow-domain",
+			name: "URL filtering with single output.allowed-domain",
 			frontmatter: `---
 name: Test Workflow
 on: push
 engine: claude
-allow-domains: github.com
+output:
+  issue: {}
+  allowed-domains: github.com
 ---`,
 			markdown: "# Test\nThis workflow tests URL filtering with single domain.",
 			expectedInOutput: []string{
-				"const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : [\"github.com\"];",
+				"GITHUB_AW_AGENT_OUTPUT:",
+				"GH_AW_ALLOW_DOMAINS: \"github.com\"", // Should set single domain env var
 				"function filterURLs(content, allowDomains)",
 			},
 			notInOutput: []string{},
@@ -135,28 +142,43 @@ func TestAllowDomainsExtraction(t *testing.T) {
 		expectedDomains []string
 	}{
 		{
-			name:            "no allow-domains",
+			name:            "no output.allowed-domains",
 			frontmatter:     map[string]any{},
 			expectedDomains: nil,
 		},
 		{
-			name: "single string domain",
+			name: "single string domain in output",
 			frontmatter: map[string]any{
-				"allow-domains": "github.com",
+				"output": map[string]any{
+					"allowed-domains": "github.com",
+				},
 			},
 			expectedDomains: []string{"github.com"},
 		},
 		{
-			name: "array of domains",
+			name: "array of domains in output",
 			frontmatter: map[string]any{
-				"allow-domains": []any{"github.com", "example.org"},
+				"output": map[string]any{
+					"allowed-domains": []any{"github.com", "example.org"},
+				},
 			},
 			expectedDomains: []string{"github.com", "example.org"},
 		},
 		{
-			name: "empty array",
+			name: "empty array in output",
 			frontmatter: map[string]any{
-				"allow-domains": []any{},
+				"output": map[string]any{
+					"allowed-domains": []any{},
+				},
+			},
+			expectedDomains: nil,
+		},
+		{
+			name: "output section without allowed-domains",
+			frontmatter: map[string]any{
+				"output": map[string]any{
+					"comment": map[string]any{},
+				},
 			},
 			expectedDomains: nil,
 		},
@@ -165,7 +187,12 @@ func TestAllowDomainsExtraction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			compiler := NewCompiler(false, "", "test")
-			result := compiler.extractStringArray(tt.frontmatter, "allow-domains")
+			outputConfig := compiler.extractOutputConfig(tt.frontmatter)
+			
+			var result []string
+			if outputConfig != nil && len(outputConfig.AllowedDomains) > 0 {
+				result = outputConfig.AllowedDomains
+			}
 
 			if len(result) != len(tt.expectedDomains) {
 				t.Errorf("Expected %d domains, got %d", len(tt.expectedDomains), len(result))
