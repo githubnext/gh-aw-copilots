@@ -28,6 +28,16 @@ async function main() {
 
   console.log('Allowed labels:', allowedLabels);
 
+  // Read the max-count limit from environment variable (default: 3)
+  const maxCountEnv = process.env.GITHUB_AW_LABELS_MAX_COUNT;
+  const maxCount = maxCountEnv ? parseInt(maxCountEnv, 10) : 3;
+  if (isNaN(maxCount) || maxCount < 1) {
+    core.setFailed(`Invalid max-count value: ${maxCountEnv}. Must be a positive integer`);
+    return;
+  }
+
+  console.log('Max count:', maxCount);
+
   // Check if we're in an issue or pull request context
   const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
   const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
@@ -97,6 +107,12 @@ async function main() {
   // Remove duplicates from requested labels
   const uniqueLabels = [...new Set(requestedLabels)];
 
+  // Enforce max-count limit
+  if (uniqueLabels.length > maxCount) {
+    core.setFailed(`Too many labels requested (${uniqueLabels.length}). Maximum allowed: ${maxCount}. Labels: ${uniqueLabels.join(', ')}`);
+    return;
+  }
+
   if (uniqueLabels.length === 0) {
     console.log('No labels to add');
     core.setOutput('labels_added', '');
@@ -108,7 +124,7 @@ No labels were added (no valid labels found in agent output).
     return;
   }
 
-  console.log(`Adding labels to ${contextType} #${issueNumber}:`, uniqueLabels);
+  console.log(`Adding ${uniqueLabels.length} labels to ${contextType} #${issueNumber}:`, uniqueLabels);
 
   try {
     // Add labels using GitHub API

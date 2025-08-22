@@ -150,7 +150,7 @@ type OutputConfig struct {
 	Issue       *IssueConfig       `yaml:"issue,omitempty"`
 	Comment     *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
-	Label       *LabelConfig       `yaml:"label,omitempty"`
+	Label       *LabelConfig       `yaml:"labels,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -173,7 +173,8 @@ type PullRequestConfig struct {
 
 // LabelConfig holds configuration for adding labels to issues/PRs from agent output
 type LabelConfig struct {
-	Allowed []string `yaml:"allowed"` // Mandatory list of allowed labels
+	Allowed  []string `yaml:"allowed"`                // Mandatory list of allowed labels
+	MaxCount *int     `yaml:"max-count,omitempty"`    // Optional maximum number of labels to add (default: 3)
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1843,61 +1844,7 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 	return job, nil
 }
 
-// buildCreateOutputLabelJob creates the add_labels job
-func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName string) (*Job, error) {
-	if data.Output == nil || data.Output.Label == nil {
-		return nil, fmt.Errorf("output.labels configuration is required")
-	}
 
-	// Validate that allowed labels list is not empty
-	if len(data.Output.Label.Allowed) == 0 {
-		return nil, fmt.Errorf("output.labels.allowed must be non-empty")
-	}
-
-	var steps []string
-	steps = append(steps, "      - name: Add Labels\n")
-	steps = append(steps, "        id: add_labels\n")
-	steps = append(steps, "        uses: actions/github-script@v7\n")
-
-	// Add environment variables
-	steps = append(steps, "        env:\n")
-	// Pass the agent output content from the main job
-	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
-	// Pass the allowed labels list
-	allowedLabelsStr := strings.Join(data.Output.Label.Allowed, ",")
-	steps = append(steps, fmt.Sprintf("          GITHUB_AW_LABELS_ALLOWED: %q\n", allowedLabelsStr))
-
-	steps = append(steps, "        with:\n")
-	steps = append(steps, "          script: |\n")
-
-	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(addLabelsScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
-
-	// Create outputs for the job
-	outputs := map[string]string{
-		"labels_added": "${{ steps.add_labels.outputs.labels_added }}",
-	}
-
-	job := &Job{
-		Name:           "add_labels",
-		If:             "if: github.event.issue.number || github.event.pull_request.number", // Only run in issue or PR context
-		RunsOn:         "runs-on: ubuntu-latest",
-		Permissions:    "permissions:\n      contents: read\n      issues: write\n      pull-requests: write",
-		TimeoutMinutes: 10, // 10-minute timeout as required
-		Steps:          steps,
-		Outputs:        outputs,
-		Depends:        []string{mainJobName}, // Depend on the main workflow job
-	}
-
-	return job, nil
-}
 
 // buildMainJob creates the main workflow job
 func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreated bool) (*Job, error) {
@@ -2372,6 +2319,30 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 								}
 							}
 							labelConfig.Allowed = allowedStrings
+						}
+					}
+
+					// Parse max-count (optional)
+					if maxCount, exists := labelsMap["max-count"]; exists {
+						// Handle different numeric types that YAML parsers might return
+						var maxCountInt int
+						var validMaxCount bool
+						switch v := maxCount.(type) {
+						case int:
+							maxCountInt = v
+							validMaxCount = true
+						case int64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						case uint64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						case float64:
+							maxCountInt = int(v)
+							validMaxCount = true
+						}
+						if validMaxCount {
+							labelConfig.MaxCount = &maxCountInt
 						}
 					}
 

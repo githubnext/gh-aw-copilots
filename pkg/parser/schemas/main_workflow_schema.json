@@ -1009,6 +1009,11 @@
                 "type": "string"
               },
               "minItems": 1
+            },
+            "max-count": {
+              "type": "integer",
+              "description": "Optional maximum number of labels to add (default: 3)",
+              "minimum": 1
             }
           },
           "required": ["allowed"],

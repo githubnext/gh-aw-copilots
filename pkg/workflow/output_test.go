@@ -889,6 +889,265 @@ This workflow tests the add_labels job generation.
 	t.Logf("Generated workflow content:\n%s", lockContent)
 }
 
+func TestOutputLabelConfigMaxCountParsing(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-max-count-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration including max-count
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement, needs-review]
+    max-count: 5
+---
+
+# Test Output Label Max Count Configuration
+
+This workflow tests the output labels max-count configuration parsing.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels-max-count.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow data
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with output labels max-count config: %v", err)
+	}
+
+	// Verify output configuration is parsed correctly
+	if workflowData.Output == nil {
+		t.Fatal("Expected output configuration to be parsed")
+	}
+
+	if workflowData.Output.Label == nil {
+		t.Fatal("Expected labels configuration to be parsed")
+	}
+
+	// Verify allowed labels
+	expectedLabels := []string{"triage", "bug", "enhancement", "needs-review"}
+	if len(workflowData.Output.Label.Allowed) != len(expectedLabels) {
+		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Label.Allowed))
+	}
+
+	for i, expectedLabel := range expectedLabels {
+		if i >= len(workflowData.Output.Label.Allowed) || workflowData.Output.Label.Allowed[i] != expectedLabel {
+			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Label.Allowed[i])
+		}
+	}
+
+	// Verify max-count
+	if workflowData.Output.Label.MaxCount == nil {
+		t.Fatal("Expected max-count to be parsed")
+	}
+
+	expectedMaxCount := 5
+	if *workflowData.Output.Label.MaxCount != expectedMaxCount {
+		t.Errorf("Expected max-count to be %d, got %d", expectedMaxCount, *workflowData.Output.Label.MaxCount)
+	}
+}
+
+func TestOutputLabelConfigDefaultMaxCount(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-default-max-count-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration without max-count (should use default)
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement]
+---
+
+# Test Output Label Default Max Count
+
+This workflow tests the default max-count behavior.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels-default.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow data
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow without max-count: %v", err)
+	}
+
+	// Verify max-count is nil (will use default in job generation)
+	if workflowData.Output.Label.MaxCount != nil {
+		t.Errorf("Expected max-count to be nil (default), got %d", *workflowData.Output.Label.MaxCount)
+	}
+}
+
+func TestOutputLabelJobGenerationWithMaxCount(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-job-max-count-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration including max-count
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [get_issue]
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement]
+    max-count: 2
+---
+
+# Test Output Label Job Generation with Max Count
+
+This workflow tests the add_labels job generation with max-count.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels-max-count.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with output labels max-count: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := filepath.Join(tmpDir, "test-output-labels-max-count.lock.yml")
+	content, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	lockContent := string(content)
+
+	// Verify add_labels job exists
+	if !strings.Contains(lockContent, "add_labels:") {
+		t.Error("Expected 'add_labels' job to be in generated workflow")
+	}
+
+	// Verify JavaScript content includes environment variables for configuration
+	if !strings.Contains(lockContent, "GITHUB_AW_LABELS_ALLOWED: \"triage,bug,enhancement\"") {
+		t.Error("Expected allowed labels to be set as environment variable")
+	}
+
+	// Verify max-count environment variable is set
+	if !strings.Contains(lockContent, "GITHUB_AW_LABELS_MAX_COUNT: 2") {
+		t.Error("Expected max-count to be set as environment variable")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContent)
+}
+
+func TestOutputLabelJobGenerationWithDefaultMaxCount(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-job-default-max-count-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration without max-count (should use default of 3)
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [get_issue]
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement]
+---
+
+# Test Output Label Job Generation with Default Max Count
+
+This workflow tests the add_labels job generation with default max-count.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels-default-max-count.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with output labels default max-count: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := filepath.Join(tmpDir, "test-output-labels-default-max-count.lock.yml")
+	content, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	lockContent := string(content)
+
+	// Verify add_labels job exists
+	if !strings.Contains(lockContent, "add_labels:") {
+		t.Error("Expected 'add_labels' job to be in generated workflow")
+	}
+
+	// Verify max-count environment variable is set to default value of 3
+	if !strings.Contains(lockContent, "GITHUB_AW_LABELS_MAX_COUNT: 3") {
+		t.Error("Expected max-count to be set to default value of 3 as environment variable")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContent)
+}
+
 func TestOutputLabelConfigValidation(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "output-label-validation-test")

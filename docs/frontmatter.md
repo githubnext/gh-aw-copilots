@@ -262,6 +262,7 @@ output:
     draft: true                     # Optional: create as draft PR (defaults to true)
   labels:
     allowed: [triage, bug, enhancement] # Mandatory: allowed labels for addition
+    max-count: 3                        # Optional: maximum number of labels to add (default: 3)
 ```
 
 ### Issue Creation (`output.issue`)
@@ -417,6 +418,7 @@ The agent must create git patches in `/tmp/aw.patch` for the changes to be appli
 output:
   labels:
     allowed: [triage, bug, enhancement]  # Mandatory: list of allowed labels (must be non-empty)
+    max-count: 3                         # Optional: maximum number of labels to add (default: 3)
 ```
 
 **Agent Output Format:**
@@ -432,6 +434,7 @@ needs-review
 - Lines starting with `-` are rejected (no removal operations allowed)
 - Duplicate labels are automatically removed
 - All requested labels must be in the `allowed` list or the job fails with a clear error message
+- Label count is limited by `max-count` setting (default: 3) - exceeding this limit causes job failure
 - Only GitHub's `issues.addLabels` API endpoint is used (no removal endpoints)
 
 **Example workflow using label addition:**
