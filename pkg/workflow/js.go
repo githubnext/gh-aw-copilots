@@ -12,3 +12,6 @@ var createIssueScript string
 
 //go:embed js/create_comment.cjs
 var createCommentScript string
+
+//go:embed js/add_labels.cjs
+var addLabelsScript string
