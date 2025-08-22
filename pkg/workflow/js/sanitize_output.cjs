@@ -3,12 +3,25 @@
  * Provides XML character escaping, URI filtering, and domain allowlisting
  */
 
-function sanitizeContent(content, options = {}) {
+function neutralizeMentions(s) {
+  // Replace @name or @org/team outside code with `@name`
+  return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                   (_m, p1, p2) => `${p1}\`@${p2}\``);
+}
+
+function neutralizeBotTriggers(s) {
+  // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
+  return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi, 
+                   (match, action, ref) => `\`${action} #${ref}\``);
+}
+
+function sanitizeContent(content) {
   if (!content || typeof content !== 'string') {
     return '';
   }
 
-  // Default allowed domains for GitHub infrastructure
+  // Read allowed domains from environment variable
+  const allowedDomainsEnv = process.env.GITHUB_AW_ALLOWED_DOMAINS;
   const defaultAllowedDomains = [
     'github.com',
     'github.io',
@@ -18,9 +31,14 @@ function sanitizeContent(content, options = {}) {
     'codespaces.new'
   ];
 
-  const allowedDomains = options.allowedDomains || defaultAllowedDomains;
+  const allowedDomains = allowedDomainsEnv 
+    ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+    : defaultAllowedDomains;
 
   let sanitized = content;
+
+  // Neutralize @mentions to prevent unintended notifications
+  sanitized = neutralizeMentions(sanitized);
 
   // Remove control characters (except newlines and tabs)
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
@@ -67,6 +85,9 @@ function sanitizeContent(content, options = {}) {
 
   // Remove ANSI escape sequences
   sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+
+  // Neutralize common bot trigger phrases
+  sanitized = neutralizeBotTriggers(sanitized);
 
   // Trim excessive whitespace
   return sanitized.trim();

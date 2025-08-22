@@ -2586,6 +2586,14 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("      - name: Collect agent output\n")
 	yaml.WriteString("        id: collect_output\n")
 	yaml.WriteString("        uses: actions/github-script@v7\n")
+
+	// Add environment variables for sanitization configuration
+	if data.Output != nil && len(data.Output.AllowedDomains) > 0 {
+		yaml.WriteString("        env:\n")
+		domainsStr := strings.Join(data.Output.AllowedDomains, ",")
+		yaml.WriteString(fmt.Sprintf("          GITHUB_AW_ALLOWED_DOMAINS: %q\n", domainsStr))
+	}
+
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          script: |\n")
 	yaml.WriteString("            const fs = require('fs');\n")
@@ -2608,23 +2616,6 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("            const { sanitizeContent } = module.exports;\n")
 	yaml.WriteString("            \n")
 
-	// Build the options object for allowed domains
-	yaml.WriteString("            // Build sanitization options\n")
-	yaml.WriteString("            const sanitizationOptions = {};\n")
-
-	if data.Output != nil && len(data.Output.AllowedDomains) > 0 {
-		yaml.WriteString("            sanitizationOptions.allowedDomains = [\n")
-		for i, domain := range data.Output.AllowedDomains {
-			yaml.WriteString(fmt.Sprintf("              '%s'", domain))
-			if i < len(data.Output.AllowedDomains)-1 {
-				yaml.WriteString(",")
-			}
-			yaml.WriteString("\n")
-		}
-		yaml.WriteString("            ];\n")
-	}
-
-	yaml.WriteString("            \n")
 	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
 	yaml.WriteString("            if (!outputFile) {\n")
 	yaml.WriteString("              console.log('GITHUB_AW_OUTPUT not set, no output to collect');\n")
@@ -2641,7 +2632,7 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("              console.log('Output file is empty');\n")
 	yaml.WriteString("              core.setOutput('output', '');\n")
 	yaml.WriteString("            } else {\n")
-	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent, sanitizationOptions);\n")
+	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent);\n")
 	yaml.WriteString("              console.log('Collected agentic output (sanitized):', sanitizedContent.substring(0, 200) + (sanitizedContent.length > 200 ? '...' : ''));\n")
 	yaml.WriteString("              core.setOutput('output', sanitizedContent);\n")
 	yaml.WriteString("            }\n")

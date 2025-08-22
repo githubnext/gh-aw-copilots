@@ -104,11 +104,11 @@ This workflow tests the agentic output collection functionality.
 	}
 
 	// Verify sanitization function is included
-	if !strings.Contains(lockContent, "function sanitizeContent(content, options = {}) {") {
+	if !strings.Contains(lockContent, "function sanitizeContent(content) {") {
 		t.Error("Expected sanitization function to be in collection step")
 	}
 
-	if !strings.Contains(lockContent, "const sanitizedContent = sanitizeContent(outputContent, sanitizationOptions);") {
+	if !strings.Contains(lockContent, "const sanitizedContent = sanitizeContent(outputContent);") {
 		t.Error("Expected sanitization function to be called on output content")
 	}
 
