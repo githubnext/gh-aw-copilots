@@ -1,7 +1,4 @@
-/**
- * Sanitization function for adversarial LLM outputs with enhanced security
- * Provides XML character escaping, URI filtering, and domain allowlisting
- */
+const fs = require("fs");
 
 function neutralizeMentions(s) {
   // Replace @name or @org/team outside code with `@name`
