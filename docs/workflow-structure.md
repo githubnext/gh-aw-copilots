@@ -85,7 +85,7 @@ cache:
   key: node-modules-${{ hashFiles('package-lock.json') }}
   path: node_modules
 
-ai-reaction: "eyes"
+ai_reaction: "eyes"
 ---
 
 # Issue Auto-Responder

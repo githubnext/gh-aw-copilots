@@ -9,9 +9,9 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 **Standard GitHub Actions Properties:**
 - `on`: Trigger events for the workflow
 - `permissions`: Required permissions for the workflow
-- `run-name`: Name of the workflow run
+- `run_name`: Name of the workflow run
 - `runs-on`: Runner environment for the workflow
-- `timeout_minutes`: Workflow timeout
+- `timeout-minutes`: Workflow timeout
 - `concurrency`: Concurrency settings for the workflow
 - `env`: Environment variables for the workflow
 - `if`: Conditional execution of the workflow
@@ -20,10 +20,10 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 **Agentic-Specific Properties:**
 - `engine`: AI engine configuration (claude/codex)
 - `tools`: Available tools and MCP servers for the AI engine  
-- `stop-time`: Deadline when workflow should stop running (absolute or relative time)
-- `max-turns`: Maximum number of chat iterations per run
+- `stop_time`: Deadline when workflow should stop running (absolute or relative time)
+- `max_turns`: Maximum number of chat iterations per run
 - `alias`: Alias name for the workflow
-- `ai-reaction`: Emoji reaction to add/remove on triggering GitHub item
+- `ai_reaction`: Emoji reaction to add/remove on triggering GitHub item
 - `cache`: Cache configuration for workflow dependencies
 - `output`: Output processing configuration for automatic issue creation and comment posting
 
@@ -188,12 +188,12 @@ engine:
 
 ## Cost Control Options
 
-### Maximum Turns (`max-turns:`)
+### Maximum Turns (`max_turns:`)
 
 Limit the number of chat iterations within a single agentic run:
 
 ```yaml
-max-turns: 5
+max_turns: 5
 ```
 
 **Behavior:**
@@ -202,13 +202,13 @@ max-turns: 5
 3. Helps prevent runaway chat loops and control costs
 4. Only applies to engines that support turn limiting (currently Claude)
 
-### Stop Time (`stop-time:`)
+### Stop Time (`stop_time:`)
 
 Automatically disable workflow after a deadline:
 
 **Relative time delta (calculated from compilation time):**
 ```yaml
-stop-time: "+25h"      # 25 hours from now
+stop_time: "+25h"      # 25 hours from now
 ```
 
 **Supported absolute date formats:**
@@ -226,12 +226,12 @@ stop-time: "+25h"      # 25 hours from now
 
 Note that if you specify a relative time, it is calculated at the time of workflow compilation, not when the workflow runs. If you re-compile your workflow, e.g. after a change, the effective stop time will be reset.
 
-## Visual Feedback (`ai-reaction:`)
+## Visual Feedback (`ai_reaction:`)
 
 Emoji reaction added/removed on triggering GitHub items:
 
 ```yaml
-ai-reaction: "eyes"
+ai_reaction: "eyes"
 ```
 
 **Available reactions:**
@@ -253,11 +253,11 @@ Configure automatic output processing from AI agent results:
 ```yaml
 output:
   issue:
-    title-prefix: "[ai] "           # Optional: prefix for issue titles
+    title_prefix: "[ai] "           # Optional: prefix for issue titles
     labels: [automation, ai-agent]  # Optional: labels to attach to issues
   comment: {}                       # Create comments on issues/PRs from agent output
-  pull-request:
-    title-prefix: "[ai] "           # Optional: prefix for PR titles
+  pull_request:
+    title_prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
     draft: true                     # Optional: create as draft PR (defaults to true)
 ```
@@ -306,7 +306,7 @@ permissions:
 engine: claude
 output:
   issue:
-    title-prefix: "[analysis] "
+    title_prefix: "[analysis] "
     labels: [automation, code-review]
 ---
 
@@ -362,8 +362,8 @@ This automatically creates GitHub issues or comments from the agent's analysis w
 **Configuration:**
 ```yaml
 output:
-  pull-request:
-    title-prefix: "[ai] "           # Optional: prefix for PR titles
+  pull_request:
+    title_prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
     draft: true                     # Optional: create as draft PR (defaults to true)
 ```
@@ -376,8 +376,8 @@ permissions:
   actions: read       # Main job only needs minimal permissions
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[bot] "
+  pull_request:
+    title_prefix: "[bot] "
     labels: [automation, ai-generated]
 ---
 
@@ -433,9 +433,9 @@ cache:
 ### Run Configuration
 
 ```yaml
-run-name: "Custom workflow run name"  # Defaults to workflow name
+run_name: "Custom workflow run name"  # Defaults to workflow name
 runs-on: ubuntu-latest               # Defaults to ubuntu-latest
-timeout_minutes: 30                  # Defaults to 15 minutes
+timeout-minutes: 30                  # Defaults to 15 minutes
 ```
 
 ### Concurrency Control
@@ -544,18 +544,18 @@ tools:
 
 output:
   issue:
-    title-prefix: "[analysis] "
+    title_prefix: "[analysis] "
     labels: [automation, ai-analysis]
 
 cache:
   key: deps-${{ hashFiles('**/package-lock.json') }}
   path: node_modules
 
-stop-time: "2025-12-31 23:59:59"
-ai-reaction: "rocket"
+stop_time: "2025-12-31 23:59:59"
+ai_reaction: "rocket"
 
-run-name: "Issue Handler - #${{ github.event.issue.number }}"
-timeout_minutes: 10
+run_name: "Issue Handler - #${{ github.event.issue.number }}"
+timeout-minutes: 10
 
 env:
   LOG_LEVEL: info

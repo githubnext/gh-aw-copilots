@@ -10,18 +10,18 @@ on:
 engine: 
   id: claude
   model: claude-3-5-sonnet-20241022
-timeout_minutes: 10
+timeout-minutes: 10
 permissions:
   pull-requests: write
   actions: read
   contents: read
 output:
   issue:
-    title-prefix: "[claude-test] "
+    title_prefix: "[claude-test] "
     labels: [claude, automation, haiku]
   comment: {}
-  pull-request:
-    title-prefix: "[claude-test] "
+  pull_request:
+    title_prefix: "[claude-test] "
     labels: [claude, automation, bot]
 tools:
   claude:

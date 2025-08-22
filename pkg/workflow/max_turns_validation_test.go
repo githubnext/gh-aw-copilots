@@ -23,7 +23,7 @@ on:
 permissions:
   contents: read
 engine: codex
-max-turns: 5
+max_turns: 5
 ---
 
 # Test Workflow
@@ -41,7 +41,7 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: 5
+max_turns: 5
 ---
 
 # Test Workflow

@@ -281,7 +281,7 @@ func TestCompileWorkflowWithTracking_SharedActions(t *testing.T) {
 	workflowWithReaction := `---
 name: Test Workflow With Reaction
 on: push
-ai-reaction: heart
+ai_reaction: heart
 ---
 
 This is a test workflow.

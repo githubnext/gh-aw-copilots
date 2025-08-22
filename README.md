@@ -64,10 +64,10 @@ tools:
 
 output:
   issue:
-    title-prefix: "[triage] "
+    title_prefix: "[triage] "
     labels: [automation, triage]
 
-timeout_minutes: 5
+timeout-minutes: 5
 ---
 
 # Issue Triage

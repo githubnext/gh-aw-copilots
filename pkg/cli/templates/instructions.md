@@ -20,7 +20,7 @@ tools:
   github:
     allowed: [add_issue_comment]
 engine: claude
-timeout_minutes: 10
+timeout-minutes: 10
 ---
 
 # Workflow Title
@@ -48,14 +48,14 @@ The YAML frontmatter supports these fields:
   - Available permissions: `contents`, `issues`, `pull-requests`, `discussions`, `actions`, `checks`, `statuses`, `models`, `deployments`, `security-events`
 
 - **`runs-on:`** - Runner type (string, array, or object)
-- **`timeout_minutes:`** - Workflow timeout (integer)
+- **`timeout-minutes:`** - Workflow timeout (integer)
 - **`concurrency:`** - Concurrency control (string or object)
 - **`env:`** - Environment variables (object or string)
 - **`if:`** - Conditional execution expression (string)
-- **`run-name:`** - Custom workflow run name (string)
+- **`run_name:`** - Custom workflow run name (string)
 - **`name:`** - Workflow name (string)
 - **`steps:`** - Custom workflow steps (object)
-- **`post-steps:`** - Custom workflow steps to run after AI execution (object)
+- **`post_steps:`** - Custom workflow steps to run after AI execution (object)
 
 ### Agentic Workflow Specific Fields
 
@@ -79,7 +79,7 @@ The YAML frontmatter supports these fields:
     ```yaml
     output:
       issue:
-        title-prefix: "[ai] "           # Optional: prefix for issue titles  
+        title_prefix: "[ai] "           # Optional: prefix for issue titles  
         labels: [automation, ai-agent]  # Optional: labels to attach to issues
     ```
     **Important**: When using `output.issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
@@ -89,18 +89,18 @@ The YAML frontmatter supports these fields:
       comment: {}
     ```
     **Important**: When using `output.comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
-  - `pull-request:` - Automatic pull request creation from agent output with git patches
+  - `pull_request:` - Automatic pull request creation from agent output with git patches
     ```yaml
     output:
-      pull-request:
-        title-prefix: "[ai] "           # Optional: prefix for PR titles
+      pull_request:
+        title_prefix: "[ai] "           # Optional: prefix for PR titles
         labels: [automation, ai-agent]  # Optional: labels to attach to PRs
         draft: true                     # Optional: create as draft PR (defaults to true)
     ```
     **Important**: When using `output.pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. The agent must create git patches in `/tmp/aw.patch`.
   
-- **`max-turns:`** - Maximum chat iterations per run (integer)
-- **`stop-time:`** - Deadline for workflow. Can be absolute timestamp ("YYYY-MM-DD HH:MM:SS") or relative delta (+25h, +3d, +1d12h30m). Uses precise date calculations that account for varying month lengths.
+- **`max_turns:`** - Maximum chat iterations per run (integer)
+- **`stop_time:`** - Deadline for workflow. Can be absolute timestamp ("YYYY-MM-DD HH:MM:SS") or relative delta (+25h, +3d, +1d12h30m). Uses precise date calculations that account for varying month lengths.
 - **`alias:`** - Alternative workflow name (string)
 - **`cache:`** - Cache configuration for workflow dependencies (object or array)
 
@@ -158,7 +158,7 @@ permissions:
 engine: claude
 output:
   issue:
-    title-prefix: "[analysis] "
+    title_prefix: "[analysis] "
     labels: [automation, ai-generated]
 ---
 
@@ -387,11 +387,11 @@ permissions:
   actions: read
 output:
   issue:
-    title-prefix: "[ai] "
+    title_prefix: "[ai] "
     labels: [automation]
   # OR for pull requests:
-  # pull-request:
-  #   title-prefix: "[ai] " 
+  # pull_request:
+  #   title_prefix: "[ai] " 
   #   labels: [automation]
   #   draft: false                      # Create non-draft PR
   # OR for comments:
@@ -415,7 +415,7 @@ permissions:
 engine: claude
 output:
   issue:
-    title-prefix: "[analysis] "
+    title_prefix: "[analysis] "
     labels: [automation, ai-generated]
 ---
 
@@ -449,8 +449,8 @@ permissions:
   actions: read       # Main job only needs minimal permissions
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[bot] "
+  pull_request:
+    title_prefix: "[bot] "
     labels: [automation, ai-generated]
     draft: false                        # Create non-draft PR for immediate review
 ---
@@ -539,7 +539,7 @@ permissions:
 tools:
   github:
     allowed: [get_issue, add_issue_comment, update_issue]
-timeout_minutes: 5
+timeout-minutes: 5
 ---
 
 # Issue Triage
@@ -566,7 +566,7 @@ tools:
     allowed:
       WebFetch:
       WebSearch:
-timeout_minutes: 15
+timeout-minutes: 15
 ---
 
 # Weekly Research
@@ -729,8 +729,8 @@ Agentic workflows compile to GitHub Actions YAML:
 4. **Use @include directives** for common patterns and security boilerplate
 5. **Test with `gh aw compile`** before committing (or `gh aw compile <workflow-id>` for specific workflows)
 6. **Review generated `.lock.yml`** files before deploying
-7. **Set `stop-time`** for cost-sensitive workflows
-8. **Set `max-turns`** to limit chat iterations and prevent runaway loops
+7. **Set `stop_time`** for cost-sensitive workflows
+8. **Set `max_turns`** to limit chat iterations and prevent runaway loops
 9. **Use specific tool permissions** rather than broad access
 10. **Monitor costs with `gh aw logs`** to track AI model usage and expenses
 11. **Use `--engine` filter** in logs command to analyze specific AI engine performance
@@ -740,7 +740,7 @@ Agentic workflows compile to GitHub Actions YAML:
 The workflow frontmatter is validated against JSON Schema during compilation. Common validation errors:
 
 - **Invalid field names** - Only fields in the schema are allowed
-- **Wrong field types** - e.g., `timeout_minutes` must be integer
+- **Wrong field types** - e.g., `timeout-minutes` must be integer
 - **Invalid enum values** - e.g., `engine` must be "claude" or "codex"
 - **Missing required fields** - Some triggers require specific configuration
 

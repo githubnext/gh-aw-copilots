@@ -23,7 +23,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "2025-12-31 23:59:59"
+stop_time: "2025-12-31 23:59:59"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -36,7 +36,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "June 1, 2025"
+stop_time: "June 1, 2025"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -49,7 +49,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "1st June 2025"
+stop_time: "1st June 2025"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -62,7 +62,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "06/01/2025 15:30"
+stop_time: "06/01/2025 15:30"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -75,7 +75,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "+25h"
+stop_time: "+25h"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -88,7 +88,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"  
-stop-time: "+1d12h30m"
+stop_time: "+1d12h30m"
 ---`,
 			markdown:       "# Test Workflow\n\nThis is a test workflow.",
 			expectStopTime: true,
@@ -234,7 +234,7 @@ engine: claude
 on:
   schedule:
     - cron: "0 9 * * 1"
-stop-time: "%s"
+stop_time: "%s"
 ---
 
 # Test Workflow

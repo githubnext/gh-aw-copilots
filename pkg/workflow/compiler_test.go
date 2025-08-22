@@ -21,7 +21,7 @@ func TestCompileWorkflow(t *testing.T) {
 
 	// Create a test markdown file with basic frontmatter
 	testContent := `---
-timeout_minutes: 10
+timeout-minutes: 10
 permissions:
   contents: read
   issues: write
@@ -2428,7 +2428,7 @@ func TestWorkflowNameWithColon(t *testing.T) {
 
 	// Create a test markdown file with a header containing a colon
 	testContent := `---
-timeout_minutes: 10
+timeout-minutes: 10
 permissions:
   contents: read
 tools:
@@ -2581,7 +2581,7 @@ func TestCompileWorkflowWithNestedEnv_NoOrphanedEnv(t *testing.T) {
 on:
   workflow_dispatch:
 
-timeout_minutes: 15
+timeout-minutes: 15
 
 permissions:
   contents: read
@@ -3304,8 +3304,8 @@ permissions:
 tools:
   github:
     allowed: [get_issue]
-ai-reaction: eyes
-timeout_minutes: 5
+ai_reaction: eyes
+timeout-minutes: 5
 ---
 
 # AI Reaction Test
@@ -3378,7 +3378,7 @@ permissions:
 tools:
   github:
     allowed: [get_issue]
-timeout_minutes: 5
+timeout-minutes: 5
 ---
 
 # No Reaction Test
@@ -3978,7 +3978,7 @@ Invalid YAML with missing comma in array.`,
 			name: "invalid_number_format",
 			content: `---
 on: push
-timeout_minutes: 05.5
+timeout-minutes: 05.5
 permissions:
   contents: read
 engine: claude
@@ -4399,7 +4399,7 @@ tools:
 steps:
   - name: Pre AI Step
     run: echo "This runs before AI"
-post-steps:
+post_steps:
   - name: Post AI Step
     run: echo "This runs after AI"
   - name: Another Post Step
@@ -4489,7 +4489,7 @@ permissions:
 tools:
   github:
     allowed: [list_issues]
-post-steps:
+post_steps:
   - name: Only Post Step
     run: echo "This runs after AI only"
 engine: claude

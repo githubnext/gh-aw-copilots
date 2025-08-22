@@ -5,7 +5,7 @@ on:
     - cron: "0 9 * * 1"
   workflow_dispatch:
 
-timeout_minutes: 15
+timeout-minutes: 15
 permissions:
   issues: write # needed to write the output report to an issue
   contents: read

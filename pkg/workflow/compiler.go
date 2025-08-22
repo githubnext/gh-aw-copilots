@@ -606,16 +606,16 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.On = c.extractTopLevelYAMLSection(result.Frontmatter, "on")
 	workflowData.Permissions = c.extractTopLevelYAMLSection(result.Frontmatter, "permissions")
 	workflowData.Concurrency = c.extractTopLevelYAMLSection(result.Frontmatter, "concurrency")
-	workflowData.RunName = c.extractTopLevelYAMLSection(result.Frontmatter, "run-name")
+	workflowData.RunName = c.extractTopLevelYAMLSection(result.Frontmatter, "run_name")
 	workflowData.Env = c.extractTopLevelYAMLSection(result.Frontmatter, "env")
 	workflowData.If = c.extractTopLevelYAMLSection(result.Frontmatter, "if")
-	workflowData.TimeoutMinutes = c.extractTopLevelYAMLSection(result.Frontmatter, "timeout_minutes")
+	workflowData.TimeoutMinutes = c.extractTopLevelYAMLSection(result.Frontmatter, "timeout-minutes")
 	workflowData.CustomSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "steps")
-	workflowData.PostSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "post-steps")
+	workflowData.PostSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "post_steps")
 	workflowData.RunsOn = c.extractTopLevelYAMLSection(result.Frontmatter, "runs-on")
 	workflowData.Cache = c.extractTopLevelYAMLSection(result.Frontmatter, "cache")
-	workflowData.MaxTurns = c.extractYAMLValue(result.Frontmatter, "max-turns")
-	workflowData.StopTime = c.extractYAMLValue(result.Frontmatter, "stop-time")
+	workflowData.MaxTurns = c.extractYAMLValue(result.Frontmatter, "max_turns")
+	workflowData.StopTime = c.extractYAMLValue(result.Frontmatter, "stop_time")
 
 	// Resolve relative stop-time to absolute time if needed
 	if workflowData.StopTime != "" {
@@ -623,7 +623,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		if err != nil {
 			return nil, fmt.Errorf("invalid stop-time format: %w", err)
 		}
-		originalStopTime := c.extractYAMLValue(result.Frontmatter, "stop-time")
+		originalStopTime := c.extractYAMLValue(result.Frontmatter, "stop_time")
 		workflowData.StopTime = resolvedStopTime
 
 		if c.verbose && isRelativeStopTime(originalStopTime) {
@@ -634,7 +634,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	}
 
 	workflowData.Alias = c.extractAliasName(result.Frontmatter)
-	workflowData.AIReaction = c.extractYAMLValue(result.Frontmatter, "ai-reaction")
+	workflowData.AIReaction = c.extractYAMLValue(result.Frontmatter, "ai_reaction")
 	workflowData.Jobs = c.extractJobsFromFrontmatter(result.Frontmatter)
 
 	// Parse output configuration
@@ -2217,7 +2217,7 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 					issueConfig := &IssueConfig{}
 
 					// Parse title-prefix
-					if titlePrefix, exists := issueMap["title-prefix"]; exists {
+					if titlePrefix, exists := issueMap["title_prefix"]; exists {
 						if titlePrefixStr, ok := titlePrefix.(string); ok {
 							issueConfig.TitlePrefix = titlePrefixStr
 						}
@@ -2249,12 +2249,12 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 			}
 
 			// Parse pull-request configuration
-			if pullRequest, exists := outputMap["pull-request"]; exists {
+			if pullRequest, exists := outputMap["pull_request"]; exists {
 				if pullRequestMap, ok := pullRequest.(map[string]any); ok {
 					pullRequestConfig := &PullRequestConfig{}
 
 					// Parse title-prefix
-					if titlePrefix, exists := pullRequestMap["title-prefix"]; exists {
+					if titlePrefix, exists := pullRequestMap["title_prefix"]; exists {
 						if titlePrefixStr, ok := titlePrefix.(string); ok {
 							pullRequestConfig.TitlePrefix = titlePrefixStr
 						}
@@ -2449,7 +2449,7 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 					yaml.WriteString(comment)
 					yaml.WriteString(fmt.Sprintf("          %s: \"%s\"\n", key, data.AllowedTools))
 				}
-			} else if key == "timeout_minutes" {
+			} else if key == "timeout-minutes" {
 				if data.TimeoutMinutes != "" {
 					yaml.WriteString("          " + data.TimeoutMinutes + "\n")
 				}
@@ -2668,7 +2668,7 @@ func (c *Compiler) validateHTTPTransportSupport(tools map[string]any, engine Age
 // validateMaxTurnsSupport validates that max-turns is only used with engines that support this feature
 func (c *Compiler) validateMaxTurnsSupport(frontmatter map[string]any, engine AgenticEngine) error {
 	// Check if max-turns is specified in the frontmatter
-	_, hasMaxTurns := frontmatter["max-turns"]
+	_, hasMaxTurns := frontmatter["max_turns"]
 	if !hasMaxTurns {
 		// No max-turns specified, no validation needed
 		return nil

@@ -374,7 +374,7 @@
         }
       ]
     },
-    "run-name": {
+    "run_name": {
       "type": "string",
       "description": "Custom run name for the workflow"
     },
@@ -613,7 +613,7 @@
         }
       ]
     },
-    "post-steps": {
+    "post_steps": {
       "description": "Custom workflow steps to run after AI execution",
       "oneOf": [
         {
@@ -816,11 +816,11 @@
         ]
       }
     },
-    "max-turns": {
+    "max_turns": {
       "type": "integer",
       "description": "Maximum number of chat iterations per run"
     },
-    "stop-time": {
+    "stop_time": {
       "type": "string",
       "description": "Time when workflow should stop running. Supports multiple formats: absolute dates (YYYY-MM-DD HH:MM:SS, June 1 2025, 1st June 2025, 06/01/2025, etc.) or relative time deltas (+25h, +3d, +1d12h30m)"
     },
@@ -828,7 +828,7 @@
       "type": "string",
       "description": "Alias name for the workflow"
     },
-    "ai-reaction": {
+    "ai_reaction": {
       "type": "string",
       "enum": ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
       "description": "AI reaction to add/remove on triggering item (one of: +1, -1, laugh, confused, heart, hooray, rocket, eyes). Defaults to 'eyes' if not specified."
@@ -957,7 +957,7 @@
           "type": "object",
           "description": "Configuration for creating GitHub issues from agent output",
           "properties": {
-            "title-prefix": {
+            "title_prefix": {
               "type": "string",
               "description": "Optional prefix for the issue title"
             },
@@ -976,11 +976,11 @@
           "description": "Configuration for creating GitHub issue/PR comments from agent output",
           "additionalProperties": false
         },
-        "pull-request": {
+        "pull_request": {
           "type": "object",
           "description": "Configuration for creating GitHub pull requests from agent output",
           "properties": {
-            "title-prefix": {
+            "title_prefix": {
               "type": "string",
               "description": "Optional prefix for the pull request title"
             },

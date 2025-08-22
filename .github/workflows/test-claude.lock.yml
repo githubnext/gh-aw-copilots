@@ -352,7 +352,7 @@ jobs:
           mcp_config: /tmp/mcp-config/mcp-servers.json
           model: claude-3-5-sonnet-20241022
           prompt_file: /tmp/aw-prompts/prompt.txt
-          timeout_minutes: 10
+          timeout-minutes: 10
         env:
           GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}
       - name: Capture Agentic Action logs

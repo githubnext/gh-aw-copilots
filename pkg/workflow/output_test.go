@@ -24,7 +24,7 @@ permissions:
 engine: claude
 output:
   issue:
-    title-prefix: "[genai] "
+    title_prefix: "[genai] "
     labels: [copilot, automation]
 ---
 
@@ -135,7 +135,7 @@ tools:
 engine: claude
 output:
   issue:
-    title-prefix: "[genai] "
+    title_prefix: "[genai] "
     labels: [copilot]
 ---
 
@@ -417,8 +417,8 @@ permissions:
   pull-requests: write
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[agent] "
+  pull_request:
+    title_prefix: "[agent] "
     labels: [automation, bot]
 ---
 
@@ -487,8 +487,8 @@ tools:
     allowed: [list_issues]
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[agent] "
+  pull_request:
+    title_prefix: "[agent] "
     labels: [automation]
 ---
 
@@ -596,8 +596,8 @@ tools:
     allowed: [list_issues]
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[agent] "
+  pull_request:
+    title_prefix: "[agent] "
     labels: [automation]
     draft: false
 ---
@@ -671,8 +671,8 @@ tools:
     allowed: [list_issues]
 engine: claude
 output:
-  pull-request:
-    title-prefix: "[agent] "
+  pull_request:
+    title_prefix: "[agent] "
     labels: [automation]
     draft: true
 ---

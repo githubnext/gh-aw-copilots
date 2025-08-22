@@ -86,22 +86,22 @@ GitHub Actions workflows are designed to be steps within a larger process. Some 
 
 ### Limit operations
 
-#### Limit workflow longevity by `stop-time:`
+#### Limit workflow longevity by `stop_time:`
 
-Use `stop-time:` to limit the time of operation of an agentic workflow. For example, using
+Use `stop_time:` to limit the time of operation of an agentic workflow. For example, using
 
 ```yaml
-stop-time: +7d
+stop_time: +7d
 ```
 
 will mean the agentic workflow no longer operates 7 days after time of compilation.
 
-#### Limit workflow runs by `max-turns:`
+#### Limit workflow runs by `max_turns:`
 
-Use `max-turns:` to limit the number of chat iterations per run. This prevents runaway loops and excessive resource consumption. For example:
+Use `max_turns:` to limit the number of chat iterations per run. This prevents runaway loops and excessive resource consumption. For example:
 
 ```yaml
-max-turns: 5
+max_turns: 5
 ```
 
 This limits the workflow to a maximum of 5 interactions with the AI engine per run.

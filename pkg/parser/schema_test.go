@@ -18,16 +18,16 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			frontmatter: map[string]any{
 				"on":              "push",
 				"permissions":     "read",
-				"run-name":        "Test Run",
+				"run_name":        "Test Run",
 				"runs-on":         "ubuntu-latest",
-				"timeout_minutes": 30,
+				"timeout-minutes": 30,
 				"concurrency":     "test",
 				"env":             map[string]string{"TEST": "value"},
 				"if":              "true",
 				"steps":           []string{"step1"},
 				"engine":          "claude",
 				"tools":           map[string]any{"github": "test"},
-				"stop-time":       "2024-12-31",
+				"stop_time":       "2024-12-31",
 				"alias":           "test-workflow",
 			},
 			wantErr: false,
@@ -171,7 +171,7 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 		{
 			name: "invalid type for timeout_minutes",
 			frontmatter: map[string]any{
-				"timeout_minutes": "not-a-number",
+				"timeout-minutes": "not-a-number",
 			},
 			wantErr:     true,
 			errContains: "got string, want integer",
@@ -421,7 +421,7 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			frontmatter: map[string]any{
 				"output": map[string]any{
 					"issue": map[string]any{
-						"title-prefix": "[ai] ",
+						"title_prefix": "[ai] ",
 						"invalid_prop": "value",
 					},
 				},

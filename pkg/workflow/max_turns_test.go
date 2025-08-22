@@ -22,7 +22,7 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: 3
+max_turns: 3
 tools:
   github:
     allowed: [get_issue]
@@ -61,8 +61,8 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: 10
-timeout_minutes: 15
+max_turns: 10
+timeout-minutes: 15
 tools:
   github:
     allowed: [get_issue]
@@ -164,7 +164,7 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: 5
+max_turns: 5
 ---
 
 # Valid Max Turns`,
@@ -178,7 +178,7 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: "invalid"
+max_turns: "invalid"
 ---
 
 # Invalid Max Turns`,
@@ -192,7 +192,7 @@ on:
 permissions:
   contents: read
 engine: claude
-max-turns: 0
+max_turns: 0
 ---
 
 # Zero Max Turns`,

@@ -54,7 +54,7 @@ permissions:
 engine: claude
 output:
   issue:
-    title-prefix: "[test] "
+    title_prefix: "[test] "
     labels: [automation, test]
 ---
 

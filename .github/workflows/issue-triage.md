@@ -28,7 +28,7 @@ concurrency:
    group: "triage-${{ github.event.issue.number }}"
    cancel-in-progress: true
 
-timeout_minutes: 10
+timeout-minutes: 10
 ---
 
 # Agentic Triage

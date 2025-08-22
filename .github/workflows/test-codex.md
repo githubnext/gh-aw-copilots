@@ -7,7 +7,7 @@ on:
 engine: 
   id: codex
   model: o4-mini
-timeout_minutes: 10
+timeout-minutes: 10
 permissions:
   contents: read
   pull-requests: write
