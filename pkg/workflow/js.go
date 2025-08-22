@@ -26,9 +26,8 @@ func FormatJavaScriptForYAML(script string) []string {
 	var formattedLines []string
 	scriptLines := strings.Split(script, "\n")
 	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			formattedLines = append(formattedLines, "\n")
-		} else {
+		// Skip empty lines when inlining to YAML
+		if strings.TrimSpace(line) != "" {
 			formattedLines = append(formattedLines, fmt.Sprintf("            %s\n", line))
 		}
 	}
@@ -39,9 +38,8 @@ func FormatJavaScriptForYAML(script string) []string {
 func WriteJavaScriptToYAML(yaml *strings.Builder, script string) {
 	scriptLines := strings.Split(script, "\n")
 	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			yaml.WriteString("\n")
-		} else {
+		// Skip empty lines when inlining to YAML
+		if strings.TrimSpace(line) != "" {
 			yaml.WriteString(fmt.Sprintf("            %s\n", line))
 		}
 	}
