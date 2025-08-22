@@ -147,9 +147,10 @@ type WorkflowData struct {
 
 // OutputConfig holds configuration for automatic output routes
 type OutputConfig struct {
-	Issue       *IssueConfig       `yaml:"issue,omitempty"`
-	Comment     *CommentConfig     `yaml:"comment,omitempty"`
-	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
+	Issue          *IssueConfig       `yaml:"issue,omitempty"`
+	Comment        *CommentConfig     `yaml:"comment,omitempty"`
+	PullRequest    *PullRequestConfig `yaml:"pull-request,omitempty"`
+	AllowedDomains []string           `yaml:"allowed-domains,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -2284,6 +2285,19 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 				}
 			}
 
+			// Parse allowed-domains configuration
+			if allowedDomains, exists := outputMap["allowed-domains"]; exists {
+				if domainsArray, ok := allowedDomains.([]any); ok {
+					var domainStrings []string
+					for _, domain := range domainsArray {
+						if domainStr, ok := domain.(string); ok {
+							domainStrings = append(domainStrings, domainStr)
+						}
+					}
+					config.AllowedDomains = domainStrings
+				}
+			}
+
 			return config
 		}
 	}
@@ -2576,35 +2590,40 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("          script: |\n")
 	yaml.WriteString("            const fs = require('fs');\n")
 	yaml.WriteString("            \n")
-	yaml.WriteString("            // Sanitization function for adversarial LLM outputs\n")
-	yaml.WriteString("            function sanitizeContent(content) {\n")
-	yaml.WriteString("              if (!content || typeof content !== 'string') {\n")
-	yaml.WriteString("                return '';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Remove control characters (except newlines and tabs)\n")
-	yaml.WriteString("              let sanitized = content.replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/g, '');\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Limit total length to prevent DoS (0.5MB max)\n")
-	yaml.WriteString("              const maxLength = 524288;\n")
-	yaml.WriteString("              if (sanitized.length > maxLength) {\n")
-	yaml.WriteString("                sanitized = sanitized.substring(0, maxLength) + '\\n[Content truncated due to length]';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Limit number of lines to prevent log flooding (65k max)\n")
-	yaml.WriteString("              const lines = sanitized.split('\\n');\n")
-	yaml.WriteString("              const maxLines = 65000;\n")
-	yaml.WriteString("              if (lines.length > maxLines) {\n")
-	yaml.WriteString("                sanitized = lines.slice(0, maxLines).join('\\n') + '\\n[Content truncated due to line count]';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Remove ANSI escape sequences\n")
-	yaml.WriteString("              sanitized = sanitized.replace(/\\x1b\\[[0-9;]*[mGKH]/g, '');\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Trim excessive whitespace\n")
-	yaml.WriteString("              return sanitized.trim();\n")
-	yaml.WriteString("            }\n")
+
+	// Include the sanitization script
+	yaml.WriteString("            // Enhanced sanitization function with XML escaping and URI filtering\n")
+
+	// Add the embedded sanitization script
+	for _, line := range strings.Split(sanitizeOutputScript, "\n") {
+		if strings.TrimSpace(line) != "" {
+			yaml.WriteString("            " + line + "\n")
+		} else {
+			yaml.WriteString("            \n")
+		}
+	}
+
+	yaml.WriteString("            \n")
+	yaml.WriteString("            // Extract sanitize function from module\n")
+	yaml.WriteString("            const { sanitizeContent } = module.exports;\n")
+	yaml.WriteString("            \n")
+
+	// Build the options object for allowed domains
+	yaml.WriteString("            // Build sanitization options\n")
+	yaml.WriteString("            const sanitizationOptions = {};\n")
+
+	if data.Output != nil && len(data.Output.AllowedDomains) > 0 {
+		yaml.WriteString("            sanitizationOptions.allowedDomains = [\n")
+		for i, domain := range data.Output.AllowedDomains {
+			yaml.WriteString(fmt.Sprintf("              '%s'", domain))
+			if i < len(data.Output.AllowedDomains)-1 {
+				yaml.WriteString(",")
+			}
+			yaml.WriteString("\n")
+		}
+		yaml.WriteString("            ];\n")
+	}
+
 	yaml.WriteString("            \n")
 	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
 	yaml.WriteString("            if (!outputFile) {\n")
@@ -2622,7 +2641,7 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("              console.log('Output file is empty');\n")
 	yaml.WriteString("              core.setOutput('output', '');\n")
 	yaml.WriteString("            } else {\n")
-	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent);\n")
+	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent, sanitizationOptions);\n")
 	yaml.WriteString("              console.log('Collected agentic output (sanitized):', sanitizedContent.substring(0, 200) + (sanitizedContent.length > 200 ? '...' : ''));\n")
 	yaml.WriteString("              core.setOutput('output', sanitizedContent);\n")
 	yaml.WriteString("            }\n")
