@@ -1685,14 +1685,8 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createIssueScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createIssueScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -1734,14 +1728,8 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName s
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createCommentScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createCommentScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -1815,14 +1803,8 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createPullRequestScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createPullRequestScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -2662,14 +2644,7 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(sanitizeOutputScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			yaml.WriteString("\n")
-		} else {
-			yaml.WriteString(fmt.Sprintf("            %s\n", line))
-		}
-	}
+	WriteJavaScriptToYAML(yaml, sanitizeOutputScript)
 
 	yaml.WriteString("      - name: Print agent output to step summary\n")
 	yaml.WriteString("        env:\n")
