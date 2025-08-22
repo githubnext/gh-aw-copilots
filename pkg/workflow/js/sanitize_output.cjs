@@ -1,17 +1,3 @@
-const fs = require("fs");
-
-function neutralizeMentions(s) {
-  // Replace @name or @org/team outside code with `@name`
-  return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
-                   (_m, p1, p2) => `${p1}\`@${p2}\``);
-}
-
-function neutralizeBotTriggers(s) {
-  // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
-  return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi, 
-                   (match, action, ref) => `\`${action} #${ref}\``);
-}
-
 function sanitizeContent(content) {
   if (!content || typeof content !== 'string') {
     return '';
@@ -28,7 +14,7 @@ function sanitizeContent(content) {
     'codespaces.new'
   ];
 
-  const allowedDomains = allowedDomainsEnv 
+  const allowedDomains = allowedDomainsEnv
     ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
     : defaultAllowedDomains;
 
@@ -56,10 +42,10 @@ function sanitizeContent(content) {
     httpsUrls.push(match);
     return httpsPlaceholder + (httpsUrls.length - 1);
   });
-  
+
   // Step 2: Replace other protocols with "(redacted)"
   sanitized = sanitized.replace(/\b(?:http:\/\/|ftp:|file:|data:|javascript:|vbscript:|mailto:|tel:|ssh:|ldap:|jdbc:|chrome:|edge:|safari:|firefox:|opera:)[^\s\])}'"<>&\x00-\x1f]+/gi, '(redacted)');
-  
+
   // Step 3: Restore HTTPS URLs
   sanitized = sanitized.replace(new RegExp(httpsPlaceholder + '(\\d+)', 'g'), (match, index) => {
     return httpsUrls[parseInt(index)];
@@ -70,7 +56,7 @@ function sanitizeContent(content) {
   sanitized = sanitized.replace(/\bhttps:\/\/([^\/\s\])}'"<>&\x00-\x1f]+)/gi, (match, domain) => {
     // Extract the hostname part (before first slash, colon, or other delimiter)
     const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
-    
+
     // Check if this domain or any parent domain is in the allowlist
     const isAllowed = allowedDomains.some(allowedDomain => {
       const normalizedAllowed = allowedDomain.toLowerCase();
@@ -101,22 +87,35 @@ function sanitizeContent(content) {
 
   // Trim excessive whitespace
   return sanitized.trim();
+
+  function neutralizeMentions(s) {
+    // Replace @name or @org/team outside code with `@name`
+    return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+      (_m, p1, p2) => `${p1}\`@${p2}\``);
+  }
+
+  function neutralizeBotTriggers(s) {
+    // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
+    return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+      (match, action, ref) => `\`${action} #${ref}\``);
+  }
 }
 
 async function main() {
+  const fs = require("fs");
   const outputFile = process.env.GITHUB_AW_OUTPUT;
   if (!outputFile) {
     console.log('GITHUB_AW_OUTPUT not set, no output to collect');
     core.setOutput('output', '');
     return;
   }
-  
+
   if (!fs.existsSync(outputFile)) {
     console.log('Output file does not exist:', outputFile);
     core.setOutput('output', '');
     return;
   }
-  
+
   const outputContent = fs.readFileSync(outputFile, 'utf8');
   if (outputContent.trim() === '') {
     console.log('Output file is empty');
