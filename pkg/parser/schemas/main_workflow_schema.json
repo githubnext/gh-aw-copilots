@@ -953,6 +953,13 @@
       "type": "object",
       "description": "Output configuration for automatic output routes",
       "properties": {
+        "allowed-domains": {
+          "type": "array",
+          "description": "List of allowed domains for URI filtering in agent output",
+          "items": {
+            "type": "string"
+          }
+        },
         "issue": {
           "type": "object",
           "description": "Configuration for creating GitHub issues from agent output",
