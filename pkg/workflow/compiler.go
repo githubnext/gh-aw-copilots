@@ -150,7 +150,7 @@ type OutputConfig struct {
 	Issue          *IssueConfig       `yaml:"issue,omitempty"`
 	Comment        *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest    *PullRequestConfig `yaml:"pull-request,omitempty"`
-	Labels      *LabelConfig       `yaml:"labels,omitempty"`
+	Labels         *LabelConfig       `yaml:"labels,omitempty"`
 	AllowedDomains []string           `yaml:"allowed-domains,omitempty"`
 }
 
@@ -2313,8 +2313,9 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 						}
 					}
 					config.AllowedDomains = domainStrings
-      }
-        
+				}
+			}
+
 			// Parse labels configuration
 			if labels, exists := outputMap["labels"]; exists {
 				if labelsMap, ok := labels.(map[string]any); ok {
