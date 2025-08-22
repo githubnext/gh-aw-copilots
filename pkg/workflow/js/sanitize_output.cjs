@@ -1,3 +1,8 @@
+/**
+ * Sanitizes content for safe output in GitHub Actions
+ * @param {string} content - The content to sanitize
+ * @returns {string} The sanitized content
+ */
 function sanitizeContent(content) {
   if (!content || typeof content !== 'string') {
     return '';
@@ -88,12 +93,22 @@ function sanitizeContent(content) {
   // Trim excessive whitespace
   return sanitized.trim();
 
+  /**
+   * Neutralizes @mentions by wrapping them in backticks
+   * @param {string} s - The string to process
+   * @returns {string} The string with neutralized mentions
+   */
   function neutralizeMentions(s) {
     // Replace @name or @org/team outside code with `@name`
     return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
       (_m, p1, p2) => `${p1}\`@${p2}\``);
   }
 
+  /**
+   * Neutralizes bot trigger phrases by wrapping them in backticks
+   * @param {string} s - The string to process
+   * @returns {string} The string with neutralized bot triggers
+   */
   function neutralizeBotTriggers(s) {
     // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
     return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
