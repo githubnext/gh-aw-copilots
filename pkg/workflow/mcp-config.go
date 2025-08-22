@@ -20,7 +20,7 @@ type MCPConfigRenderer struct {
 // This function handles the common logic for rendering MCP configurations across different engines
 func renderSharedMCPConfig(yaml *strings.Builder, toolName string, toolConfig map[string]any, isLast bool, renderer MCPConfigRenderer) error {
 	// Get MCP configuration in the new format
-	mcpConfig, err := getMCPConfig(toolConfig)
+	mcpConfig, err := getMCPConfig(toolConfig, toolName)
 	if err != nil {
 		return fmt.Errorf("failed to parse MCP config for tool '%s': %w", toolName, err)
 	}
@@ -200,7 +200,7 @@ func renderSharedMCPConfig(yaml *strings.Builder, toolName string, toolConfig ma
 }
 
 // getMCPConfig extracts MCP configuration from a tool config in the new format
-func getMCPConfig(toolConfig map[string]any) (map[string]any, error) {
+func getMCPConfig(toolConfig map[string]any, toolName string) (map[string]any, error) {
 	result := make(map[string]any)
 
 	// Check new format: mcp.type, mcp.url, mcp.command, etc.
@@ -223,8 +223,16 @@ func getMCPConfig(toolConfig map[string]any) (map[string]any, error) {
 		}
 	}
 
+	// Check if this container needs proxy support
+	if _, hasContainer := result["container"]; hasContainer {
+		if hasNetPerms, _ := hasNetworkPermissions(toolConfig); hasNetPerms {
+			// Mark this configuration as proxy-enabled
+			result["__uses_proxy"] = true
+		}
+	}
+
 	// Transform container field to docker command if present
-	if err := transformContainerToDockerCommand(result); err != nil {
+	if err := transformContainerToDockerCommand(result, toolName); err != nil {
 		return nil, err
 	}
 
@@ -232,7 +240,8 @@ func getMCPConfig(toolConfig map[string]any) (map[string]any, error) {
 }
 
 // transformContainerToDockerCommand converts a container field to docker command and args
-func transformContainerToDockerCommand(mcpConfig map[string]any) error {
+// For proxy-enabled containers, it sets special markers instead of docker commands
+func transformContainerToDockerCommand(mcpConfig map[string]any, toolName string) error {
 	container, hasContainer := mcpConfig["container"]
 	if !hasContainer {
 		return nil // No container field, nothing to transform
@@ -247,6 +256,17 @@ func transformContainerToDockerCommand(mcpConfig map[string]any) error {
 	// Check for conflicting command field
 	if _, hasCommand := mcpConfig["command"]; hasCommand {
 		return fmt.Errorf("cannot specify both 'container' and 'command' fields")
+	}
+
+	// Check if this is a proxy-enabled container (has special marker)
+	if _, hasProxyFlag := mcpConfig["__uses_proxy"]; hasProxyFlag {
+		// For proxy-enabled containers, use docker compose run to connect to the MCP server
+		mcpConfig["command"] = "docker"
+		if toolName != "" {
+			mcpConfig["args"] = []any{"compose", "-f", fmt.Sprintf("docker-compose-%s.yml", toolName), "run", "--rm", toolName}
+		}
+		// Keep the container field for compose file generation
+		return nil
 	}
 
 	// Set docker command
@@ -395,6 +415,59 @@ func validateStringProperty(toolName, propertyName string, value any, exists boo
 		return fmt.Errorf("tool '%s' mcp configuration '%s' got %s, want string", toolName, propertyName, actualType)
 	}
 	return nil
+}
+
+// hasNetworkPermissions checks if a tool configuration has network permissions
+func hasNetworkPermissions(toolConfig map[string]any) (bool, []string) {
+	extract := func(perms any) (bool, []string) {
+		permsMap, ok := perms.(map[string]any)
+		if !ok {
+			return false, nil
+		}
+		network, hasNetwork := permsMap["network"]
+		if !hasNetwork {
+			return false, nil
+		}
+		networkMap, ok := network.(map[string]any)
+		if !ok {
+			return false, nil
+		}
+		allowed, hasAllowed := networkMap["allowed"]
+		if !hasAllowed {
+			return false, nil
+		}
+		allowedSlice, ok := allowed.([]any)
+		if !ok {
+			return false, nil
+		}
+		var domains []string
+		for _, item := range allowedSlice {
+			if str, ok := item.(string); ok {
+				domains = append(domains, str)
+			}
+		}
+		return len(domains) > 0, domains
+	}
+
+	// First, check top-level permissions
+	if permissions, hasPerms := toolConfig["permissions"]; hasPerms {
+		if ok, domains := extract(permissions); ok {
+			return true, domains
+		}
+	}
+
+	// Then, check permissions nested under mcp (alternate schema used in some configs)
+	if mcpSection, hasMcp := toolConfig["mcp"]; hasMcp {
+		if m, ok := mcpSection.(map[string]any); ok {
+			if permissions, hasPerms := m["permissions"]; hasPerms {
+				if ok, domains := extract(permissions); ok {
+					return true, domains
+				}
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // validateMCPRequirements validates the specific requirements for MCP configuration
