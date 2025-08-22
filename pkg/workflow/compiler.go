@@ -156,6 +156,7 @@ type OutputConfig struct {
 type IssueConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
+	AllowHTML   *bool    `yaml:"allow-html,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
 }
 
 // CommentConfig holds configuration for creating GitHub issue/PR comments from agent output
@@ -1661,6 +1662,9 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 		labelsStr := strings.Join(data.Output.Issue.Labels, ",")
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_LABELS: %q\n", labelsStr))
 	}
+	if data.Output.Issue.AllowHTML != nil {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_ISSUE_ALLOW_HTML: %q\n", fmt.Sprintf("%t", *data.Output.Issue.AllowHTML)))
+	}
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -2233,6 +2237,13 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 								}
 							}
 							issueConfig.Labels = labelStrings
+						}
+					}
+
+					// Parse allow-html
+					if allowHTML, exists := issueMap["allow-html"]; exists {
+						if allowHTMLBool, ok := allowHTML.(bool); ok {
+							issueConfig.AllowHTML = &allowHTMLBool
 						}
 					}
 

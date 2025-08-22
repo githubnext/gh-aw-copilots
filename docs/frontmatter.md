@@ -255,6 +255,7 @@ output:
   issue:
     title-prefix: "[ai] "           # Optional: prefix for issue titles
     labels: [automation, ai-agent]  # Optional: labels to attach to issues
+    allow-html: false               # Optional: strip HTML tags from output (defaults to true)
   comment: {}                       # Create comments on issues/PRs from agent output
   pull-request:
     title-prefix: "[ai] "           # Optional: prefix for PR titles
@@ -269,6 +270,7 @@ output:
 - This job runs after the main AI agent job completes
 - The agent's output content flows from the main job to the issue creation job via job output variables
 - The issue creation job parses the output content, using the first non-empty line as the title and the remainder as the body
+- **HTML Content**: By default, HTML content is preserved in issue titles and bodies. Set `allow-html: false` to strip HTML tags
 - **Important**: With output processing, the main job **does not** need `issues: write` permission since the write operation is performed in the separate job
 
 **Generated Job Properties:**
@@ -276,7 +278,7 @@ output:
 - **Dependencies**: Runs after the main agent job (`needs: [main-job-name]`)
 - **Permissions**: Only the issue creation job has `issues: write` permission
 - **Timeout**: 10-minute timeout to prevent hanging
-- **Environment Variables**: Configuration passed via `GITHUB_AW_ISSUE_TITLE_PREFIX` and `GITHUB_AW_ISSUE_LABELS`
+- **Environment Variables**: Configuration passed via `GITHUB_AW_ISSUE_TITLE_PREFIX`, `GITHUB_AW_ISSUE_LABELS`, and `GITHUB_AW_ISSUE_ALLOW_HTML`
 - **Outputs**: Returns `issue_number` and `issue_url` for downstream jobs
 
 ### Comment Creation (`output.comment`)
@@ -308,6 +310,7 @@ output:
   issue:
     title-prefix: "[analysis] "
     labels: [automation, code-review]
+    allow-html: false               # Strip HTML tags from agent output
 ---
 
 # Code Analysis Agent

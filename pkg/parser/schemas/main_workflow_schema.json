@@ -967,6 +967,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "allow-html": {
+              "type": "boolean",
+              "description": "Optional flag to allow HTML content in the issue. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
             }
           },
           "additionalProperties": false
