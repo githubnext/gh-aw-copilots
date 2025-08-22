@@ -49,21 +49,11 @@ async function main() {
     return;
   }
 
-  // HTML utility functions (inlined to avoid import issues)
-  function stripHtmlTags(text) {
-    return text.replace(/<[^>]*>/g, '');
-  }
-  
-  function shouldStripHTML(envVarName) {
-    const allowHTML = process.env[envVarName];
-    return allowHTML === 'false';
-  }
-
   let body = outputContent.trim();
   
   // Check if HTML content should be stripped
-  if (shouldStripHTML('GITHUB_AW_COMMENT_ALLOW_HTML')) {
-    body = stripHtmlTags(body);
+  if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML === 'false') {
+    body = body.replace(/<[^>]*>/g, '');
     console.log('HTML content stripped from comment body');
   }
   
