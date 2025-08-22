@@ -953,6 +953,10 @@
       "type": "object",
       "description": "Output configuration for automatic output routes",
       "properties": {
+        "allow-html": {
+          "type": "boolean",
+          "description": "Shared flag to allow HTML content in all output types. When false, HTML characters are escaped for security. Can be overridden by individual output type configurations. Defaults to false (HTML is escaped)."
+        },
         "issue": {
           "type": "object",
           "description": "Configuration for creating GitHub issues from agent output",
@@ -970,7 +974,7 @@
             },
             "allow-html": {
               "type": "boolean",
-              "description": "Optional flag to allow HTML content in the issue. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
+              "description": "Optional flag to allow HTML content in the issue. When false, HTML characters are escaped for security. Overrides the shared allow-html setting if specified."
             }
           },
           "additionalProperties": false
@@ -981,7 +985,7 @@
           "properties": {
             "allow-html": {
               "type": "boolean",
-              "description": "Optional flag to allow HTML content in the comment. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
+              "description": "Optional flag to allow HTML content in the comment. When false, HTML characters are escaped for security. Overrides the shared allow-html setting if specified."
             }
           },
           "additionalProperties": false
@@ -1007,7 +1011,7 @@
             },
             "allow-html": {
               "type": "boolean",
-              "description": "Optional flag to allow HTML content in the pull request. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
+              "description": "Optional flag to allow HTML content in the pull request. When false, HTML characters are escaped for security. Overrides the shared allow-html setting if specified."
             }
           },
           "additionalProperties": false

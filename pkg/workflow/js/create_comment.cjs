@@ -51,10 +51,17 @@ async function main() {
 
   let body = outputContent.trim();
   
-  // Check if HTML content should be stripped
+  // Check if HTML content should be escaped
   if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML !== 'true') {
-    body = body.replace(/<[^>]*>/g, '');
-    console.log('HTML content stripped from comment body');
+    // Escape HTML characters and neutralize mentions
+    body = body.replace(/[&<>"]/g, (c) =>
+      c === "&" ? "&amp;" :
+      c === "<" ? "&lt;" :
+      c === ">" ? "&gt;" :
+      c === '"' ? "&quot;" : c);
+    body = body.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                       (_m, p1, p2) => `${p1}\`@${p2}\``);
+    console.log('HTML content escaped and mentions neutralized in comment body');
   }
   
   // Add AI disclaimer with run id, run htmlurl

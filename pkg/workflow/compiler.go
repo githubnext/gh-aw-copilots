@@ -147,6 +147,7 @@ type WorkflowData struct {
 
 // OutputConfig holds configuration for automatic output routes
 type OutputConfig struct {
+	AllowHTML   *bool              `yaml:"allow-html,omitempty"` // Shared allow-html setting for all output types
 	Issue       *IssueConfig       `yaml:"issue,omitempty"`
 	Comment     *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
@@ -2222,6 +2223,16 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 		if outputMap, ok := output.(map[string]any); ok {
 			config := &OutputConfig{}
 
+			// Parse shared allow-html configuration first
+			if allowHTML, err := parseAllowHTMLField(outputMap); err != nil {
+				// Log error but continue parsing
+				if c.verbose {
+					fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing shared allow-html: %v", err)))
+				}
+			} else {
+				config.AllowHTML = allowHTML
+			}
+
 			// Parse issue configuration
 			if issue, exists := outputMap["issue"]; exists {
 				if issueMap, ok := issue.(map[string]any); ok {
@@ -2247,14 +2258,17 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 						issueConfig.Labels = labels
 					}
 
-					// Parse allow-html
+					// Parse allow-html, with fallback to shared setting
 					if allowHTML, err := parseAllowHTMLField(issueMap); err != nil {
 						// Log error but continue parsing
 						if c.verbose {
 							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing issue allow-html: %v", err)))
 						}
-					} else {
+					} else if allowHTML != nil {
 						issueConfig.AllowHTML = allowHTML
+					} else {
+						// Use shared allow-html setting as fallback
+						issueConfig.AllowHTML = config.AllowHTML
 					}
 
 					config.Issue = issueConfig
@@ -2266,14 +2280,17 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 				if commentMap, ok := comment.(map[string]any); ok {
 					commentConfig := &CommentConfig{}
 
-					// Parse allow-html
+					// Parse allow-html, with fallback to shared setting
 					if allowHTML, err := parseAllowHTMLField(commentMap); err != nil {
 						// Log error but continue parsing
 						if c.verbose {
 							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing comment allow-html: %v", err)))
 						}
-					} else {
+					} else if allowHTML != nil {
 						commentConfig.AllowHTML = allowHTML
+					} else {
+						// Use shared allow-html setting as fallback
+						commentConfig.AllowHTML = config.AllowHTML
 					}
 
 					config.Comment = commentConfig
@@ -2315,14 +2332,17 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 						pullRequestConfig.Draft = draft
 					}
 
-					// Parse allow-html
+					// Parse allow-html, with fallback to shared setting
 					if allowHTML, err := parseAllowHTMLField(pullRequestMap); err != nil {
 						// Log error but continue parsing
 						if c.verbose {
 							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing pull-request allow-html: %v", err)))
 						}
-					} else {
+					} else if allowHTML != nil {
 						pullRequestConfig.AllowHTML = allowHTML
+					} else {
+						// Use shared allow-html setting as fallback
+						pullRequestConfig.AllowHTML = config.AllowHTML
 					}
 
 					config.PullRequest = pullRequestConfig

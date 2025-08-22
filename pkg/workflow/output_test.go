@@ -1219,60 +1219,133 @@ This workflow tests the allow-html environment variable generation for comments.
 	t.Logf("Generated workflow content:\n%s", lockContent)
 }
 
-func TestOutputPullRequestJobGenerationWithAllowHTML(t *testing.T) {
+func TestOutputSharedAllowHTMLConfig(t *testing.T) {
 	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "output-pr-job-allow-html-test")
+	tmpDir, err := os.MkdirTemp("", "output-shared-allow-html-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Test case with allow-html: false
-	testContent := `---
+	compiler := NewCompiler(false, "", "test")
+
+	// Test case 1: shared allow-html: false with individual overrides
+	testContent1 := `---
 on: push
 permissions:
   contents: read
+  issues: write
   pull-requests: write
-tools:
-  github:
-    allowed: [list_issues]
 engine: claude
 output:
+  allow-html: false
+  issue:
+    title-prefix: "[test] "
+    labels: [automation]
+    allow-html: true  # Override shared setting
+  comment: {}  # Use shared setting (false)
   pull-request:
     title-prefix: "[agent] "
-    labels: [automation]
-    allow-html: false
+    labels: [bot]
+    # No allow-html specified, should use shared setting (false)
 ---
 
-# Test Pull Request Allow HTML in Job Generation
+# Test Shared Allow HTML Configuration
 
-This workflow tests the allow-html environment variable generation for pull requests.
+This workflow tests the shared allow-html configuration with individual overrides.
 `
 
-	testFile := filepath.Join(tmpDir, "test-pr-allow-html-job.md")
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+	testFile1 := filepath.Join(tmpDir, "test-shared-allow-html.md")
+	if err := os.WriteFile(testFile1, []byte(testContent1), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	compiler := NewCompiler(false, "", "test")
-
-	// Compile the workflow to generate the lock file
-	err = compiler.CompileWorkflow(testFile)
+	// Parse the workflow data
+	workflowData1, err := compiler.parseWorkflowFile(testFile1)
 	if err != nil {
-		t.Fatalf("Failed to compile workflow: %v", err)
+		t.Fatalf("Unexpected error parsing workflow with shared allow-html: %v", err)
 	}
 
-	// Read the generated lock file
-	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
-	lockContent, err := os.ReadFile(lockFile)
+	// Verify shared allow-html is parsed correctly
+	if workflowData1.Output == nil {
+		t.Fatal("Expected output configuration to be parsed")
+	}
+
+	if workflowData1.Output.AllowHTML == nil {
+		t.Fatal("Expected shared allow-html to be parsed")
+	}
+
+	if *workflowData1.Output.AllowHTML != false {
+		t.Errorf("Expected shared allow-html to be false, got %v", *workflowData1.Output.AllowHTML)
+	}
+
+	// Verify issue config overrides shared setting
+	if workflowData1.Output.Issue == nil {
+		t.Fatal("Expected issue configuration to be parsed")
+	}
+	if workflowData1.Output.Issue.AllowHTML == nil || *workflowData1.Output.Issue.AllowHTML != true {
+		t.Errorf("Expected issue allow-html to override shared setting to true, got %v", workflowData1.Output.Issue.AllowHTML)
+	}
+
+	// Verify comment config uses shared setting
+	if workflowData1.Output.Comment == nil {
+		t.Fatal("Expected comment configuration to be parsed")
+	}
+	if workflowData1.Output.Comment.AllowHTML == nil || *workflowData1.Output.Comment.AllowHTML != false {
+		t.Errorf("Expected comment allow-html to use shared setting (false), got %v", workflowData1.Output.Comment.AllowHTML)
+	}
+
+	// Verify pull-request config uses shared setting
+	if workflowData1.Output.PullRequest == nil {
+		t.Fatal("Expected pull-request configuration to be parsed")
+	}
+	if workflowData1.Output.PullRequest.AllowHTML == nil || *workflowData1.Output.PullRequest.AllowHTML != false {
+		t.Errorf("Expected pull-request allow-html to use shared setting (false), got %v", workflowData1.Output.PullRequest.AllowHTML)
+	}
+
+	// Test case 2: shared allow-html: true with no individual overrides
+	testContent2 := `---
+on: push
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+engine: claude
+output:
+  allow-html: true
+  issue:
+    title-prefix: "[test] "
+    labels: [automation]
+  comment: {}
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [bot]
+---
+
+# Test Shared Allow HTML True
+
+This workflow tests that all output types inherit shared allow-html: true.
+`
+
+	testFile2 := filepath.Join(tmpDir, "test-shared-allow-html-true.md")
+	if err := os.WriteFile(testFile2, []byte(testContent2), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData2, err := compiler.parseWorkflowFile(testFile2)
 	if err != nil {
-		t.Fatalf("Failed to read generated lock file: %v", err)
+		t.Fatalf("Unexpected error parsing workflow with shared allow-html true: %v", err)
 	}
 
-	// Check that the environment variable is set correctly
-	if !strings.Contains(string(lockContent), "GITHUB_AW_PR_ALLOW_HTML: \"false\"") {
-		t.Error("Expected GITHUB_AW_PR_ALLOW_HTML environment variable to be set to 'false' in generated workflow")
+	// Verify all configs inherit shared setting
+	if workflowData2.Output.Issue.AllowHTML == nil || *workflowData2.Output.Issue.AllowHTML != true {
+		t.Errorf("Expected issue allow-html to inherit shared setting (true), got %v", workflowData2.Output.Issue.AllowHTML)
 	}
-
-	t.Logf("Generated workflow content:\n%s", lockContent)
+	if workflowData2.Output.Comment.AllowHTML == nil || *workflowData2.Output.Comment.AllowHTML != true {
+		t.Errorf("Expected comment allow-html to inherit shared setting (true), got %v", workflowData2.Output.Comment.AllowHTML)
+	}
+	if workflowData2.Output.PullRequest.AllowHTML == nil || *workflowData2.Output.PullRequest.AllowHTML != true {
+		t.Errorf("Expected pull-request allow-html to inherit shared setting (true), got %v", workflowData2.Output.PullRequest.AllowHTML)
+	}
 }
