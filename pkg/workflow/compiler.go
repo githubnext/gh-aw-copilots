@@ -147,10 +147,11 @@ type WorkflowData struct {
 
 // OutputConfig holds configuration for automatic output routes
 type OutputConfig struct {
-	Issue       *IssueConfig       `yaml:"issue,omitempty"`
-	Comment     *CommentConfig     `yaml:"comment,omitempty"`
-	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
-	Labels      *LabelConfig       `yaml:"labels,omitempty"`
+	Issue          *IssueConfig       `yaml:"issue,omitempty"`
+	IssueComment   *CommentConfig     `yaml:"issue_comment,omitempty"`
+	PullRequest    *PullRequestConfig `yaml:"pull-request,omitempty"`
+	Labels         *LabelConfig       `yaml:"labels,omitempty"`
+	AllowedDomains []string           `yaml:"allowed-domains,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -1519,8 +1520,8 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		}
 	}
 
-	// Build create_issue_comment job if output.comment is configured
-	if data.Output != nil && data.Output.Comment != nil {
+	// Build create_issue_comment job if output.issue_comment is configured
+	if data.Output != nil && data.Output.IssueComment != nil {
 		createCommentJob, err := c.buildCreateOutputCommentJob(data, jobName)
 		if err != nil {
 			return fmt.Errorf("failed to build create_issue_comment job: %w", err)
@@ -1684,14 +1685,8 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createIssueScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createIssueScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -1715,8 +1710,8 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 
 // buildCreateOutputCommentJob creates the create_issue_comment job
 func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName string) (*Job, error) {
-	if data.Output == nil || data.Output.Comment == nil {
-		return nil, fmt.Errorf("output.comment configuration is required")
+	if data.Output == nil || data.Output.IssueComment == nil {
+		return nil, fmt.Errorf("output.issue_comment configuration is required")
 	}
 
 	var steps []string
@@ -1733,14 +1728,8 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName s
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createCommentScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createCommentScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -1814,14 +1803,8 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(createPullRequestScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(createPullRequestScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
@@ -1929,6 +1912,8 @@ func (c *Compiler) generateSafetyChecks(yaml *strings.Builder, data *WorkflowDat
 func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any, engine AgenticEngine) {
 	// Collect tools that need MCP server configuration
 	var mcpTools []string
+	var proxyTools []string
+
 	for toolName, toolValue := range tools {
 		// Standard MCP tools
 		if toolName == "github" {
@@ -1937,12 +1922,72 @@ func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any,
 			// Check if it's explicitly marked as MCP type in the new format
 			if hasMcp, _ := hasMCPConfig(mcpConfig); hasMcp {
 				mcpTools = append(mcpTools, toolName)
+
+				// Check if this tool needs proxy
+				if needsProxySetup, _ := needsProxy(mcpConfig); needsProxySetup {
+					proxyTools = append(proxyTools, toolName)
+				}
 			}
 		}
 	}
 
-	// Sort MCP tools to ensure stable code generation
+	// Sort tools to ensure stable code generation
 	sort.Strings(mcpTools)
+	sort.Strings(proxyTools)
+
+	// Generate proxy configuration files inline for proxy-enabled tools
+	// These files will be used automatically by docker compose when MCP tools run
+	if len(proxyTools) > 0 {
+		yaml.WriteString("      - name: Setup Proxy Configuration for MCP Network Restrictions\n")
+		yaml.WriteString("        run: |\n")
+		yaml.WriteString("          echo \"Generating proxy configuration files for MCP tools with network restrictions...\"\n")
+		yaml.WriteString("          \n")
+
+		// Generate proxy configurations inline for each proxy-enabled tool
+		for _, toolName := range proxyTools {
+			if toolConfig, ok := tools[toolName].(map[string]any); ok {
+				c.generateInlineProxyConfig(yaml, toolName, toolConfig)
+			}
+		}
+
+		yaml.WriteString("          echo \"Proxy configuration files generated.\"\n")
+
+		// Pre-pull images and start squid proxy ahead of time to avoid timeouts
+		yaml.WriteString("      - name: Pre-pull images and start Squid proxy\n")
+		yaml.WriteString("        run: |\n")
+		yaml.WriteString("          set -e\n")
+		yaml.WriteString("          echo 'Pre-pulling Docker images for proxy-enabled MCP tools...'\n")
+		yaml.WriteString("          docker pull ubuntu/squid:latest\n")
+
+		// Pull each tool's container image if specified, and bring up squid service
+		for _, toolName := range proxyTools {
+			if toolConfig, ok := tools[toolName].(map[string]any); ok {
+				if mcpConf, err := getMCPConfig(toolConfig, toolName); err == nil {
+					if containerVal, hasContainer := mcpConf["container"]; hasContainer {
+						if containerStr, ok := containerVal.(string); ok && containerStr != "" {
+							yaml.WriteString(fmt.Sprintf("          echo 'Pulling %s for tool %s'\n", containerStr, toolName))
+							yaml.WriteString(fmt.Sprintf("          docker pull %s\n", containerStr))
+						}
+					}
+				}
+				yaml.WriteString(fmt.Sprintf("          echo 'Starting squid-proxy service for %s'\n", toolName))
+				yaml.WriteString(fmt.Sprintf("          docker compose -f docker-compose-%s.yml up -d squid-proxy\n", toolName))
+
+				// Enforce that egress from this tool's network can only reach the Squid proxy
+				subnetCIDR, squidIP, _ := computeProxyNetworkParams(toolName)
+				yaml.WriteString(fmt.Sprintf("          echo 'Enforcing egress to proxy for %s (subnet %s, squid %s)'\n", toolName, subnetCIDR, squidIP))
+				yaml.WriteString("          if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi\n")
+				// Accept established/related connections first (position 1)
+				yaml.WriteString("          $SUDO iptables -C DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT\n")
+				// Accept all egress from Squid IP (position 2)
+				yaml.WriteString(fmt.Sprintf("          $SUDO iptables -C DOCKER-USER -s %s -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 2 -s %s -j ACCEPT\n", squidIP, squidIP))
+				// Allow traffic to squid:3128 from the subnet (position 3)
+				yaml.WriteString(fmt.Sprintf("          $SUDO iptables -C DOCKER-USER -s %s -d %s -p tcp --dport 3128 -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 3 -s %s -d %s -p tcp --dport 3128 -j ACCEPT\n", subnetCIDR, squidIP, subnetCIDR, squidIP))
+				// Then reject all other egress from that subnet (append to end)
+				yaml.WriteString(fmt.Sprintf("          $SUDO iptables -C DOCKER-USER -s %s -j REJECT 2>/dev/null || $SUDO iptables -A DOCKER-USER -s %s -j REJECT\n", subnetCIDR, subnetCIDR))
+			}
+		}
+	}
 
 	// If no MCP tools, no configuration needed
 	if len(mcpTools) == 0 {
@@ -2258,11 +2303,11 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 				}
 			}
 
-			// Parse comment configuration
-			if comment, exists := outputMap["comment"]; exists {
+			// Parse issue_comment configuration
+			if comment, exists := outputMap["issue_comment"]; exists {
 				if _, ok := comment.(map[string]any); ok {
 					// For now, CommentConfig is an empty struct
-					config.Comment = &CommentConfig{}
+					config.IssueComment = &CommentConfig{}
 				}
 			}
 
@@ -2299,6 +2344,19 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 					}
 
 					config.PullRequest = pullRequestConfig
+				}
+			}
+
+			// Parse allowed-domains configuration
+			if allowedDomains, exists := outputMap["allowed-domains"]; exists {
+				if domainsArray, ok := allowedDomains.([]any); ok {
+					var domainStrings []string
+					for _, domain := range domainsArray {
+						if domainStr, ok := domain.(string); ok {
+							domainStrings = append(domainStrings, domainStr)
+						}
+					}
+					config.AllowedDomains = domainStrings
 				}
 			}
 
@@ -2636,60 +2694,19 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("      - name: Collect agent output\n")
 	yaml.WriteString("        id: collect_output\n")
 	yaml.WriteString("        uses: actions/github-script@v7\n")
+
+	// Add environment variables for sanitization configuration
+	if data.Output != nil && len(data.Output.AllowedDomains) > 0 {
+		yaml.WriteString("        env:\n")
+		domainsStr := strings.Join(data.Output.AllowedDomains, ",")
+		yaml.WriteString(fmt.Sprintf("          GITHUB_AW_ALLOWED_DOMAINS: %q\n", domainsStr))
+	}
+
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          script: |\n")
-	yaml.WriteString("            const fs = require('fs');\n")
-	yaml.WriteString("            \n")
-	yaml.WriteString("            // Sanitization function for adversarial LLM outputs\n")
-	yaml.WriteString("            function sanitizeContent(content) {\n")
-	yaml.WriteString("              if (!content || typeof content !== 'string') {\n")
-	yaml.WriteString("                return '';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Remove control characters (except newlines and tabs)\n")
-	yaml.WriteString("              let sanitized = content.replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]/g, '');\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Limit total length to prevent DoS (0.5MB max)\n")
-	yaml.WriteString("              const maxLength = 524288;\n")
-	yaml.WriteString("              if (sanitized.length > maxLength) {\n")
-	yaml.WriteString("                sanitized = sanitized.substring(0, maxLength) + '\\n[Content truncated due to length]';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Limit number of lines to prevent log flooding (65k max)\n")
-	yaml.WriteString("              const lines = sanitized.split('\\n');\n")
-	yaml.WriteString("              const maxLines = 65000;\n")
-	yaml.WriteString("              if (lines.length > maxLines) {\n")
-	yaml.WriteString("                sanitized = lines.slice(0, maxLines).join('\\n') + '\\n[Content truncated due to line count]';\n")
-	yaml.WriteString("              }\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Remove ANSI escape sequences\n")
-	yaml.WriteString("              sanitized = sanitized.replace(/\\x1b\\[[0-9;]*[mGKH]/g, '');\n")
-	yaml.WriteString("              \n")
-	yaml.WriteString("              // Trim excessive whitespace\n")
-	yaml.WriteString("              return sanitized.trim();\n")
-	yaml.WriteString("            }\n")
-	yaml.WriteString("            \n")
-	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
-	yaml.WriteString("            if (!outputFile) {\n")
-	yaml.WriteString("              console.log('GITHUB_AW_OUTPUT not set, no output to collect');\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("              return;\n")
-	yaml.WriteString("            }\n")
-	yaml.WriteString("            if (!fs.existsSync(outputFile)) {\n")
-	yaml.WriteString("              console.log('Output file does not exist:', outputFile);\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("              return;\n")
-	yaml.WriteString("            }\n")
-	yaml.WriteString("            const outputContent = fs.readFileSync(outputFile, 'utf8');\n")
-	yaml.WriteString("            if (outputContent.trim() === '') {\n")
-	yaml.WriteString("              console.log('Output file is empty');\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("            } else {\n")
-	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent);\n")
-	yaml.WriteString("              console.log('Collected agentic output (sanitized):', sanitizedContent.substring(0, 200) + (sanitizedContent.length > 200 ? '...' : ''));\n")
-	yaml.WriteString("              core.setOutput('output', sanitizedContent);\n")
-	yaml.WriteString("            }\n")
+
+	// Add each line of the script with proper indentation
+	WriteJavaScriptToYAML(yaml, sanitizeOutputScript)
 
 	yaml.WriteString("      - name: Print agent output to step summary\n")
 	yaml.WriteString("        env:\n")

@@ -41,14 +41,8 @@ func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName str
 	steps = append(steps, "          script: |\n")
 
 	// Add each line of the script with proper indentation
-	scriptLines := strings.Split(addLabelsScript, "\n")
-	for _, line := range scriptLines {
-		if strings.TrimSpace(line) == "" {
-			steps = append(steps, "\n")
-		} else {
-			steps = append(steps, fmt.Sprintf("            %s\n", line))
-		}
-	}
+	formattedScript := FormatJavaScriptForYAML(addLabelsScript)
+	steps = append(steps, formattedScript...)
 
 	// Create outputs for the job
 	outputs := map[string]string{
