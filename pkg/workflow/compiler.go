@@ -15,6 +15,7 @@ import (
 	"github.com/githubnext/gh-aw/pkg/console"
 	"github.com/githubnext/gh-aw/pkg/constants"
 	"github.com/githubnext/gh-aw/pkg/parser"
+	"github.com/githubnext/gh-aw/pkg/sanitizer"
 	"github.com/goccy/go-yaml"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -138,6 +139,7 @@ type WorkflowData struct {
 	StopTime         string
 	Alias            string         // for @alias trigger support
 	AliasOtherEvents map[string]any // for merging alias with other events
+	AllowDomains     []string       // allowed domains for URL filtering
 	AIReaction       string         // AI reaction type like "eyes", "heart", etc.
 	Jobs             map[string]any // custom job configurations with dependencies
 	Cache            string         // cache configuration
@@ -468,9 +470,11 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		return nil, fmt.Errorf("no markdown content found")
 	}
 
-	// Validate main workflow frontmatter contains only expected entries
-	if err := parser.ValidateMainWorkflowFrontmatterWithSchemaAndLocation(result.Frontmatter, markdownPath); err != nil {
-		return nil, err
+	// Validate main workflow frontmatter contains only expected entries (unless validation is skipped)
+	if !c.skipValidation {
+		if err := parser.ValidateMainWorkflowFrontmatterWithSchemaAndLocation(result.Frontmatter, markdownPath); err != nil {
+			return nil, err
+		}
 	}
 
 	if c.verbose {
@@ -647,6 +651,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Parse output configuration
 	workflowData.Output = c.extractOutputConfig(result.Frontmatter)
 
+	// Parse allow-domains configuration
+	workflowData.AllowDomains = c.extractStringArray(result.Frontmatter, "allow-domains")
+
 	// Check if "alias" is used as a trigger in the "on" section
 	var hasAlias bool
 	var otherEvents map[string]any
@@ -800,6 +807,26 @@ func (c *Compiler) extractYAMLValue(frontmatter map[string]any, key string) stri
 		}
 	}
 	return ""
+}
+
+// extractStringArray extracts a string array from the frontmatter map
+func (c *Compiler) extractStringArray(frontmatter map[string]any, key string) []string {
+	if value, exists := frontmatter[key]; exists {
+		if strArray, ok := value.([]any); ok {
+			var result []string
+			for _, item := range strArray {
+				if str, ok := item.(string); ok {
+					result = append(result, str)
+				}
+			}
+			return result
+		}
+		// Handle single string value
+		if str, ok := value.(string); ok {
+			return []string{str}
+		}
+	}
+	return nil
 }
 
 // generateJobName converts a workflow name to a valid YAML job identifier
@@ -2666,9 +2693,28 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("              // Remove ANSI escape sequences\n")
 	yaml.WriteString("              sanitized = sanitized.replace(/\\x1b\\[[0-9;]*[mGKH]/g, '');\n")
 	yaml.WriteString("              \n")
+	yaml.WriteString("              // Filter URLs based on allow-domains configuration\n")
+	yaml.WriteString("              const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : ")
+	if len(data.AllowDomains) > 0 {
+		domainsJSON, _ := json.Marshal(data.AllowDomains)
+		yaml.WriteString(string(domainsJSON))
+	} else {
+		yaml.WriteString("null")
+	}
+	yaml.WriteString(";\n")
+	yaml.WriteString("              const urlFilterResult = filterURLs(sanitized, allowDomains);\n")
+	yaml.WriteString("              sanitized = urlFilterResult.filteredContent;\n")
+	yaml.WriteString("              if (urlFilterResult.removedURLs.length > 0) {\n")
+	yaml.WriteString("                console.log('Filtered URLs:', urlFilterResult.removedURLs);\n")
+	yaml.WriteString("              }\n")
+	yaml.WriteString("              \n")
 	yaml.WriteString("              // Trim excessive whitespace\n")
 	yaml.WriteString("              return sanitized.trim();\n")
 	yaml.WriteString("            }\n")
+	yaml.WriteString("            \n")
+	// Add URL filtering function
+	urlFilterJS := sanitizer.GenerateJavaScriptURLFilter(data.AllowDomains)
+	yaml.WriteString("            " + strings.ReplaceAll(urlFilterJS, "\n", "\n            ") + "\n")
 	yaml.WriteString("            \n")
 	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
 	yaml.WriteString("            if (!outputFile) {\n")

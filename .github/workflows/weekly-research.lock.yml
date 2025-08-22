@@ -350,9 +350,93 @@ jobs:
               // Remove ANSI escape sequences
               sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
               
+              // Filter URLs based on allow-domains configuration
+              const allowDomains = process.env.GH_AW_ALLOW_DOMAINS ? process.env.GH_AW_ALLOW_DOMAINS.split(',') : null;
+              const urlFilterResult = filterURLs(sanitized, allowDomains);
+              sanitized = urlFilterResult.filteredContent;
+              if (urlFilterResult.removedURLs.length > 0) {
+                console.log('Filtered URLs:', urlFilterResult.removedURLs);
+              }
+              
               // Trim excessive whitespace
               return sanitized.trim();
             }
+            
+            // URL filtering function
+            function filterURLs(content, allowDomains) {
+              if (!content || typeof content !== 'string') {
+                return { filteredContent: '', removedURLs: [] };
+              }
+              
+              let removedURLs = [];
+              let filteredContent = content;
+              
+              // Helper function to determine if URL should be filtered
+              function shouldFilterURL(rawURL) {
+                try {
+                  const url = new URL(rawURL);
+                  
+                  // Always filter non-HTTPS URLs
+                  if (url.protocol !== 'https:') {
+                    return true;
+                  }
+                  
+                  // If no domain restrictions, allow all HTTPS URLs
+                  if (!allowDomains || allowDomains.length === 0) {
+                    return false;
+                  }
+                  
+                  // Check if hostname matches any allowed domain pattern
+                  const hostname = url.hostname.toLowerCase();
+                  if (!hostname) {
+                    return true;
+                  }
+                  
+                  for (const allowedDomain of allowDomains) {
+                    const domain = allowedDomain.toLowerCase().trim();
+                    if (!domain) continue;
+                    
+                    // Exact match
+                    if (hostname === domain) {
+                      return false;
+                    }
+                    
+                    // Subdomain match
+                    if (hostname.endsWith('.' + domain)) {
+                      return false;
+                    }
+                  }
+                  
+                  return true;
+                } catch (error) {
+                  // If we can't parse it, filter it out for safety
+                  return true;
+                }
+              }
+              
+              // Handle markdown links: [text](url)
+              const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+              filteredContent = filteredContent.replace(markdownLinkRegex, (match, linkText, linkURL) => {
+                if (shouldFilterURL(linkURL)) {
+                  removedURLs.push(linkURL);
+                  return linkText ? linkText + ' [filtered]' : '[filtered]';
+                }
+                return match;
+              });
+              
+              // Handle plain URLs (including all protocols)
+              const urlRegex = /[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s<>"'\[\]{}()]+/g;
+              filteredContent = filteredContent.replace(urlRegex, (match) => {
+                if (shouldFilterURL(match)) {
+                  removedURLs.push(match);
+                  return '[filtered]';
+                }
+                return match;
+              });
+              
+              return { filteredContent, removedURLs };
+            }
+            
             
             const outputFile = process.env.GITHUB_AW_OUTPUT;
             if (!outputFile) {
