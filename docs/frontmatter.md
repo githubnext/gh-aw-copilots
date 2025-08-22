@@ -252,6 +252,10 @@ Configure automatic output processing from AI agent results:
 
 ```yaml
 output:
+  allowed-domains:                    # Optional: domains allowed in agent output URIs
+    - github.com                      # Default GitHub domains are always included
+    - api.github.com                  # Additional trusted domains can be specified
+    - trusted-domain.com              # URIs from unlisted domains are replaced with "(redacted)"
   issue:
     title-prefix: "[ai] "           # Optional: prefix for issue titles
     labels: [automation, ai-agent]  # Optional: labels to attach to issues
@@ -264,6 +268,23 @@ output:
     allowed: [triage, bug, enhancement] # Mandatory: allowed labels for addition
     max-count: 3                        # Optional: maximum number of labels to add (default: 3)
 ```
+
+### Security and Sanitization
+
+All agent output is automatically sanitized for security before being processed:
+
+- **XML Character Escaping**: Special characters (`<`, `>`, `&`, `"`, `'`) are escaped to prevent injection attacks
+- **URI Protocol Filtering**: Only HTTPS URIs are allowed; other protocols (HTTP, FTP, file://, javascript:, etc.) are replaced with "(redacted)"
+- **Domain Allowlisting**: HTTPS URIs are checked against the `allowed-domains` list. Unlisted domains are replaced with "(redacted)"
+- **Default Allowed Domains**: When `allowed-domains` is not specified, safe GitHub domains are used by default:
+  - `github.com`
+  - `github.io`
+  - `githubusercontent.com`
+  - `githubassets.com`
+  - `github.dev`
+  - `codespaces.new`
+- **Length and Line Limits**: Content is truncated if it exceeds safety limits (0.5MB or 65,000 lines)
+- **Control Character Removal**: Non-printable characters and ANSI escape sequences are stripped
 
 ### Issue Creation (`output.issue`)
 
