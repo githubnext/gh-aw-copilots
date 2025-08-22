@@ -161,14 +161,15 @@ type IssueConfig struct {
 
 // CommentConfig holds configuration for creating GitHub issue/PR comments from agent output
 type CommentConfig struct {
-	// Empty struct for now, as per requirements, but structured for future expansion
+	AllowHTML *bool `yaml:"allow-html,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
 }
 
 // PullRequestConfig holds configuration for creating GitHub pull requests from agent output
 type PullRequestConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
-	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
+	Draft       *bool    `yaml:"draft,omitempty"`      // Pointer to distinguish between unset (nil) and explicitly false
+	AllowHTML   *bool    `yaml:"allow-html,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1714,6 +1715,9 @@ func (c *Compiler) buildCreateOutputCommentJob(data *WorkflowData, mainJobName s
 	steps = append(steps, "        env:\n")
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	if data.Output.Comment.AllowHTML != nil {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_COMMENT_ALLOW_HTML: %q\n", fmt.Sprintf("%t", *data.Output.Comment.AllowHTML)))
+	}
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -1795,6 +1799,9 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		draftValue = *data.Output.PullRequest.Draft
 	}
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_DRAFT: %q\n", fmt.Sprintf("%t", draftValue)))
+	if data.Output.PullRequest.AllowHTML != nil {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_ALLOW_HTML: %q\n", fmt.Sprintf("%t", *data.Output.PullRequest.AllowHTML)))
+	}
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -2221,30 +2228,33 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 					issueConfig := &IssueConfig{}
 
 					// Parse title-prefix
-					if titlePrefix, exists := issueMap["title-prefix"]; exists {
-						if titlePrefixStr, ok := titlePrefix.(string); ok {
-							issueConfig.TitlePrefix = titlePrefixStr
+					if titlePrefix, err := parseTitlePrefixField(issueMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing issue title-prefix: %v", err)))
 						}
+					} else {
+						issueConfig.TitlePrefix = titlePrefix
 					}
 
 					// Parse labels
-					if labels, exists := issueMap["labels"]; exists {
-						if labelsArray, ok := labels.([]any); ok {
-							var labelStrings []string
-							for _, label := range labelsArray {
-								if labelStr, ok := label.(string); ok {
-									labelStrings = append(labelStrings, labelStr)
-								}
-							}
-							issueConfig.Labels = labelStrings
+					if labels, err := parseLabelsField(issueMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing issue labels: %v", err)))
 						}
+					} else {
+						issueConfig.Labels = labels
 					}
 
 					// Parse allow-html
-					if allowHTML, exists := issueMap["allow-html"]; exists {
-						if allowHTMLBool, ok := allowHTML.(bool); ok {
-							issueConfig.AllowHTML = &allowHTMLBool
+					if allowHTML, err := parseAllowHTMLField(issueMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing issue allow-html: %v", err)))
 						}
+					} else {
+						issueConfig.AllowHTML = allowHTML
 					}
 
 					config.Issue = issueConfig
@@ -2253,9 +2263,20 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 
 			// Parse comment configuration
 			if comment, exists := outputMap["comment"]; exists {
-				if _, ok := comment.(map[string]any); ok {
-					// For now, CommentConfig is an empty struct
-					config.Comment = &CommentConfig{}
+				if commentMap, ok := comment.(map[string]any); ok {
+					commentConfig := &CommentConfig{}
+
+					// Parse allow-html
+					if allowHTML, err := parseAllowHTMLField(commentMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing comment allow-html: %v", err)))
+						}
+					} else {
+						commentConfig.AllowHTML = allowHTML
+					}
+
+					config.Comment = commentConfig
 				}
 			}
 
@@ -2265,30 +2286,43 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 					pullRequestConfig := &PullRequestConfig{}
 
 					// Parse title-prefix
-					if titlePrefix, exists := pullRequestMap["title-prefix"]; exists {
-						if titlePrefixStr, ok := titlePrefix.(string); ok {
-							pullRequestConfig.TitlePrefix = titlePrefixStr
+					if titlePrefix, err := parseTitlePrefixField(pullRequestMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing pull-request title-prefix: %v", err)))
 						}
+					} else {
+						pullRequestConfig.TitlePrefix = titlePrefix
 					}
 
 					// Parse labels
-					if labels, exists := pullRequestMap["labels"]; exists {
-						if labelsArray, ok := labels.([]any); ok {
-							var labelStrings []string
-							for _, label := range labelsArray {
-								if labelStr, ok := label.(string); ok {
-									labelStrings = append(labelStrings, labelStr)
-								}
-							}
-							pullRequestConfig.Labels = labelStrings
+					if labels, err := parseLabelsField(pullRequestMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing pull-request labels: %v", err)))
 						}
+					} else {
+						pullRequestConfig.Labels = labels
 					}
 
 					// Parse draft
-					if draft, exists := pullRequestMap["draft"]; exists {
-						if draftBool, ok := draft.(bool); ok {
-							pullRequestConfig.Draft = &draftBool
+					if draft, err := parseDraftField(pullRequestMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing pull-request draft: %v", err)))
 						}
+					} else {
+						pullRequestConfig.Draft = draft
+					}
+
+					// Parse allow-html
+					if allowHTML, err := parseAllowHTMLField(pullRequestMap); err != nil {
+						// Log error but continue parsing
+						if c.verbose {
+							fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Error parsing pull-request allow-html: %v", err)))
+						}
+					} else {
+						pullRequestConfig.AllowHTML = allowHTML
 					}
 
 					config.PullRequest = pullRequestConfig

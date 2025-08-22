@@ -928,3 +928,351 @@ This workflow tests the allow-html environment variable generation.
 
 	t.Logf("Generated workflow content:\n%s", lockContentStr)
 }
+
+func TestOutputCommentAllowHTMLConfig(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-comment-allow-html-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Test case 1: allow-html: false
+	testContent1 := `---
+on: push
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  comment:
+    allow-html: false
+---
+
+# Test Allow HTML Configuration for Comments
+
+This workflow tests the allow-html configuration for comments.
+`
+
+	testFile1 := filepath.Join(tmpDir, "test-comment-allow-html-false.md")
+	if err := os.WriteFile(testFile1, []byte(testContent1), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData1, err := compiler.parseWorkflowFile(testFile1)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with comment allow-html false: %v", err)
+	}
+
+	// Verify allow-html is parsed correctly
+	if workflowData1.Output == nil || workflowData1.Output.Comment == nil {
+		t.Fatal("Expected comment configuration to be parsed")
+	}
+
+	if workflowData1.Output.Comment.AllowHTML == nil {
+		t.Fatal("Expected comment allow-html to be parsed")
+	}
+
+	if *workflowData1.Output.Comment.AllowHTML != false {
+		t.Errorf("Expected comment allow-html to be false, got %v", *workflowData1.Output.Comment.AllowHTML)
+	}
+
+	// Test case 2: allow-html: true
+	testContent2 := `---
+on: push
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  comment:
+    allow-html: true
+---
+
+# Test Allow HTML Configuration for Comments
+
+This workflow tests the allow-html configuration for comments.
+`
+
+	testFile2 := filepath.Join(tmpDir, "test-comment-allow-html-true.md")
+	if err := os.WriteFile(testFile2, []byte(testContent2), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData2, err := compiler.parseWorkflowFile(testFile2)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with comment allow-html true: %v", err)
+	}
+
+	// Verify allow-html is parsed correctly
+	if workflowData2.Output == nil || workflowData2.Output.Comment == nil {
+		t.Fatal("Expected comment configuration to be parsed")
+	}
+
+	if workflowData2.Output.Comment.AllowHTML == nil {
+		t.Fatal("Expected comment allow-html to be parsed")
+	}
+
+	if *workflowData2.Output.Comment.AllowHTML != true {
+		t.Errorf("Expected comment allow-html to be true, got %v", *workflowData2.Output.Comment.AllowHTML)
+	}
+
+	// Test case 3: allow-html not specified (should be nil)
+	testContent3 := `---
+on: push
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  comment: {}
+---
+
+# Test Allow HTML Configuration for Comments
+
+This workflow tests the allow-html configuration for comments.
+`
+
+	testFile3 := filepath.Join(tmpDir, "test-comment-allow-html-unspecified.md")
+	if err := os.WriteFile(testFile3, []byte(testContent3), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData3, err := compiler.parseWorkflowFile(testFile3)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow without comment allow-html: %v", err)
+	}
+
+	// Verify allow-html is nil when not specified
+	if workflowData3.Output == nil || workflowData3.Output.Comment == nil {
+		t.Fatal("Expected comment configuration to be parsed")
+	}
+
+	if workflowData3.Output.Comment.AllowHTML != nil {
+		t.Errorf("Expected comment allow-html to be nil when not specified, got %v", *workflowData3.Output.Comment.AllowHTML)
+	}
+}
+
+func TestOutputPullRequestAllowHTMLConfig(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-pr-allow-html-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Test case 1: allow-html: false
+	testContent1 := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+engine: claude
+output:
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    allow-html: false
+---
+
+# Test Allow HTML Configuration for Pull Requests
+
+This workflow tests the allow-html configuration for pull requests.
+`
+
+	testFile1 := filepath.Join(tmpDir, "test-pr-allow-html-false.md")
+	if err := os.WriteFile(testFile1, []byte(testContent1), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData1, err := compiler.parseWorkflowFile(testFile1)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with pull-request allow-html false: %v", err)
+	}
+
+	// Verify allow-html is parsed correctly
+	if workflowData1.Output == nil || workflowData1.Output.PullRequest == nil {
+		t.Fatal("Expected pull-request configuration to be parsed")
+	}
+
+	if workflowData1.Output.PullRequest.AllowHTML == nil {
+		t.Fatal("Expected pull-request allow-html to be parsed")
+	}
+
+	if *workflowData1.Output.PullRequest.AllowHTML != false {
+		t.Errorf("Expected pull-request allow-html to be false, got %v", *workflowData1.Output.PullRequest.AllowHTML)
+	}
+
+	// Test case 2: allow-html: true
+	testContent2 := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+engine: claude
+output:
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    allow-html: true
+---
+
+# Test Allow HTML Configuration for Pull Requests
+
+This workflow tests the allow-html configuration for pull requests.
+`
+
+	testFile2 := filepath.Join(tmpDir, "test-pr-allow-html-true.md")
+	if err := os.WriteFile(testFile2, []byte(testContent2), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data
+	workflowData2, err := compiler.parseWorkflowFile(testFile2)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with pull-request allow-html true: %v", err)
+	}
+
+	// Verify allow-html is parsed correctly
+	if workflowData2.Output == nil || workflowData2.Output.PullRequest == nil {
+		t.Fatal("Expected pull-request configuration to be parsed")
+	}
+
+	if workflowData2.Output.PullRequest.AllowHTML == nil {
+		t.Fatal("Expected pull-request allow-html to be parsed")
+	}
+
+	if *workflowData2.Output.PullRequest.AllowHTML != true {
+		t.Errorf("Expected pull-request allow-html to be true, got %v", *workflowData2.Output.PullRequest.AllowHTML)
+	}
+
+	// Verify other fields are still parsed
+	expectedPrefix := "[agent] "
+	if workflowData2.Output.PullRequest.TitlePrefix != expectedPrefix {
+		t.Errorf("Expected title prefix '%s', got '%s'", expectedPrefix, workflowData2.Output.PullRequest.TitlePrefix)
+	}
+
+	expectedLabels := []string{"automation"}
+	if len(workflowData2.Output.PullRequest.Labels) != len(expectedLabels) {
+		t.Errorf("Expected %d labels, got %d", len(expectedLabels), len(workflowData2.Output.PullRequest.Labels))
+	}
+}
+
+func TestOutputCommentJobGenerationWithAllowHTML(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-comment-job-allow-html-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with allow-html: false
+	testContent := `---
+on: issues
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  comment:
+    allow-html: false
+---
+
+# Test Comment Allow HTML in Job Generation
+
+This workflow tests the allow-html environment variable generation for comments.
+`
+
+	testFile := filepath.Join(tmpDir, "test-comment-allow-html-job.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow to generate the lock file
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	// Check that the environment variable is set correctly
+	if !strings.Contains(string(lockContent), "GITHUB_AW_COMMENT_ALLOW_HTML: \"false\"") {
+		t.Error("Expected GITHUB_AW_COMMENT_ALLOW_HTML environment variable to be set to 'false' in generated workflow")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContent)
+}
+
+func TestOutputPullRequestJobGenerationWithAllowHTML(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-pr-job-allow-html-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with allow-html: false
+	testContent := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+output:
+  pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    allow-html: false
+---
+
+# Test Pull Request Allow HTML in Job Generation
+
+This workflow tests the allow-html environment variable generation for pull requests.
+`
+
+	testFile := filepath.Join(tmpDir, "test-pr-allow-html-job.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow to generate the lock file
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	// Check that the environment variable is set correctly
+	if !strings.Contains(string(lockContent), "GITHUB_AW_PR_ALLOW_HTML: \"false\"") {
+		t.Error("Expected GITHUB_AW_PR_ALLOW_HTML environment variable to be set to 'false' in generated workflow")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContent)
+}

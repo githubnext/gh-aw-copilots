@@ -978,6 +978,12 @@
         "comment": {
           "type": "object",
           "description": "Configuration for creating GitHub issue/PR comments from agent output",
+          "properties": {
+            "allow-html": {
+              "type": "boolean",
+              "description": "Optional flag to allow HTML content in the comment. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
+            }
+          },
           "additionalProperties": false
         },
         "pull-request": {
@@ -998,6 +1004,10 @@
             "draft": {
               "type": "boolean",
               "description": "Whether to create pull request as draft (defaults to true)"
+            },
+            "allow-html": {
+              "type": "boolean",
+              "description": "Optional flag to allow HTML content in the pull request. When false, HTML tags are stripped from the output. Defaults to true (preserves HTML)."
             }
           },
           "additionalProperties": false

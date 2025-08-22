@@ -49,8 +49,17 @@ async function main() {
     return;
   }
 
+  // Import HTML utilities
+  const { stripHtmlTags, shouldStripHTML } = require('./html_utils.cjs');
 
   let body = outputContent.trim();
+  
+  // Check if HTML content should be stripped
+  if (shouldStripHTML('GITHUB_AW_COMMENT_ALLOW_HTML')) {
+    body = stripHtmlTags(body);
+    console.log('HTML content stripped from comment body');
+  }
+  
   // Add AI disclaimer with run id, run htmlurl
   const runId = context.runId;
   const runUrl = `${context.payload.repository.html_url}/actions/runs/${runId}`;  
