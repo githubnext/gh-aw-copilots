@@ -131,5 +131,4 @@ async function main() {
   }
 }
 
-module.exports = { sanitizeContent };
 await main();
