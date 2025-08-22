@@ -36,7 +36,6 @@
     "pkg/workflow/js/create_comment.cjs",
     "pkg/workflow/js/create_issue.cjs",
     "pkg/workflow/js/create_pull_request.cjs",
-    "pkg/workflow/js/test_globals.cjs",
     "pkg/workflow/js/types/*.d.ts"
   ],
   "exclude": [
