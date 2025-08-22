@@ -2596,46 +2596,16 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          script: |\n")
-	yaml.WriteString("            const fs = require('fs');\n")
-	yaml.WriteString("            \n")
 
-	// Include the sanitization script
-	yaml.WriteString("            // Enhanced sanitization function with XML escaping and URI filtering\n")
-
-	// Add the embedded sanitization script
-	for _, line := range strings.Split(sanitizeOutputScript, "\n") {
-		if strings.TrimSpace(line) != "" {
-			yaml.WriteString("            " + line + "\n")
+	// Add each line of the script with proper indentation
+	scriptLines := strings.Split(sanitizeOutputScript, "\n")
+	for _, line := range scriptLines {
+		if strings.TrimSpace(line) == "" {
+			yaml.WriteString("\n")
 		} else {
-			yaml.WriteString("            \n")
+			yaml.WriteString(fmt.Sprintf("            %s\n", line))
 		}
 	}
-
-	yaml.WriteString("            \n")
-	yaml.WriteString("            // Extract sanitize function from module\n")
-	yaml.WriteString("            const { sanitizeContent } = module.exports;\n")
-	yaml.WriteString("            \n")
-
-	yaml.WriteString("            const outputFile = process.env.GITHUB_AW_OUTPUT;\n")
-	yaml.WriteString("            if (!outputFile) {\n")
-	yaml.WriteString("              console.log('GITHUB_AW_OUTPUT not set, no output to collect');\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("              return;\n")
-	yaml.WriteString("            }\n")
-	yaml.WriteString("            if (!fs.existsSync(outputFile)) {\n")
-	yaml.WriteString("              console.log('Output file does not exist:', outputFile);\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("              return;\n")
-	yaml.WriteString("            }\n")
-	yaml.WriteString("            const outputContent = fs.readFileSync(outputFile, 'utf8');\n")
-	yaml.WriteString("            if (outputContent.trim() === '') {\n")
-	yaml.WriteString("              console.log('Output file is empty');\n")
-	yaml.WriteString("              core.setOutput('output', '');\n")
-	yaml.WriteString("            } else {\n")
-	yaml.WriteString("              const sanitizedContent = sanitizeContent(outputContent);\n")
-	yaml.WriteString("              console.log('Collected agentic output (sanitized):', sanitizedContent.substring(0, 200) + (sanitizedContent.length > 200 ? '...' : ''));\n")
-	yaml.WriteString("              core.setOutput('output', sanitizedContent);\n")
-	yaml.WriteString("            }\n")
 
 	yaml.WriteString("      - name: Print agent output to step summary\n")
 	yaml.WriteString("        env:\n")

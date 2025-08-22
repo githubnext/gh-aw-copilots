@@ -106,4 +106,30 @@ function sanitizeContent(content) {
   return sanitized.trim();
 }
 
+async function main() {
+  const outputFile = process.env.GITHUB_AW_OUTPUT;
+  if (!outputFile) {
+    console.log('GITHUB_AW_OUTPUT not set, no output to collect');
+    core.setOutput('output', '');
+    return;
+  }
+  
+  if (!fs.existsSync(outputFile)) {
+    console.log('Output file does not exist:', outputFile);
+    core.setOutput('output', '');
+    return;
+  }
+  
+  const outputContent = fs.readFileSync(outputFile, 'utf8');
+  if (outputContent.trim() === '') {
+    console.log('Output file is empty');
+    core.setOutput('output', '');
+  } else {
+    const sanitizedContent = sanitizeContent(outputContent);
+    console.log('Collected agentic output (sanitized):', sanitizedContent.substring(0, 200) + (sanitizedContent.length > 200 ? '...' : ''));
+    core.setOutput('output', sanitizedContent);
+  }
+}
+
 module.exports = { sanitizeContent };
+await main();
