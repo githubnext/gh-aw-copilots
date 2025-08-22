@@ -49,8 +49,15 @@ async function main() {
     return;
   }
 
-  // Import HTML utilities
-  const { stripHtmlTags, shouldStripHTML } = require('./html_utils.cjs');
+  // HTML utility functions (inlined to avoid import issues)
+  function stripHtmlTags(text) {
+    return text.replace(/<[^>]*>/g, '');
+  }
+  
+  function shouldStripHTML(envVarName) {
+    const allowHTML = process.env[envVarName];
+    return allowHTML === 'false';
+  }
 
   let body = outputContent.trim();
   
