@@ -72,7 +72,7 @@ async function main() {
   let body = bodyLines.join('\n').trim();
   let processedTitle = title;
   
-  if (process.env.GITHUB_AW_ISSUE_ALLOW_HTML === 'false') {
+  if (process.env.GITHUB_AW_ISSUE_ALLOW_HTML !== 'true') {
     body = body.replace(/<[^>]*>/g, '');
     processedTitle = title.replace(/<[^>]*>/g, '');
     console.log('HTML content stripped from issue title and body');

@@ -620,7 +620,7 @@ jobs:
               let body = bodyLines.join('\n').trim();
               let processedTitle = title;
 
-              if (process.env.GITHUB_AW_ISSUE_ALLOW_HTML === 'false') {
+              if (process.env.GITHUB_AW_ISSUE_ALLOW_HTML !== 'true') {
                 body = body.replace(/<[^>]*>/g, '');
                 processedTitle = title.replace(/<[^>]*>/g, '');
                 console.log('HTML content stripped from issue title and body');
@@ -744,7 +744,7 @@ jobs:
               let body = outputContent.trim();
 
               // Check if HTML content should be stripped
-              if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML === 'false') {
+              if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML !== 'true') {
                 body = body.replace(/<[^>]*>/g, '');
                 console.log('HTML content stripped from comment body');
               }
@@ -901,7 +901,7 @@ jobs:
               let body = bodyLines.join('\n').trim();
               let processedTitle = title;
 
-              if (process.env.GITHUB_AW_PR_ALLOW_HTML === 'false') {
+              if (process.env.GITHUB_AW_PR_ALLOW_HTML !== 'true') {
                 body = body.replace(/<[^>]*>/g, '');
                 processedTitle = title.replace(/<[^>]*>/g, '');
                 console.log('HTML content stripped from pull request title and body');

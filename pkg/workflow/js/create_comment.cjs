@@ -52,7 +52,7 @@ async function main() {
   let body = outputContent.trim();
   
   // Check if HTML content should be stripped
-  if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML === 'false') {
+  if (process.env.GITHUB_AW_COMMENT_ALLOW_HTML !== 'true') {
     body = body.replace(/<[^>]*>/g, '');
     console.log('HTML content stripped from comment body');
   }
