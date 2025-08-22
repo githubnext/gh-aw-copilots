@@ -997,6 +997,22 @@
             }
           },
           "additionalProperties": false
+        },
+        "labels": {
+          "type": "object",
+          "description": "Configuration for adding labels to issues/PRs from agent output",
+          "properties": {
+            "allowed": {
+              "type": "array",
+              "description": "Mandatory list of allowed labels that can be added",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          },
+          "required": ["allowed"],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

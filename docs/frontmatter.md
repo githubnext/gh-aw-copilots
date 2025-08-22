@@ -260,6 +260,8 @@ output:
     title-prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
     draft: true                     # Optional: create as draft PR (defaults to true)
+  labels:
+    allowed: [triage, bug, enhancement] # Mandatory: allowed labels for addition
 ```
 
 ### Issue Creation (`output.issue`)
@@ -390,6 +392,69 @@ Write a summary to ${{ env.GITHUB_AW_OUTPUT }} with title and description.
 
 **Required Patch Format:**
 The agent must create git patches in `/tmp/aw.patch` for the changes to be applied. The pull request creation job validates patch existence and content before proceeding.
+
+### Label Addition (`output.labels`)
+
+**Behavior:**
+- When `output.labels` is configured, the compiler automatically generates a separate `add_labels` job
+- This job runs after the main AI agent job completes
+- The agent's output content flows from the main job to the label addition job via job output variables
+- The job parses labels from the agent output (one per line), validates them against the allowed list, and adds them to the current issue or pull request
+- **Important**: Only **label addition** is supported; label removal is strictly prohibited and will cause the job to fail
+- **Security**: The `allowed` list is mandatory and enforced at runtime - only labels from this list can be added
+
+**Generated Job Properties:**
+- **Job Name**: `add_labels`
+- **Dependencies**: Runs after the main agent job (`needs: [main-job-name]`)
+- **Permissions**: Only the label addition job has `issues: write` and `pull-requests: write` permissions
+- **Timeout**: 10-minute timeout to prevent hanging
+- **Conditional Execution**: Only runs when `github.event.issue.number` or `github.event.pull_request.number` is available
+- **Environment Variables**: Configuration passed via `GITHUB_AW_LABELS_ALLOWED`
+- **Outputs**: Returns `labels_added` as a newline-separated list of labels that were successfully added
+
+**Configuration:**
+```yaml
+output:
+  labels:
+    allowed: [triage, bug, enhancement]  # Mandatory: list of allowed labels (must be non-empty)
+```
+
+**Agent Output Format:**
+The agent should write labels to add, one per line, to the `${{ env.GITHUB_AW_OUTPUT }}` file:
+```
+triage
+bug
+needs-review
+```
+
+**Safety Features:**
+- Empty lines in agent output are ignored
+- Lines starting with `-` are rejected (no removal operations allowed)
+- Duplicate labels are automatically removed
+- All requested labels must be in the `allowed` list or the job fails with a clear error message
+- Only GitHub's `issues.addLabels` API endpoint is used (no removal endpoints)
+
+**Example workflow using label addition:**
+```yaml
+---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  actions: read       # Main job only needs minimal permissions
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement, documentation, needs-review]
+---
+
+# Issue Labeling Agent
+
+Analyze the issue content and add appropriate labels.
+Write the labels you want to add (one per line) to ${{ env.GITHUB_AW_OUTPUT }}.
+Only use labels from the allowed list: triage, bug, enhancement, documentation, needs-review.
+```
 
 ## Cache Configuration (`cache:`)
 

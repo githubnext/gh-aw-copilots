@@ -726,3 +726,254 @@ This workflow tests the create_pull_request job generation with draft: true.
 
 	t.Logf("Generated workflow content:\n%s", lockContentStr)
 }
+
+func TestOutputLabelConfigParsing(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-config-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement, needs-review]
+---
+
+# Test Output Label Configuration
+
+This workflow tests the output labels configuration parsing.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow data
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with output labels config: %v", err)
+	}
+
+	// Verify output configuration is parsed correctly
+	if workflowData.Output == nil {
+		t.Fatal("Expected output configuration to be parsed")
+	}
+
+	if workflowData.Output.Label == nil {
+		t.Fatal("Expected labels configuration to be parsed")
+	}
+
+	// Verify allowed labels
+	expectedLabels := []string{"triage", "bug", "enhancement", "needs-review"}
+	if len(workflowData.Output.Label.Allowed) != len(expectedLabels) {
+		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Label.Allowed))
+	}
+
+	for i, expectedLabel := range expectedLabels {
+		if i >= len(workflowData.Output.Label.Allowed) || workflowData.Output.Label.Allowed[i] != expectedLabel {
+			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Label.Allowed[i])
+		}
+	}
+}
+
+func TestOutputLabelJobGeneration(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-job-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with output.labels configuration
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [get_issue]
+engine: claude
+output:
+  labels:
+    allowed: [triage, bug, enhancement]
+---
+
+# Test Output Label Job Generation
+
+This workflow tests the add_labels job generation.
+`
+
+	testFile := filepath.Join(tmpDir, "test-output-labels.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with output labels: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := filepath.Join(tmpDir, "test-output-labels.lock.yml")
+	content, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	lockContent := string(content)
+
+	// Verify add_labels job exists
+	if !strings.Contains(lockContent, "add_labels:") {
+		t.Error("Expected 'add_labels' job to be in generated workflow")
+	}
+
+	// Verify job properties
+	if !strings.Contains(lockContent, "timeout-minutes: 10") {
+		t.Error("Expected 10-minute timeout in add_labels job")
+	}
+
+	if !strings.Contains(lockContent, "permissions:\n      contents: read\n      issues: write\n      pull-requests: write") {
+		t.Error("Expected correct permissions in add_labels job")
+	}
+
+	// Verify the job uses github-script
+	if !strings.Contains(lockContent, "uses: actions/github-script@v7") {
+		t.Error("Expected github-script action to be used in add_labels job")
+	}
+
+	// Verify job has conditional execution
+	if !strings.Contains(lockContent, "if: github.event.issue.number || github.event.pull_request.number") {
+		t.Error("Expected add_labels job to have conditional execution")
+	}
+
+	// Verify job dependencies
+	if !strings.Contains(lockContent, "needs: test-output-label-job-generation") {
+		t.Error("Expected add_labels job to depend on main job")
+	}
+
+	// Verify JavaScript content includes environment variables for configuration
+	if !strings.Contains(lockContent, "GITHUB_AW_AGENT_OUTPUT:") {
+		t.Error("Expected agent output content to be passed as environment variable")
+	}
+
+	if !strings.Contains(lockContent, "GITHUB_AW_LABELS_ALLOWED: \"triage,bug,enhancement\"") {
+		t.Error("Expected allowed labels to be set as environment variable")
+	}
+
+	// Verify output variables
+	if !strings.Contains(lockContent, "labels_added: ${{ steps.add_labels.outputs.labels_added }}") {
+		t.Error("Expected labels_added output to be available")
+	}
+
+	t.Logf("Generated workflow content:\n%s", lockContent)
+}
+
+func TestOutputLabelConfigValidation(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-validation-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with empty allowed labels (should fail)
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  labels:
+    allowed: []
+---
+
+# Test Output Label Validation
+
+This workflow tests validation of empty allowed labels.
+`
+
+	testFile := filepath.Join(tmpDir, "test-label-validation.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow - should fail with empty allowed labels
+	err = compiler.CompileWorkflow(testFile)
+	if err == nil {
+		t.Fatal("Expected error when compiling workflow with empty allowed labels")
+	}
+
+	if !strings.Contains(err.Error(), "minItems: got 0, want 1") {
+		t.Errorf("Expected schema validation error about minItems, got: %v", err)
+	}
+}
+
+func TestOutputLabelConfigMissingAllowed(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "output-label-missing-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with missing allowed field (should fail)
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+engine: claude
+output:
+  labels: {}
+---
+
+# Test Output Label Missing Allowed
+
+This workflow tests validation of missing allowed field.
+`
+
+	testFile := filepath.Join(tmpDir, "test-label-missing.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow - should fail with missing allowed labels
+	err = compiler.CompileWorkflow(testFile)
+	if err == nil {
+		t.Fatal("Expected error when compiling workflow with missing allowed labels")
+	}
+
+	if !strings.Contains(err.Error(), "missing property 'allowed'") {
+		t.Errorf("Expected schema validation error about missing required property, got: %v", err)
+	}
+}

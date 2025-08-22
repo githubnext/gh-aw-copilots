@@ -150,6 +150,7 @@ type OutputConfig struct {
 	Issue       *IssueConfig       `yaml:"issue,omitempty"`
 	Comment     *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
+	Label       *LabelConfig       `yaml:"label,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -168,6 +169,11 @@ type PullRequestConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
 	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
+}
+
+// LabelConfig holds configuration for adding labels to issues/PRs from agent output
+type LabelConfig struct {
+	Allowed []string `yaml:"allowed"` // Mandatory list of allowed labels
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1534,6 +1540,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 		}
 	}
 
+	// Build add_labels job if output.labels is configured
+	if data.Output != nil && data.Output.Label != nil {
+		addLabelsJob, err := c.buildCreateOutputLabelJob(data, jobName)
+		if err != nil {
+			return fmt.Errorf("failed to build add_labels job: %w", err)
+		}
+		if err := c.jobManager.AddJob(addLabelsJob); err != nil {
+			return fmt.Errorf("failed to add add_labels job: %w", err)
+		}
+	}
+
 	// Build additional custom jobs from frontmatter jobs section
 	if err := c.buildCustomJobs(data); err != nil {
 		return fmt.Errorf("failed to build custom jobs: %w", err)
@@ -1817,6 +1834,62 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		If:             "", // No conditional execution
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: write\n      issues: write\n      pull-requests: write",
+		TimeoutMinutes: 10, // 10-minute timeout as required
+		Steps:          steps,
+		Outputs:        outputs,
+		Depends:        []string{mainJobName}, // Depend on the main workflow job
+	}
+
+	return job, nil
+}
+
+// buildCreateOutputLabelJob creates the add_labels job
+func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName string) (*Job, error) {
+	if data.Output == nil || data.Output.Label == nil {
+		return nil, fmt.Errorf("output.labels configuration is required")
+	}
+
+	// Validate that allowed labels list is not empty
+	if len(data.Output.Label.Allowed) == 0 {
+		return nil, fmt.Errorf("output.labels.allowed must be non-empty")
+	}
+
+	var steps []string
+	steps = append(steps, "      - name: Add Labels\n")
+	steps = append(steps, "        id: add_labels\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	// Pass the agent output content from the main job
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass the allowed labels list
+	allowedLabelsStr := strings.Join(data.Output.Label.Allowed, ",")
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_LABELS_ALLOWED: %q\n", allowedLabelsStr))
+
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	scriptLines := strings.Split(addLabelsScript, "\n")
+	for _, line := range scriptLines {
+		if strings.TrimSpace(line) == "" {
+			steps = append(steps, "\n")
+		} else {
+			steps = append(steps, fmt.Sprintf("            %s\n", line))
+		}
+	}
+
+	// Create outputs for the job
+	outputs := map[string]string{
+		"labels_added": "${{ steps.add_labels.outputs.labels_added }}",
+	}
+
+	job := &Job{
+		Name:           "add_labels",
+		If:             "if: github.event.issue.number || github.event.pull_request.number", // Only run in issue or PR context
+		RunsOn:         "runs-on: ubuntu-latest",
+		Permissions:    "permissions:\n      contents: read\n      issues: write\n      pull-requests: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
 		Steps:          steps,
 		Outputs:        outputs,
@@ -2281,6 +2354,28 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 					}
 
 					config.PullRequest = pullRequestConfig
+				}
+			}
+
+			// Parse labels configuration
+			if labels, exists := outputMap["labels"]; exists {
+				if labelsMap, ok := labels.(map[string]any); ok {
+					labelConfig := &LabelConfig{}
+
+					// Parse allowed labels (mandatory)
+					if allowed, exists := labelsMap["allowed"]; exists {
+						if allowedArray, ok := allowed.([]any); ok {
+							var allowedStrings []string
+							for _, label := range allowedArray {
+								if labelStr, ok := label.(string); ok {
+									allowedStrings = append(allowedStrings, labelStr)
+								}
+							}
+							labelConfig.Allowed = allowedStrings
+						}
+					}
+
+					config.Label = labelConfig
 				}
 			}
 
