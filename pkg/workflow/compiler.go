@@ -150,7 +150,7 @@ type OutputConfig struct {
 	Issue       *IssueConfig       `yaml:"issue,omitempty"`
 	Comment     *CommentConfig     `yaml:"comment,omitempty"`
 	PullRequest *PullRequestConfig `yaml:"pull-request,omitempty"`
-	Label       *LabelConfig       `yaml:"labels,omitempty"`
+	Labels      *LabelConfig       `yaml:"labels,omitempty"`
 }
 
 // IssueConfig holds configuration for creating GitHub issues from agent output
@@ -173,8 +173,8 @@ type PullRequestConfig struct {
 
 // LabelConfig holds configuration for adding labels to issues/PRs from agent output
 type LabelConfig struct {
-	Allowed  []string `yaml:"allowed"`                // Mandatory list of allowed labels
-	MaxCount *int     `yaml:"max-count,omitempty"`    // Optional maximum number of labels to add (default: 3)
+	Allowed  []string `yaml:"allowed"`             // Mandatory list of allowed labels
+	MaxCount *int     `yaml:"max-count,omitempty"` // Optional maximum number of labels to add (default: 3)
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1542,7 +1542,7 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 	}
 
 	// Build add_labels job if output.labels is configured
-	if data.Output != nil && data.Output.Label != nil {
+	if data.Output != nil && data.Output.Labels != nil {
 		addLabelsJob, err := c.buildCreateOutputLabelJob(data, jobName)
 		if err != nil {
 			return fmt.Errorf("failed to build add_labels job: %w", err)
@@ -1843,8 +1843,6 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 
 	return job, nil
 }
-
-
 
 // buildMainJob creates the main workflow job
 func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreated bool) (*Job, error) {
@@ -2346,7 +2344,7 @@ func (c *Compiler) extractOutputConfig(frontmatter map[string]any) *OutputConfig
 						}
 					}
 
-					config.Label = labelConfig
+					config.Labels = labelConfig
 				}
 			}
 

@@ -773,19 +773,19 @@ This workflow tests the output labels configuration parsing.
 		t.Fatal("Expected output configuration to be parsed")
 	}
 
-	if workflowData.Output.Label == nil {
+	if workflowData.Output.Labels == nil {
 		t.Fatal("Expected labels configuration to be parsed")
 	}
 
 	// Verify allowed labels
 	expectedLabels := []string{"triage", "bug", "enhancement", "needs-review"}
-	if len(workflowData.Output.Label.Allowed) != len(expectedLabels) {
-		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Label.Allowed))
+	if len(workflowData.Output.Labels.Allowed) != len(expectedLabels) {
+		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Labels.Allowed))
 	}
 
 	for i, expectedLabel := range expectedLabels {
-		if i >= len(workflowData.Output.Label.Allowed) || workflowData.Output.Label.Allowed[i] != expectedLabel {
-			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Label.Allowed[i])
+		if i >= len(workflowData.Output.Labels.Allowed) || workflowData.Output.Labels.Allowed[i] != expectedLabel {
+			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Labels.Allowed[i])
 		}
 	}
 }
@@ -936,30 +936,30 @@ This workflow tests the output labels max-count configuration parsing.
 		t.Fatal("Expected output configuration to be parsed")
 	}
 
-	if workflowData.Output.Label == nil {
+	if workflowData.Output.Labels == nil {
 		t.Fatal("Expected labels configuration to be parsed")
 	}
 
 	// Verify allowed labels
 	expectedLabels := []string{"triage", "bug", "enhancement", "needs-review"}
-	if len(workflowData.Output.Label.Allowed) != len(expectedLabels) {
-		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Label.Allowed))
+	if len(workflowData.Output.Labels.Allowed) != len(expectedLabels) {
+		t.Errorf("Expected %d allowed labels, got %d", len(expectedLabels), len(workflowData.Output.Labels.Allowed))
 	}
 
 	for i, expectedLabel := range expectedLabels {
-		if i >= len(workflowData.Output.Label.Allowed) || workflowData.Output.Label.Allowed[i] != expectedLabel {
-			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Label.Allowed[i])
+		if i >= len(workflowData.Output.Labels.Allowed) || workflowData.Output.Labels.Allowed[i] != expectedLabel {
+			t.Errorf("Expected label[%d] to be '%s', got '%s'", i, expectedLabel, workflowData.Output.Labels.Allowed[i])
 		}
 	}
 
 	// Verify max-count
-	if workflowData.Output.Label.MaxCount == nil {
+	if workflowData.Output.Labels.MaxCount == nil {
 		t.Fatal("Expected max-count to be parsed")
 	}
 
 	expectedMaxCount := 5
-	if *workflowData.Output.Label.MaxCount != expectedMaxCount {
-		t.Errorf("Expected max-count to be %d, got %d", expectedMaxCount, *workflowData.Output.Label.MaxCount)
+	if *workflowData.Output.Labels.MaxCount != expectedMaxCount {
+		t.Errorf("Expected max-count to be %d, got %d", expectedMaxCount, *workflowData.Output.Labels.MaxCount)
 	}
 }
 
@@ -1005,8 +1005,8 @@ This workflow tests the default max-count behavior.
 	}
 
 	// Verify max-count is nil (will use default in job generation)
-	if workflowData.Output.Label.MaxCount != nil {
-		t.Errorf("Expected max-count to be nil (default), got %d", *workflowData.Output.Label.MaxCount)
+	if workflowData.Output.Labels.MaxCount != nil {
+		t.Errorf("Expected max-count to be nil (default), got %d", *workflowData.Output.Labels.MaxCount)
 	}
 }
 

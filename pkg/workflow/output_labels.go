@@ -7,19 +7,19 @@ import (
 
 // buildCreateOutputLabelJob creates the add_labels job
 func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName string) (*Job, error) {
-	if data.Output == nil || data.Output.Label == nil {
+	if data.Output == nil || data.Output.Labels == nil {
 		return nil, fmt.Errorf("output.labels configuration is required")
 	}
 
 	// Validate that allowed labels list is not empty
-	if len(data.Output.Label.Allowed) == 0 {
+	if len(data.Output.Labels.Allowed) == 0 {
 		return nil, fmt.Errorf("output.labels.allowed must be non-empty")
 	}
 
 	// Get max-count with default of 3
 	maxCount := 3
-	if data.Output.Label.MaxCount != nil {
-		maxCount = *data.Output.Label.MaxCount
+	if data.Output.Labels.MaxCount != nil {
+		maxCount = *data.Output.Labels.MaxCount
 	}
 
 	var steps []string
@@ -32,7 +32,7 @@ func (c *Compiler) buildCreateOutputLabelJob(data *WorkflowData, mainJobName str
 	// Pass the agent output content from the main job
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
 	// Pass the allowed labels list
-	allowedLabelsStr := strings.Join(data.Output.Label.Allowed, ",")
+	allowedLabelsStr := strings.Join(data.Output.Labels.Allowed, ",")
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_LABELS_ALLOWED: %q\n", allowedLabelsStr))
 	// Pass the max-count limit
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_LABELS_MAX_COUNT: %d\n", maxCount))
