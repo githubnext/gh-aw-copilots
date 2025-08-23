@@ -1579,7 +1579,7 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "        uses: actions/github-script@v7\n")
 		steps = append(steps, "        with:\n")
 		steps = append(steps, "          script: |\n")
-		
+
 		// Inline the JavaScript code with proper indentation
 		scriptLines := strings.Split(checkTeamMemberScript, "\n")
 		for _, line := range scriptLines {
