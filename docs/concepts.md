@@ -1,4 +1,4 @@
-# 📖 Introduction to Agentic Workflows
+# 📖 Introduction to GitHub Agentic Workflows
 
 Now that you've [got your first workflow running](quick-start.md), let's dive deeper into the concepts and capabilities of GitHub Agentic Workflows.
 
@@ -17,7 +17,9 @@ Traditional GitHub Actions follow pre-programmed steps. Agentic workflows use AI
 - **Use tools** — Interact with GitHub APIs, external services, and repository files
 - **Generate content** — Create meaningful comments, documentation, and code changes
 - **Learn and adapt** — Adjust behavior based on past action, feedback and outcomes
-- **Productive ambiguity** — Interpret natural language instructions flexibly and productively
+- **Use ambiguity productively** — Interpret natural language instructions flexibly and productively
+
+One crucial difference from regular agentic prompting is that GitHub Agentic Workflows can contain **both** traditional GitHub Actions steps and agentic natural language instructions. This allows the best of both worlds: traditional steps for deterministic actions, and agentic steps for flexible, context-aware AI-driven actions.
 
 ### The anatomy of an agentic workflow
 
@@ -38,7 +40,7 @@ steps: ...
 Analyze this issue and provide helpful triage comments...
 ```
 
-One crucial difference from traditional agentic prompting is that GitHub Agentic Workflows can contain **both** traditional GitHub Actions steps and agentic natural language instructions. This allows the best of both worlds: traditional steps for deterministic actions, and agentic steps for flexible, context-aware AI-driven actions.
+Another crucial difference from traditional agentic prompting is that GitHub Agentic Workflows can contain triggers, permissions and other declarative elements. This works towards more reliable and more secure agentic programming, setting the AI up to contribute to success, in a partially sandboxed way, at the right time in your team's work.
 
 See [Workflow Structure](workflow-structure.md) and [Frontmatter Options](frontmatter.md) for details of file layout and configuration options.
 
