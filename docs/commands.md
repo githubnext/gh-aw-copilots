@@ -17,7 +17,41 @@ gh aw run weekly-research                                    # Execute workflow
 gh aw logs weekly-research                                   # View execution logs
 ```
 
-## 🔧 Workflow Compilation
+## 📝 Workflow Creation and Management  
+
+The `add` and `new` commands help you create and manage agentic workflows, from templates and samples to completely custom workflows.
+
+**Creating New Workflows:**
+```bash
+# Create a new workflow with comprehensive template
+gh aw new my-custom-workflow
+
+# Create a new workflow, overwriting if it exists
+gh aw new issue-handler --force
+```
+
+**Adding Workflows from Samples:**
+```bash
+# Add a workflow from the official samples repository
+gh aw add samples/weekly-research.md -r githubnext/agentics
+
+# Add workflow and create pull request for review
+gh aw add samples/issue-triage.md -r githubnext/agentics --pr
+
+# Add workflow to a specific directory
+gh aw add samples/daily-standup.md -r githubnext/agentics --output .github/workflows/
+```
+
+**Workflow Removal:**
+```bash
+# Remove a workflow and its compiled version
+gh aw remove WorkflowName
+
+# Remove workflow but keep shared include files
+gh aw remove WorkflowName --keep-orphans
+```
+
+## 🔧 Workflow Recompilation
 
 The `compile` command transforms natural language workflow markdown files into executable GitHub Actions YAML files. This is the core functionality that converts your agentic workflow descriptions into automated GitHub workflows.
 
@@ -61,40 +95,6 @@ gh aw compile --watch --auto-compile --verbose
 - Generates `.lock.yml` files ready for GitHub Actions execution
 - Integrates with AI engines (Claude, Codex) for instruction processing
 
-## 📝 Workflow Creation and Management  
-
-The `add` and `new` commands help you create and manage agentic workflows, from templates and samples to completely custom workflows.
-
-**Adding Workflows from Samples:**
-```bash
-# Add a workflow from the official samples repository
-gh aw add samples/weekly-research.md -r githubnext/agentics
-
-# Add workflow and create pull request for review
-gh aw add samples/issue-triage.md -r githubnext/agentics --pr
-
-# Add workflow to a specific directory
-gh aw add samples/daily-standup.md -r githubnext/agentics --output .github/workflows/
-```
-
-**Creating New Workflows:**
-```bash
-# Create a new workflow with comprehensive template
-gh aw new my-custom-workflow
-
-# Create a new workflow, overwriting if it exists
-gh aw new issue-handler --force
-```
-
-**Workflow Removal:**
-```bash
-# Remove a workflow and its compiled version
-gh aw remove WorkflowName
-
-# Remove workflow but keep shared include files
-gh aw remove WorkflowName --keep-orphans
-```
-
 **Creation Features:**
 - **Template Generation**: `new` creates comprehensive markdown with all configuration options
 - **Sample Integration**: `add` pulls proven workflows from community repositories  
@@ -102,7 +102,7 @@ gh aw remove WorkflowName --keep-orphans
 - **Flexible Output**: Control where workflows are created in your repository
 - **Include Management**: Smart handling of shared workflow components
 
-## ⚙️ Workflow Operations
+## ⚙️ Workflow Operations on GitHub Actions
 
 These commands control the execution and state of your compiled agentic workflows within GitHub Actions.
 
