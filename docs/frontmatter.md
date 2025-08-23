@@ -183,7 +183,7 @@ See [Safe Output Processing](safe-outputs.md) for automatic issue creation and c
 
 See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
 
-## Run Configuration
+## Run Configuration (`run-name:`, `runs-on:`, `timeout_minutes:`)
 
 ```yaml
 run-name: "Custom workflow run name"  # Defaults to workflow name
@@ -191,7 +191,7 @@ runs-on: ubuntu-latest               # Defaults to ubuntu-latest
 timeout_minutes: 30                  # Defaults to 15 minutes
 ```
 
-## Concurrency Control
+## Concurrency Control (`concurrency:`)
 
 GitHub Agentic Workflows automatically generates enhanced concurrency policies based on workflow trigger types to provide better isolation and resource management. For example, most workflows produce this:
 
