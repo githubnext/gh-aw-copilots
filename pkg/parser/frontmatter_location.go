@@ -32,7 +32,7 @@ func NewFrontmatterLocator(frontmatterYAML string) *FrontmatterLocator {
 	locator := &FrontmatterLocator{
 		frontmatterYAML: frontmatterYAML,
 	}
-	
+
 	// Parse YAML once and cache the result
 	if frontmatterYAML != "" {
 		file, err := parser.ParseBytes([]byte(frontmatterYAML), 0)
@@ -46,7 +46,7 @@ func NewFrontmatterLocator(frontmatterYAML string) *FrontmatterLocator {
 	} else {
 		locator.parseError = fmt.Errorf("frontmatter YAML is empty")
 	}
-	
+
 	return locator
 }
 
@@ -55,7 +55,7 @@ func (l *FrontmatterLocator) LocatePathSpan(jsonPath string) (SourceSpan, error)
 	if l.parseError != nil {
 		return SourceSpan{}, l.parseError
 	}
-	
+
 	if jsonPath == "" {
 		return SourceSpan{}, fmt.Errorf("JSONPath is empty")
 	}
@@ -109,19 +109,19 @@ func normalizeJSONPath(path string) []string {
 	path = strings.TrimPrefix(path, "$.")
 	// Remove leading $ if present (just dollar)
 	path = strings.TrimPrefix(path, "$")
-	
+
 	// Handle empty path
 	if path == "" {
 		return []string{}
 	}
 
 	var parts []string
-	
+
 	// Use regex to split on dots and extract array indices
 	// This handles: "jobs.build.steps[0].run" -> ["jobs", "build", "steps", "[0]", "run"]
 	re := regexp.MustCompile(`([^.\[\]]+)|\[([^\]]+)\]`)
 	matches := re.FindAllStringSubmatch(path, -1)
-	
+
 	for _, match := range matches {
 		if match[1] != "" {
 			// Regular property name
@@ -131,14 +131,14 @@ func normalizeJSONPath(path string) []string {
 			parts = append(parts, "["+match[2]+"]")
 		}
 	}
-	
+
 	return parts
 }
 
 // navigateToNode traverses the AST to find the node at the given path
 func navigateToNode(root ast.Node, pathParts []string) (ast.Node, error) {
 	current := root
-	
+
 	for i, part := range pathParts {
 		if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
 			// Array index
@@ -147,7 +147,7 @@ func navigateToNode(root ast.Node, pathParts []string) (ast.Node, error) {
 			if err != nil {
 				return nil, fmt.Errorf("invalid array index '%s' at part %d", indexStr, i)
 			}
-			
+
 			// Navigate to array element
 			current, err = navigateToArrayElement(current, index)
 			if err != nil {
@@ -162,7 +162,7 @@ func navigateToNode(root ast.Node, pathParts []string) (ast.Node, error) {
 			}
 		}
 	}
-	
+
 	return current, nil
 }
 
@@ -298,14 +298,14 @@ func calculateLiteralNodeEnd(node *ast.LiteralNode, tok *token.Token) (int, int)
 		if node.Value != nil {
 			content = node.Value.Value
 		}
-		
+
 		// Count actual newlines in the content to estimate span
 		lines := strings.Split(content, "\n")
 		// Remove empty trailing line if present (common in YAML literals)
 		if len(lines) > 0 && lines[len(lines)-1] == "" {
 			lines = lines[:len(lines)-1]
 		}
-		
+
 		if len(lines) > 1 {
 			// Multi-line literal spans from the indicator to the last content line
 			// Calculate approximate end line based on content lines
@@ -318,7 +318,7 @@ func calculateLiteralNodeEnd(node *ast.LiteralNode, tok *token.Token) (int, int)
 			return endLine, endColumn
 		}
 	}
-	
+
 	// Single line literal or other cases
 	endColumn := tok.Position.Column + len(tok.Value) - 1
 	return tok.Position.Line, endColumn
@@ -329,14 +329,14 @@ func calculateMappingNodeEnd(node *ast.MappingNode, tok *token.Token) (int, int)
 	if len(node.Values) == 0 {
 		return tok.Position.Line, tok.Position.Column
 	}
-	
+
 	// Find the last value in the mapping
 	lastValue := node.Values[len(node.Values)-1]
 	if lastValue.Value != nil {
 		lastSpan := calculateNodeSpan(lastValue.Value)
 		return lastSpan.EndLine, lastSpan.EndColumn
 	}
-	
+
 	return tok.Position.Line, tok.Position.Column
 }
 
@@ -345,13 +345,13 @@ func calculateSequenceNodeEnd(node *ast.SequenceNode, tok *token.Token) (int, in
 	if len(node.Values) == 0 {
 		return tok.Position.Line, tok.Position.Column
 	}
-	
+
 	// Find the last value in the sequence
 	lastValue := node.Values[len(node.Values)-1]
 	if lastValue != nil {
 		lastSpan := calculateNodeSpan(lastValue)
 		return lastSpan.EndLine, lastSpan.EndColumn
 	}
-	
+
 	return tok.Position.Line, tok.Position.Column
 }

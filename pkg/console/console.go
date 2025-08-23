@@ -167,7 +167,7 @@ func FormatError(err CompilerError) string {
 	if err.Position.File != "" {
 		relativePath := ToRelativePath(err.Position.File)
 		var location string
-		
+
 		// Format position with optional span information
 		if err.Position.EndLine > 0 && err.Position.EndColumn > 0 {
 			// Span format: file:startLine:startColumn-endLine:endColumn:
@@ -194,7 +194,7 @@ func FormatError(err CompilerError) string {
 				err.Position.Line,
 				err.Position.Column)
 		}
-		
+
 		output.WriteString(applyStyle(filePathStyle, location))
 		output.WriteString(" ")
 	}

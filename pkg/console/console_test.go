@@ -369,7 +369,7 @@ func TestFormatErrorWithSpan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output := FormatError(tt.err)
-			
+
 			for _, expected := range tt.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected output to contain %q, got: %s", expected, output)
@@ -391,14 +391,14 @@ func TestSourceSpanToErrorPosition(t *testing.T) {
 		EndLine:     5,
 		EndColumn:   12,
 	}
-	
+
 	pos := SourceSpanToErrorPosition("test.yaml", span)
-	
+
 	expected := NewErrorPositionWithSpan("test.yaml", 3, 8, 5, 12)
 	if pos != expected {
 		t.Errorf("SourceSpanToErrorPosition() = %+v, want %+v", pos, expected)
 	}
-	
+
 	if !pos.IsSpan() {
 		t.Error("Expected converted position to be a span")
 	}

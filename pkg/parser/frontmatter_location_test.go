@@ -121,7 +121,7 @@ name: Test`,
 			name: "path not found",
 			yaml: `title: Test
 on: push`,
-			path: "nonexistent.key",
+			path:        "nonexistent.key",
 			wantErr:     true,
 			errContains: "path not found",
 		},
@@ -130,7 +130,7 @@ on: push`,
 			yaml: `branches:
   - main
   - develop`,
-			path: "branches[5]",
+			path:        "branches[5]",
 			wantErr:     true,
 			errContains: "array index 5 out of range",
 		},
@@ -138,21 +138,21 @@ on: push`,
 			name: "invalid array index",
 			yaml: `branches:
   - main`,
-			path: "branches[invalid]",
+			path:        "branches[invalid]",
 			wantErr:     true,
 			errContains: "invalid array index",
 		},
 		{
-			name: "empty yaml",
-			yaml: "",
-			path: "any.path",
+			name:        "empty yaml",
+			yaml:        "",
+			path:        "any.path",
 			wantErr:     true,
 			errContains: "frontmatter YAML is empty",
 		},
 		{
-			name: "empty path",
-			yaml: `title: test`,
-			path: "",
+			name:        "empty path",
+			yaml:        `title: test`,
+			path:        "",
 			wantErr:     true,
 			errContains: "JSONPath is empty",
 		},
@@ -269,9 +269,9 @@ on: push`,
 			expectedCol:  14,
 		},
 		{
-			name: "error case - legacy compatibility",
-			yaml: `title: Test`,
-			path: "nonexistent",
+			name:    "error case - legacy compatibility",
+			yaml:    `title: Test`,
+			path:    "nonexistent",
 			wantErr: true,
 		},
 	}
@@ -355,12 +355,12 @@ func TestNormalizeJSONPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := normalizeJSONPath(tt.path)
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("normalizeJSONPath(%q) = %v, want %v", tt.path, result, tt.expected)
 				return
 			}
-			
+
 			for i, part := range result {
 				if part != tt.expected[i] {
 					t.Errorf("normalizeJSONPath(%q) = %v, want %v", tt.path, result, tt.expected)
@@ -489,7 +489,7 @@ simple: value`,
 
 			if span != tt.expectedSpan {
 				t.Errorf("LocateFrontmatterPathSpan() = %+v, want %+v", span, tt.expectedSpan)
-				
+
 				// Print the YAML with line numbers for debugging
 				lines := strings.Split(tt.yaml, "\n")
 				t.Logf("YAML content with line numbers:")
@@ -521,9 +521,9 @@ tools:
 
 	// Test multiple path lookups using the same parsed AST
 	testPaths := []struct {
-		path         string
-		expectSpan   bool
-		expectError  bool
+		path        string
+		expectSpan  bool
+		expectError bool
 	}{
 		{"engine", true, false},
 		{"on.push.branches[0]", true, false},
@@ -538,19 +538,19 @@ tools:
 	for _, testPath := range testPaths {
 		t.Run(fmt.Sprintf("path_%s", testPath.path), func(t *testing.T) {
 			span, err := locator.LocatePathSpan(testPath.path)
-			
+
 			if testPath.expectError {
 				if err == nil {
 					t.Errorf("Expected error for path '%s', got nil", testPath.path)
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error for path '%s': %v", testPath.path, err)
 				return
 			}
-			
+
 			if testPath.expectSpan {
 				if span.StartLine <= 0 || span.StartColumn <= 0 {
 					t.Errorf("Expected valid span for path '%s', got %+v", testPath.path, span)

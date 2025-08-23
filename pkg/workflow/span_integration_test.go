@@ -14,10 +14,10 @@ import (
 // frontmatter validation through span calculation to error formatting
 func TestFrontmatterSpanIntegration(t *testing.T) {
 	tests := []struct {
-		name              string
-		workflowContent   string
+		name                    string
+		workflowContent         string
 		expectedErrorSubstrings []string
-		expectedSpanFormat     bool // Should the error include span formatting?
+		expectedSpanFormat      bool // Should the error include span formatting?
 	}{
 		{
 			name: "invalid engine with span",
@@ -30,7 +30,7 @@ on: push
 
 This workflow tests span-based error reporting.`,
 			expectedErrorSubstrings: []string{
-				"test.md:2:9-22:",  // Span format for invalid engine (corrected)
+				"test.md:2:9-22:", // Span format for invalid engine (corrected)
 				"unsupported engine 'invalid-engine'",
 				"Supported engines: claude, codex",
 			},
@@ -48,7 +48,7 @@ max-turns: 150
 
 This workflow has invalid max-turns value.`,
 			expectedErrorSubstrings: []string{
-				"test.md:4:12-14:",  // Span format for max-turns value (corrected)
+				"test.md:4:12-14:", // Span format for max-turns value (corrected)
 				"max-turns must be between 1 and 100, got 150",
 				"max-turns should be a number between 1 and 100",
 			},
@@ -65,7 +65,7 @@ max-turns: 5
 
 This workflow is missing the 'on' field.`,
 			expectedErrorSubstrings: []string{
-				"test.md:2:1:",  // No span for missing field
+				"test.md:2:1:", // No span for missing field
 				"missing required field 'on'",
 				"Add an 'on' field to specify when the workflow should run",
 			},
@@ -139,7 +139,7 @@ This workflow has tools with missing name field.`,
 			// Format errors and check output
 			for _, compilerError := range compilerErrors {
 				formattedError := console.FormatError(compilerError)
-				
+
 				// Check that expected substrings are present
 				for _, expectedSubstring := range tt.expectedErrorSubstrings {
 					if !strings.Contains(formattedError, expectedSubstring) {
@@ -150,7 +150,7 @@ This workflow has tools with missing name field.`,
 				// Check span formatting expectation
 				hasSpanFormat := compilerError.Position.IsSpan()
 				if hasSpanFormat != tt.expectedSpanFormat {
-					t.Errorf("Expected span format: %v, got span format: %v in error:\n%s", 
+					t.Errorf("Expected span format: %v, got span format: %v in error:\n%s",
 						tt.expectedSpanFormat, hasSpanFormat, formattedError)
 				}
 			}
@@ -209,7 +209,7 @@ The errors should be:
 
 	// Convert to compiler errors
 	compilerErrors := ConvertValidationErrorsToCompilerErrors(
-		testFile, 
+		testFile,
 		result.FrontmatterStart,
 		validationErrors,
 	)
@@ -219,7 +219,7 @@ The errors should be:
 	for i := range compilerErrors {
 		err := &compilerErrors[i]
 		formatted := console.FormatError(*err)
-		
+
 		if strings.Contains(formatted, "unsupported engine") {
 			engineError = err
 		} else if strings.Contains(formatted, "max-turns must be") {
@@ -286,7 +286,7 @@ max-turns: 999
 Content here.`
 
 	lines := strings.Split(workflowContent, "\n")
-	
+
 	result, err := parser.ExtractFrontmatterFromContent(workflowContent)
 	if err != nil {
 		t.Fatal(err)
@@ -314,15 +314,15 @@ Content here.`
 	}
 
 	// Debug the actual span values
-	t.Logf("Engine error span: StartLine=%d, StartColumn=%d, EndLine=%d, EndColumn=%d", 
-		engineError.Span.StartLine, engineError.Span.StartColumn, 
+	t.Logf("Engine error span: StartLine=%d, StartColumn=%d, EndLine=%d, EndColumn=%d",
+		engineError.Span.StartLine, engineError.Span.StartColumn,
 		engineError.Span.EndLine, engineError.Span.EndColumn)
 
 	// Verify the span points to the correct text
 	// The engine value "invalid-engine" should be on line 2 within frontmatter (not line 3)
 	expectedLine := 2 // Within frontmatter
 	if engineError.Span.StartLine != expectedLine {
-		t.Errorf("Expected engine error span to start at frontmatter line %d, got %d", 
+		t.Errorf("Expected engine error span to start at frontmatter line %d, got %d",
 			expectedLine, engineError.Span.StartLine)
 	}
 
@@ -334,12 +334,12 @@ Content here.`
 
 	actualLine := lines[actualFileLineIndex]
 	t.Logf("Actual line %d: %q (length: %d)", actualFileLineIndex+1, actualLine, len(actualLine))
-	
+
 	expectedValue := "invalid-engine"
-	
+
 	// Extract the substring using the span columns
 	if engineError.Span.StartColumn <= 0 || engineError.Span.EndColumn > len(actualLine) {
-		t.Fatalf("Span columns (%d-%d) are out of range for line %q (length %d)", 
+		t.Fatalf("Span columns (%d-%d) are out of range for line %q (length %d)",
 			engineError.Span.StartColumn, engineError.Span.EndColumn, actualLine, len(actualLine))
 	}
 
@@ -347,7 +347,7 @@ Content here.`
 	spannedText := actualLine[engineError.Span.StartColumn-1 : engineError.Span.EndColumn]
 	t.Logf("Spanned text: %q", spannedText)
 	if spannedText != expectedValue {
-		t.Errorf("Expected span to cover %q, but got %q from line %q (columns %d-%d)", 
+		t.Errorf("Expected span to cover %q, but got %q from line %q (columns %d-%d)",
 			expectedValue, spannedText, actualLine, engineError.Span.StartColumn, engineError.Span.EndColumn)
 	}
 }

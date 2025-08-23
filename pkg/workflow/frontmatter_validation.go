@@ -10,8 +10,8 @@ import (
 
 // FrontmatterValidationError represents a validation error with position information
 type FrontmatterValidationError struct {
-	Path    string  // JSONPath to the problematic field
-	Message string  // Error message
+	Path    string             // JSONPath to the problematic field
+	Message string             // Error message
 	Span    *parser.SourceSpan // Optional source span information
 }
 
@@ -57,7 +57,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 				if err == nil {
 					spanPtr = &span
 				}
-				
+
 				errors = append(errors, FrontmatterValidationError{
 					Path:    "engine",
 					Message: fmt.Sprintf("unsupported engine '%s', must be one of: claude, codex", engineStr),
@@ -71,7 +71,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 	if maxTurns, exists := frontmatter["max-turns"]; exists {
 		var maxTurnsInt int
 		var ok bool
-		
+
 		// Handle both int and uint64 types (YAML can parse numbers as different types)
 		switch v := maxTurns.(type) {
 		case int:
@@ -87,7 +87,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 			maxTurnsInt = int(v)
 			ok = true
 		}
-		
+
 		if ok {
 			if maxTurnsInt < 1 || maxTurnsInt > 100 {
 				span, err := v.locator.LocatePathSpan("max-turns")
@@ -95,7 +95,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 				if err == nil {
 					spanPtr = &span
 				}
-				
+
 				errors = append(errors, FrontmatterValidationError{
 					Path:    "max-turns",
 					Message: fmt.Sprintf("max-turns must be between 1 and 100, got %d", maxTurnsInt),
@@ -117,7 +117,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 						if err == nil {
 							spanPtr = &span
 						}
-						
+
 						errors = append(errors, FrontmatterValidationError{
 							Path:    path,
 							Message: "tool must have a 'name' field",
@@ -153,7 +153,7 @@ func ConvertValidationErrorsToCompilerErrors(
 
 	for _, valErr := range validationErrors {
 		var position console.ErrorPosition
-		
+
 		if valErr.Span != nil {
 			// Convert span to error position, adjusting for frontmatter position in file
 			position = console.NewErrorPositionWithSpan(
