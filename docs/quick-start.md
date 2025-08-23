@@ -119,6 +119,6 @@ Now that you have your first workflow running:
 - **Customize the workflow** — Edit the `.md` file to fit your needs, then recompile with `gh aw compile`
 - **Explore more samples** — Check out [The Agentics](https://github.com/githubnext/agentics) repository
 - **Learn the concepts** — Read [Concepts](concepts.md) to understand how agentic workflows work
-- **Build your own** — Use `gh aw new` to create custom workflows
+- **Read the docs** — See [Documentation](index.md)
 
 You're ready to start automating with agentic workflows! ✨
