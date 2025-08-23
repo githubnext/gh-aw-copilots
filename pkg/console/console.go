@@ -10,11 +10,62 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
+// NewErrorPosition creates a basic ErrorPosition with file, line, and column
+func NewErrorPosition(file string, line, column int) ErrorPosition {
+	return ErrorPosition{
+		File:   file,
+		Line:   line,
+		Column: column,
+	}
+}
+
+// NewErrorPositionWithSpan creates an ErrorPosition with span information
+func NewErrorPositionWithSpan(file string, startLine, startColumn, endLine, endColumn int) ErrorPosition {
+	return ErrorPosition{
+		File:      file,
+		Line:      startLine,
+		Column:    startColumn,
+		EndLine:   endLine,
+		EndColumn: endColumn,
+	}
+}
+
+// IsSpan returns true if this ErrorPosition represents a span (has end position)
+func (p ErrorPosition) IsSpan() bool {
+	return p.EndLine > 0 && p.EndColumn > 0
+}
+
+// SourceSpanToErrorPosition converts a parser.SourceSpan to ErrorPosition
+// This is a helper for integrating frontmatter location spans with console errors
+func SourceSpanToErrorPosition(file string, span interface{}) ErrorPosition {
+	// Use reflection to handle the SourceSpan from parser package without import cycle
+	// In practice, this would be called with parser.SourceSpan
+	if spanValue, ok := span.(struct {
+		StartLine   int
+		StartColumn int
+		EndLine     int
+		EndColumn   int
+	}); ok {
+		return NewErrorPositionWithSpan(
+			file,
+			spanValue.StartLine,
+			spanValue.StartColumn,
+			spanValue.EndLine,
+			spanValue.EndColumn,
+		)
+	}
+	// Fallback to basic position if span format not recognized
+	return NewErrorPosition(file, 0, 0)
+}
+
 // ErrorPosition represents a position in a source file
 type ErrorPosition struct {
 	File   string
 	Line   int
 	Column int
+	// Optional end position for spans (backwards compatible - zero values ignored)
+	EndLine   int
+	EndColumn int
 }
 
 // CompilerError represents a structured compiler error with position information
@@ -115,10 +166,35 @@ func FormatError(err CompilerError) string {
 	// IDE-parseable format: file:line:column: type: message
 	if err.Position.File != "" {
 		relativePath := ToRelativePath(err.Position.File)
-		location := fmt.Sprintf("%s:%d:%d:",
-			relativePath,
-			err.Position.Line,
-			err.Position.Column)
+		var location string
+		
+		// Format position with optional span information
+		if err.Position.EndLine > 0 && err.Position.EndColumn > 0 {
+			// Span format: file:startLine:startColumn-endLine:endColumn:
+			if err.Position.EndLine == err.Position.Line {
+				// Same line span: file:line:startCol-endCol:
+				location = fmt.Sprintf("%s:%d:%d-%d:",
+					relativePath,
+					err.Position.Line,
+					err.Position.Column,
+					err.Position.EndColumn)
+			} else {
+				// Multi-line span: file:startLine:startCol-endLine:endCol:
+				location = fmt.Sprintf("%s:%d:%d-%d:%d:",
+					relativePath,
+					err.Position.Line,
+					err.Position.Column,
+					err.Position.EndLine,
+					err.Position.EndColumn)
+			}
+		} else {
+			// Traditional point format: file:line:column:
+			location = fmt.Sprintf("%s:%d:%d:",
+				relativePath,
+				err.Position.Line,
+				err.Position.Column)
+		}
+		
 		output.WriteString(applyStyle(filePathStyle, location))
 		output.WriteString(" ")
 	}

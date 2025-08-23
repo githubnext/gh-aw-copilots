@@ -281,3 +281,125 @@ func TestFormatErrorWithAbsolutePaths(t *testing.T) {
 		t.Errorf("Expected output to contain error message, got: %s", output)
 	}
 }
+
+func TestErrorPosition(t *testing.T) {
+	tests := []struct {
+		name   string
+		pos    ErrorPosition
+		isSpan bool
+	}{
+		{
+			name:   "basic position",
+			pos:    NewErrorPosition("test.yaml", 5, 10),
+			isSpan: false,
+		},
+		{
+			name:   "single line span",
+			pos:    NewErrorPositionWithSpan("test.yaml", 5, 10, 5, 20),
+			isSpan: true,
+		},
+		{
+			name:   "multi-line span",
+			pos:    NewErrorPositionWithSpan("test.yaml", 5, 10, 8, 15),
+			isSpan: true,
+		},
+		{
+			name:   "zero end values not a span",
+			pos:    ErrorPosition{File: "test.yaml", Line: 5, Column: 10, EndLine: 0, EndColumn: 0},
+			isSpan: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.pos.IsSpan() != tt.isSpan {
+				t.Errorf("IsSpan() = %v, want %v", tt.pos.IsSpan(), tt.isSpan)
+			}
+		})
+	}
+}
+
+func TestFormatErrorWithSpan(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      CompilerError
+		expected []string // Substrings that should be present
+	}{
+		{
+			name: "error with single line span",
+			err: CompilerError{
+				Position: NewErrorPositionWithSpan("test.yaml", 5, 10, 5, 20),
+				Type:     "error",
+				Message:  "invalid syntax",
+			},
+			expected: []string{
+				"test.yaml:5:10-20:",
+				"error:",
+				"invalid syntax",
+			},
+		},
+		{
+			name: "error with multi-line span",
+			err: CompilerError{
+				Position: NewErrorPositionWithSpan("workflow.md", 3, 8, 6, 15),
+				Type:     "warning",
+				Message:  "deprecated field",
+			},
+			expected: []string{
+				"workflow.md:3:8-6:15:",
+				"warning:",
+				"deprecated field",
+			},
+		},
+		{
+			name: "backwards compatibility - no span",
+			err: CompilerError{
+				Position: NewErrorPosition("old.yaml", 2, 5),
+				Type:     "error",
+				Message:  "missing field",
+			},
+			expected: []string{
+				"old.yaml:2:5:",
+				"error:",
+				"missing field",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := FormatError(tt.err)
+			
+			for _, expected := range tt.expected {
+				if !strings.Contains(output, expected) {
+					t.Errorf("Expected output to contain %q, got: %s", expected, output)
+				}
+			}
+		})
+	}
+}
+
+func TestSourceSpanToErrorPosition(t *testing.T) {
+	span := struct {
+		StartLine   int
+		StartColumn int
+		EndLine     int
+		EndColumn   int
+	}{
+		StartLine:   3,
+		StartColumn: 8,
+		EndLine:     5,
+		EndColumn:   12,
+	}
+	
+	pos := SourceSpanToErrorPosition("test.yaml", span)
+	
+	expected := NewErrorPositionWithSpan("test.yaml", 3, 8, 5, 12)
+	if pos != expected {
+		t.Errorf("SourceSpanToErrorPosition() = %+v, want %+v", pos, expected)
+	}
+	
+	if !pos.IsSpan() {
+		t.Error("Expected converted position to be a span")
+	}
+}
