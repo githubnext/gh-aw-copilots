@@ -155,7 +155,7 @@ max-turns: 5
 
 ## Visual Feedback (`ai-reaction:`)
 
-Emoji reaction added/removed on triggering GitHub items:
+Adding this option enables emoji reactions on the triggering GitHub item (issue, PR, comment, discussion) to provide visual feedback about the workflow status.
 
 ```yaml
 ai-reaction: "eyes"
