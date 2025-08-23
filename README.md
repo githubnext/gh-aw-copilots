@@ -89,6 +89,8 @@ Agentic workflows can be as simple or complex as you like, and can use a variety
 - [📦 Daily Dependency Updater](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-dependency-updater) - Update dependencies and create pull requests
 - [📖 Regular Documentation Update](https://github.com/githubnext/agentics?tab=readme-ov-file#-regular-documentation-update) - Update documentation automatically
 - [🔍 Daily QA](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-qa) - Perform quality assurance tasks
+- [🧪 Daily Test Coverage Improver](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-test-coverage-improver) - Improve test coverage by adding meaningful tests to under-tested areas
+- [⚡ Daily Performance Improver](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-performance-improver) - Analyze and improve code performance through benchmarking and optimization
 - [🔍 Daily Accessibility Review](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-accessibility-review) - Review application accessibility
 
 
