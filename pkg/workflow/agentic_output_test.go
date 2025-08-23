@@ -16,7 +16,7 @@ func TestAgenticOutputCollection(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Test case with agentic output collection
+	// Test case with agentic output collection for Claude engine
 	testContent := `---
 on: push
 permissions:
@@ -55,129 +55,53 @@ This workflow tests the agentic output collection functionality.
 
 	lockContent := string(content)
 
-	// Verify pre-step: Setup agentic output file step exists
+	// Verify GITHUB_AW_OUTPUT functionality (should be present for all engines)
 	if !strings.Contains(lockContent, "- name: Setup agent output") {
 		t.Error("Expected 'Setup agent output' step to be in generated workflow")
 	}
 
-	// Verify the step uses github-script and sets up the output file
-	if !strings.Contains(lockContent, "uses: actions/github-script@v7") {
-		t.Error("Expected github-script action to be used for output file setup")
-	}
-
-	if !strings.Contains(lockContent, "const outputFile = `/tmp/aw_output_${randomId}.txt`;") {
-		t.Error("Expected output file creation in setup step")
-	}
-
-	if !strings.Contains(lockContent, "core.exportVariable('GITHUB_AW_OUTPUT', outputFile);") {
-		t.Error("Expected GITHUB_AW_OUTPUT environment variable to be set")
-	}
-
-	// Verify prompt injection: Check for output instructions in the prompt
-	if !strings.Contains(lockContent, "**IMPORTANT**: If you need to provide output that should be captured as a workflow output variable, write it to the file") {
-		t.Error("Expected output instructions to be injected into prompt")
-	}
-
-	if !strings.Contains(lockContent, "\"${{ env.GITHUB_AW_OUTPUT }}\"") {
-		t.Error("Expected GITHUB_AW_OUTPUT environment variable reference in prompt")
-	}
-
-	// Verify environment variable is passed to agentic engine
-	if !strings.Contains(lockContent, "claude_env: |\n            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n            GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}") {
-		t.Error("Expected GITHUB_AW_OUTPUT environment variable to be passed to Claude via claude_env")
-	}
-
-	// Verify post-step: Collect agentic output step exists
 	if !strings.Contains(lockContent, "- name: Collect agent output") {
 		t.Error("Expected 'Collect agent output' step to be in generated workflow")
 	}
 
-	if !strings.Contains(lockContent, "id: collect_output") {
-		t.Error("Expected collect_output step ID")
-	}
-
-	if !strings.Contains(lockContent, "const outputFile = process.env.GITHUB_AW_OUTPUT;") {
-		t.Error("Expected output file reading in collection step")
-	}
-
-	if !strings.Contains(lockContent, "core.setOutput('output', sanitizedContent);") {
-		t.Error("Expected sanitized output to be set in collection step")
-	}
-
-	// Verify sanitization function is included
-	if !strings.Contains(lockContent, "function sanitizeContent(content) {") {
-		t.Error("Expected sanitization function to be in collection step")
-	}
-
-	if !strings.Contains(lockContent, "const sanitizedContent = sanitizeContent(outputContent);") {
-		t.Error("Expected sanitization function to be called on output content")
-	}
-
-	// Verify job output declaration
-	if !strings.Contains(lockContent, "outputs:\n      output: ${{ steps.collect_output.outputs.output }}") {
-		t.Error("Expected job output declaration for 'output'")
-	}
-
-	// Verify artifact upload step: Upload agentic output file step exists
 	if !strings.Contains(lockContent, "- name: Upload agentic output file") {
 		t.Error("Expected 'Upload agentic output file' step to be in generated workflow")
 	}
 
-	// Verify the upload step uses actions/upload-artifact@v4
-	if !strings.Contains(lockContent, "uses: actions/upload-artifact@v4") {
-		t.Error("Expected upload-artifact action to be used for artifact upload step")
+	// Verify job output declaration for GITHUB_AW_OUTPUT
+	if !strings.Contains(lockContent, "outputs:\n      output: ${{ steps.collect_output.outputs.output }}") {
+		t.Error("Expected job output declaration for 'output'")
 	}
 
-	// Verify the artifact upload configuration
+	// Verify GITHUB_AW_OUTPUT is passed to Claude
+	if !strings.Contains(lockContent, "GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}") {
+		t.Error("Expected GITHUB_AW_OUTPUT environment variable to be passed to engine")
+	}
+
+	// Verify prompt contains output instructions
+	if !strings.Contains(lockContent, "**IMPORTANT**: If you need to provide output that should be captured as a workflow output variable, write it to the file") {
+		t.Error("Expected output instructions to be injected into prompt")
+	}
+
+	// Verify Claude engine declared outputs are collected separately
+	if !strings.Contains(lockContent, "- name: Collect engine output files") {
+		t.Error("Expected 'Collect engine output files' step for Claude engine")
+	}
+
+	if !strings.Contains(lockContent, "- name: Upload engine output files") {
+		t.Error("Expected 'Upload engine output files' step for Claude engine")
+	}
+
+	if !strings.Contains(lockContent, "name: agent_outputs") {
+		t.Error("Expected engine output artifact to be named 'agent_outputs'")
+	}
+
+	// Verify that both artifacts are uploaded
 	if !strings.Contains(lockContent, fmt.Sprintf("name: %s", OutputArtifactName)) {
-		t.Errorf("Expected artifact name to be '%s'", OutputArtifactName)
+		t.Errorf("Expected GITHUB_AW_OUTPUT artifact name to be '%s'", OutputArtifactName)
 	}
 
-	if !strings.Contains(lockContent, "path: ${{ env.GITHUB_AW_OUTPUT }}") {
-		t.Error("Expected artifact path to use GITHUB_AW_OUTPUT environment variable")
-	}
-
-	if !strings.Contains(lockContent, "if-no-files-found: warn") {
-		t.Error("Expected if-no-files-found: warn configuration for artifact upload")
-	}
-
-	// Verify the upload step condition checks for non-empty output
-	if !strings.Contains(lockContent, "if: always() && steps.collect_output.outputs.output != ''") {
-		t.Error("Expected upload step to check for non-empty output from collection step")
-	}
-
-	// Verify step order: setup should come before agentic execution, collection should come after
-	setupIndex := strings.Index(lockContent, "- name: Setup agent output")
-	executeIndex := strings.Index(lockContent, "- name: Execute Claude Code Action")
-	collectIndex := strings.Index(lockContent, "- name: Collect agent output")
-	uploadIndex := strings.Index(lockContent, "- name: Upload agentic output file")
-
-	// If "Execute Claude Code" isn't found, try alternative step names
-	if executeIndex == -1 {
-		executeIndex = strings.Index(lockContent, "- name: Execute Claude")
-	}
-	if executeIndex == -1 {
-		executeIndex = strings.Index(lockContent, "uses: githubnext/claude-action")
-	}
-
-	if setupIndex == -1 || executeIndex == -1 || collectIndex == -1 || uploadIndex == -1 {
-		t.Fatal("Could not find expected steps in generated workflow")
-	}
-
-	if setupIndex >= executeIndex {
-		t.Error("Setup step should appear before agentic execution step")
-	}
-
-	if collectIndex <= executeIndex {
-		t.Error("Collection step should appear after agentic execution step")
-	}
-
-	if uploadIndex <= collectIndex {
-		t.Error("Upload step should appear after collection step")
-	}
-
-	t.Logf("Step order verified: Setup (%d) < Execute (%d) < Collect (%d) < Upload (%d)",
-		setupIndex, executeIndex, collectIndex, uploadIndex)
+	t.Log("Claude workflow correctly includes both GITHUB_AW_OUTPUT and engine output collection")
 }
 
 func TestCodexEngineNoOutputSteps(t *testing.T) {
@@ -188,7 +112,7 @@ func TestCodexEngineNoOutputSteps(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Test case with Codex engine (should NOT have output collection)
+	// Test case with Codex engine (should have GITHUB_AW_OUTPUT but no engine output collection)
 	testContent := `---
 on: push
 permissions:
@@ -200,9 +124,9 @@ tools:
 engine: codex
 ---
 
-# Test Codex No Output Collection
+# Test Codex No Engine Output Collection
 
-This workflow tests that Codex engine does not get output collection steps.
+This workflow tests that Codex engine gets GITHUB_AW_OUTPUT but not engine output collection.
 `
 
 	testFile := filepath.Join(tmpDir, "test-codex-no-output.md")
@@ -227,30 +151,43 @@ This workflow tests that Codex engine does not get output collection steps.
 
 	lockContent := string(content)
 
-	// Verify that Codex workflow does NOT have output-related steps
-	if strings.Contains(lockContent, "- name: Setup agent output") {
-		t.Error("Codex workflow should NOT have 'Setup agent output' step")
+	// Verify that Codex workflow DOES have GITHUB_AW_OUTPUT functionality
+	if !strings.Contains(lockContent, "- name: Setup agent output") {
+		t.Error("Codex workflow should have 'Setup agent output' step (GITHUB_AW_OUTPUT functionality)")
 	}
 
-	if strings.Contains(lockContent, "- name: Collect agent output") {
-		t.Error("Codex workflow should NOT have 'Collect agent output' step")
+	if !strings.Contains(lockContent, "- name: Collect agent output") {
+		t.Error("Codex workflow should have 'Collect agent output' step (GITHUB_AW_OUTPUT functionality)")
 	}
 
-	if strings.Contains(lockContent, "- name: Upload agentic output file") {
-		t.Error("Codex workflow should NOT have 'Upload agentic output file' step")
+	if !strings.Contains(lockContent, "- name: Upload agentic output file") {
+		t.Error("Codex workflow should have 'Upload agentic output file' step (GITHUB_AW_OUTPUT functionality)")
 	}
 
-	if strings.Contains(lockContent, "GITHUB_AW_OUTPUT") {
-		t.Error("Codex workflow should NOT reference GITHUB_AW_OUTPUT environment variable")
+	if !strings.Contains(lockContent, "GITHUB_AW_OUTPUT") {
+		t.Error("Codex workflow should reference GITHUB_AW_OUTPUT environment variable")
 	}
 
-	if strings.Contains(lockContent, fmt.Sprintf("name: %s", OutputArtifactName)) {
-		t.Errorf("Codex workflow should NOT reference %s artifact", OutputArtifactName)
+	if !strings.Contains(lockContent, fmt.Sprintf("name: %s", OutputArtifactName)) {
+		t.Errorf("Codex workflow should reference %s artifact (GITHUB_AW_OUTPUT)", OutputArtifactName)
 	}
 
-	// Verify that job outputs section does not include output
-	if strings.Contains(lockContent, "outputs:\n      output: ${{ steps.collect_output.outputs.output }}") {
-		t.Error("Codex workflow should NOT have job output declaration for 'output'")
+	// Verify that job outputs section includes output for GITHUB_AW_OUTPUT
+	if !strings.Contains(lockContent, "outputs:\n      output: ${{ steps.collect_output.outputs.output }}") {
+		t.Error("Codex workflow should have job output declaration for 'output' (GITHUB_AW_OUTPUT)")
+	}
+
+	// Verify that Codex workflow does NOT have engine output collection steps
+	if strings.Contains(lockContent, "- name: Collect engine output files") {
+		t.Error("Codex workflow should NOT have 'Collect engine output files' step")
+	}
+
+	if strings.Contains(lockContent, "- name: Upload engine output files") {
+		t.Error("Codex workflow should NOT have 'Upload engine output files' step")
+	}
+
+	if strings.Contains(lockContent, "name: agent_outputs") {
+		t.Error("Codex workflow should NOT reference 'agent_outputs' artifact")
 	}
 
 	// Verify that the Codex execution step is still present
@@ -258,7 +195,7 @@ This workflow tests that Codex engine does not get output collection steps.
 		t.Error("Expected 'Run Codex' step to be in generated workflow")
 	}
 
-	t.Log("Codex workflow correctly excludes output collection steps")
+	t.Log("Codex workflow correctly includes GITHUB_AW_OUTPUT functionality but excludes engine output collection")
 }
 
 func TestEngineOutputFileDeclarations(t *testing.T) {

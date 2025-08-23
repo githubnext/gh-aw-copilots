@@ -502,6 +502,24 @@ jobs:
           name: aw_output.txt
           path: ${{ env.GITHUB_AW_OUTPUT }}
           if-no-files-found: warn
+      - name: Collect engine output files
+        if: always()
+        run: |
+          mkdir -p /tmp/engine-outputs
+          echo "Collecting engine output files..."
+          if [ -f "output.txt" ]; then
+            cp "output.txt" /tmp/engine-outputs/
+            echo "Collected: output.txt"
+          else
+            echo "File not found: output.txt"
+          fi
+      - name: Upload engine output files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent_outputs
+          path: /tmp/engine-outputs/
+          if-no-files-found: warn
       - name: Upload agent logs
         if: always()
         uses: actions/upload-artifact@v4
