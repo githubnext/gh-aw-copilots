@@ -183,9 +183,7 @@ See [Safe Output Processing](safe-outputs.md) for automatic issue creation and c
 
 See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
 
-## Standard GitHub Actions Properties
-
-### Run Configuration
+## Run Configuration
 
 ```yaml
 run-name: "Custom workflow run name"  # Defaults to workflow name
@@ -193,7 +191,7 @@ runs-on: ubuntu-latest               # Defaults to ubuntu-latest
 timeout_minutes: 30                  # Defaults to 15 minutes
 ```
 
-### Concurrency Control
+## Concurrency Control
 
 GitHub Agentic Workflows automatically generates enhanced concurrency policies based on workflow trigger types to provide better isolation and resource management. For example, most workflows produce this:
 
@@ -222,7 +220,7 @@ Different workflow types receive different concurrency groups and cancellation b
 
 If you need custom concurrency behavior, you can override the automatic generation by specifying your own `concurrency` section in the frontmatter.
 
-### Environment Variables
+## Environment Variables (`env:`)
 
 GitHub Actions standard `env:` syntax:
 
@@ -232,7 +230,7 @@ env:
   SECRET_VAR: ${{ secrets.MY_SECRET }}
 ```
 
-### Conditional Execution
+## Conditional Execution (`if:`)
 
 Standard GitHub Actions `if:` syntax:
 
@@ -240,7 +238,7 @@ Standard GitHub Actions `if:` syntax:
 if: github.event_name == 'push'
 ```
 
-### Custom Steps
+## Custom Steps (`steps:`)
 
 Add custom steps before the agentic execution step using GitHub Actions standard `steps:` syntax:
 
@@ -253,11 +251,11 @@ steps:
       node-version: '18'
 ```
 
-### Cache Configuration (`cache:`)
+## Cache Configuration (`cache:`)
 
 Cache configuration using standard GitHub Actions `actions/cache` syntax:
 
-### Single Cache
+Single cache:
 ```yaml
 cache:
   key: node-modules-${{ hashFiles('package-lock.json') }}
@@ -266,7 +264,7 @@ cache:
     node-modules-
 ```
 
-### Multiple Caches
+Multiple caches:
 ```yaml
 cache:
   - key: node-modules-${{ hashFiles('package-lock.json') }}
