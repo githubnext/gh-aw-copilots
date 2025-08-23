@@ -37,7 +37,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            async function main() {
+            function main() {
               const fs = require('fs');
               const crypto = require('crypto');
               // Generate a random filename for the output file
@@ -56,7 +56,7 @@ jobs:
               // Also set as step output for reference
               core.setOutput('output_file', outputFile);
             }
-            await main();
+            main();
       - name: Setup MCPs
         run: |
           mkdir -p /tmp/mcp-config

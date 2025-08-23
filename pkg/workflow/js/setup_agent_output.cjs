@@ -1,4 +1,4 @@
-async function main() {
+function main() {
   const fs = require('fs');
   const crypto = require('crypto');
 
@@ -23,4 +23,4 @@ async function main() {
   core.setOutput('output_file', outputFile);
 }
 
-await main();
+main();
