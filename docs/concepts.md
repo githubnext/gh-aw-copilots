@@ -19,6 +19,8 @@ Traditional GitHub Actions follow pre-programmed steps. Agentic workflows use AI
 - **Learn and adapt** — Adjust behavior based on past action, feedback and outcomes
 - **Productive ambiguity** — Interpret natural language instructions flexibly and productively
 
+One crucial difference from regular agentic prompting is that GitHub Agentic Workflows can contain **both** traditional GitHub Actions steps and agentic natural language instructions. This allows the best of both worlds: traditional steps for deterministic actions, and agentic steps for flexible, context-aware AI-driven actions.
+
 ### The anatomy of an agentic workflow
 
 Every agentic workflow has two main parts:
