@@ -109,7 +109,42 @@ func (v *FrontmatterValidator) parseJSONSchemaError(errorMsg string) []Frontmatt
 		}
 	}
 
+	// Filter out redundant structural errors when specific item errors are present
+	errors = v.filterRedundantErrors(errors)
+
 	return errors
+}
+
+// filterRedundantErrors removes structural errors when more specific errors are available
+func (v *FrontmatterValidator) filterRedundantErrors(errors []FrontmatterValidationError) []FrontmatterValidationError {
+	var filtered []FrontmatterValidationError
+	
+	// Check if we have specific array item errors for tools
+	hasToolsItemErrors := false
+	for _, err := range errors {
+		if strings.Contains(err.Path, "tools/") && strings.Contains(err.Message, "missing property") {
+			hasToolsItemErrors = true
+			break
+		}
+	}
+	
+	// Filter out structural tools errors if we have specific item errors
+	for _, err := range errors {
+		if err.Path == "tools" && strings.Contains(err.Message, "got array, want object") && hasToolsItemErrors {
+			// Skip this structural error - we have more specific item errors
+			continue
+		}
+		
+		// Convert array path format and normalize message
+		if strings.Contains(err.Path, "/") && strings.Contains(err.Message, "missing property") {
+			err.Path = v.convertArrayPathFormat(err.Path, err.Message)
+			err.Message = v.normalizeErrorMessage(err.Path, err.Message)
+		}
+		
+		filtered = append(filtered, err)
+	}
+	
+	return filtered
 }
 
 // selectBestError chooses the most informative error from multiple errors for the same path
@@ -165,9 +200,14 @@ func (v *FrontmatterValidator) convertArrayPathFormat(path, message string) stri
 
 // getErrorGroupKey returns a key for grouping related errors together
 func (v *FrontmatterValidator) getErrorGroupKey(path, message string) string {
-	// Group all tools validation errors together under "tools"
-	if strings.HasPrefix(path, "tools") {
-		return "tools"
+	// For missing property errors in array items, use the specific path to avoid grouping
+	if strings.Contains(path, "/") && strings.Contains(message, "missing property") {
+		return path // Keep array item errors separate (e.g., "tools/0", "tools/2")
+	}
+	
+	// Group structure-level tools errors together, but keep item-level errors separate
+	if strings.HasPrefix(path, "tools") && !strings.Contains(path, "/") {
+		return "tools" // Only group the top-level tools errors
 	}
 	
 	// For other errors, use the path as the group key

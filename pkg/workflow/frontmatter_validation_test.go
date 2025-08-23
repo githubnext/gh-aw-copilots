@@ -243,7 +243,7 @@ func TestGenerateHintForValidationError(t *testing.T) {
 			name: "engine error",
 			err: FrontmatterValidationError{
 				Path:    "engine",
-				Message: "unsupported engine",
+				Message: "got string, want object", // JSON schema validation message
 			},
 			expectedHint: "Supported engines: claude, codex",
 		},

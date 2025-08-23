@@ -196,7 +196,7 @@ max-turns: 0
 ---
 
 # Zero Max Turns`,
-			expectError: false, // Zero should be valid (might mean unlimited)
+			expectError: true, // Zero is now invalid due to JSON schema minimum constraint
 		},
 	}
 
