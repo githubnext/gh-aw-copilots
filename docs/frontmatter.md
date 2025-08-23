@@ -1,6 +1,6 @@
 # ⚙️ Frontmatter Options for GitHub Agentic Workflows
 
-This guide covers all available frontmatter configuration options for agentic workflows.
+This guide covers all available frontmatter configuration options for GitHub Agentic Workflows.
 
 ## Overview
 
