@@ -19,6 +19,11 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+const (
+	// OutputArtifactName is the standard name for engine output artifacts
+	OutputArtifactName = "aw_output.txt"
+)
+
 // FileTracker interface for tracking files created during compilation
 type FileTracker interface {
 	TrackCreated(filePath string)
@@ -1847,6 +1852,18 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 		depends = []string{"task"} // Depend on the task job only if it exists
 	}
 
+	// Get the engine to determine if outputs should be included
+	engine, err := c.getAgenticEngine(data.AI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agentic engine: %w", err)
+	}
+
+	// Build outputs conditionally based on engine's declared output files
+	outputs := make(map[string]string)
+	if len(engine.GetDeclaredOutputFiles()) > 0 {
+		outputs["output"] = "${{ steps.collect_output.outputs.output }}"
+	}
+
 	job := &Job{
 		Name:        jobName,
 		If:          "", // Remove the If condition since task job handles alias checks
@@ -1854,9 +1871,7 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 		Permissions: c.indentYAMLLines(data.Permissions, "    "),
 		Steps:       steps,
 		Depends:     depends,
-		Outputs: map[string]string{
-			"output": "${{ steps.collect_output.outputs.output }}",
-		},
+		Outputs:     outputs,
 	}
 
 	return job, nil
@@ -2131,8 +2146,10 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 		}
 	}
 
-	// Generate output file setup step
-	c.generateOutputFileSetup(yaml, data)
+	// Generate output file setup step only if engine declares output files
+	if len(engine.GetDeclaredOutputFiles()) > 0 {
+		c.generateOutputFileSetup(yaml, data)
+	}
 
 	// Add MCP setup
 	c.generateMCPSetup(yaml, data.Tools, engine)
@@ -2141,7 +2158,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	c.generateSafetyChecks(yaml, data)
 
 	// Add prompt creation step
-	c.generatePrompt(yaml, data)
+	c.generatePrompt(yaml, data, engine)
 
 	logFile := generateSafeFileName(data.Name)
 	logFileFull := fmt.Sprintf("/tmp/%s.log", logFile)
@@ -2158,8 +2175,10 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	// add workflow_complete.txt
 	c.generateWorkflowComplete(yaml)
 
-	// Add output collection step
-	c.generateOutputCollectionStep(yaml, data)
+	// Add output collection step only if engine declares output files
+	if len(engine.GetDeclaredOutputFiles()) > 0 {
+		c.generateOutputCollectionStep(yaml, data)
+	}
 
 	// upload agent logs
 	c.generateUploadAgentLogs(yaml, logFile, logFileFull)
@@ -2210,10 +2229,15 @@ func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
 	yaml.WriteString("          if-no-files-found: warn\n")
 }
 
-func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData) {
+func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine) {
 	yaml.WriteString("      - name: Create prompt\n")
-	yaml.WriteString("        env:\n")
-	yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+	
+	// Add environment section only if engine declares output files
+	if len(engine.GetDeclaredOutputFiles()) > 0 {
+		yaml.WriteString("        env:\n")
+		yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+	}
+	
 	yaml.WriteString("        run: |\n")
 	yaml.WriteString("          mkdir -p /tmp/aw-prompts\n")
 	yaml.WriteString("          cat > /tmp/aw-prompts/prompt.txt << 'EOF'\n")
@@ -2223,11 +2247,13 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData) {
 		yaml.WriteString("          " + line + "\n")
 	}
 
-	// Add output instructions for the agent
-	yaml.WriteString("          \n")
-	yaml.WriteString("          ---\n")
-	yaml.WriteString("          \n")
-	yaml.WriteString("          **IMPORTANT**: If you need to provide output that should be captured as a workflow output variable, write it to the file \"${{ env.GITHUB_AW_OUTPUT }}\". This file is available for you to write any output that should be exposed from this workflow. The content of this file will be made available as the 'output' workflow output.\n")
+	// Add output instructions only if engine declares output files
+	if len(engine.GetDeclaredOutputFiles()) > 0 {
+		yaml.WriteString("          \n")
+		yaml.WriteString("          ---\n")
+		yaml.WriteString("          \n")
+		yaml.WriteString("          **IMPORTANT**: If you need to provide output that should be captured as a workflow output variable, write it to the file \"${{ env.GITHUB_AW_OUTPUT }}\". This file is available for you to write any output that should be exposed from this workflow. The content of this file will be made available as the 'output' workflow output.\n")
+	}
 	yaml.WriteString("          EOF\n")
 
 	// Add step to print prompt to GitHub step summary for debugging
@@ -2527,7 +2553,7 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 		}
 
 		// Add environment variables
-		if len(executionConfig.Environment) > 0 {
+		if len(executionConfig.Environment) > 0 || len(engine.GetDeclaredOutputFiles()) > 0 {
 			yaml.WriteString("        env:\n")
 			// Sort environment keys for consistent output
 			envKeys := make([]string, 0, len(executionConfig.Environment))
@@ -2540,12 +2566,10 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 				value := executionConfig.Environment[key]
 				yaml.WriteString(fmt.Sprintf("          %s: %s\n", key, value))
 			}
-			// Add GITHUB_AW_OUTPUT environment variable
-			yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
-		} else {
-			// Add GITHUB_AW_OUTPUT environment variable even if no other env vars
-			yaml.WriteString("        env:\n")
-			yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+			// Add GITHUB_AW_OUTPUT environment variable only if engine declares output files
+			if len(engine.GetDeclaredOutputFiles()) > 0 {
+				yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+			}
 		}
 	} else if executionConfig.Action != "" {
 
@@ -2583,9 +2607,11 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 				yaml.WriteString(fmt.Sprintf("          %s: %s\n", key, value))
 			}
 		}
-		// Add environment section to pass GITHUB_AW_OUTPUT to the action
-		yaml.WriteString("        env:\n")
-		yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+		// Add environment section to pass GITHUB_AW_OUTPUT to the action only if engine declares output files
+		if len(engine.GetDeclaredOutputFiles()) > 0 {
+			yaml.WriteString("        env:\n")
+			yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
+		}
 		yaml.WriteString("      - name: Capture Agentic Action logs\n")
 		yaml.WriteString("        if: always()\n")
 		yaml.WriteString("        run: |\n")
@@ -2721,7 +2747,7 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("        if: always() && steps.collect_output.outputs.output != ''\n")
 	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
 	yaml.WriteString("        with:\n")
-	yaml.WriteString("          name: aw_output.txt\n")
+	yaml.WriteString(fmt.Sprintf("          name: %s\n", OutputArtifactName))
 	yaml.WriteString("          path: ${{ env.GITHUB_AW_OUTPUT }}\n")
 	yaml.WriteString("          if-no-files-found: warn\n")
 
