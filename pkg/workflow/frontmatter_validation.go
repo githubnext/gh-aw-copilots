@@ -37,6 +37,32 @@ func NewFrontmatterValidator(frontmatterYAML string) *FrontmatterValidator {
 
 // ValidateFrontmatter performs validation on frontmatter data and returns errors with spans
 func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) []FrontmatterValidationError {
+	return v.ValidateFrontmatterWithOptions(frontmatter, ValidationOptions{UseJSONSchema: false})
+}
+
+// ValidationOptions configures how frontmatter validation is performed
+type ValidationOptions struct {
+	UseJSONSchema bool // If true, use JSON schema validation instead of custom validation
+}
+
+// ValidateFrontmatterWithOptions performs validation with configurable options
+func (v *FrontmatterValidator) ValidateFrontmatterWithOptions(frontmatter map[string]any, options ValidationOptions) []FrontmatterValidationError {
+	var errors []FrontmatterValidationError
+
+	if options.UseJSONSchema {
+		// Use JSON schema validation
+		schemaErrors := v.validateWithJSONSchema(frontmatter)
+		errors = append(errors, schemaErrors...)
+	} else {
+		// Use custom validation (existing behavior)
+		errors = append(errors, v.validateCustomRules(frontmatter)...)
+	}
+
+	return errors
+}
+
+// validateCustomRules performs custom validation rules not covered by JSON schema
+func (v *FrontmatterValidator) validateCustomRules(frontmatter map[string]any) []FrontmatterValidationError {
 	var errors []FrontmatterValidationError
 
 	// Example validation: check for required fields
@@ -58,9 +84,11 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 					spanPtr = &span
 				}
 
+				registry := GetGlobalEngineRegistry()
+				engines := registry.GetSupportedEngines()
 				errors = append(errors, FrontmatterValidationError{
 					Path:    "engine",
-					Message: fmt.Sprintf("unsupported engine '%s', must be one of: claude, codex", engineStr),
+					Message: fmt.Sprintf("unsupported engine '%s', must be one of: %s", engineStr, strings.Join(engines, ", ")),
 					Span:    spanPtr,
 				})
 			}
@@ -132,15 +160,30 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 	return errors
 }
 
+// validateWithJSONSchema performs JSON schema validation and converts errors to FrontmatterValidationError
+func (v *FrontmatterValidator) validateWithJSONSchema(frontmatter map[string]any) []FrontmatterValidationError {
+	var errors []FrontmatterValidationError
+
+	// Run JSON schema validation using the parser package
+	err := parser.ValidateMainWorkflowFrontmatterWithSchema(frontmatter)
+	if err != nil {
+		// Convert JSON schema error to FrontmatterValidationError
+		// For now, we'll create a general error without specific path/span information
+		// since JSON schema errors don't map directly to source locations
+		errors = append(errors, FrontmatterValidationError{
+			Path:    "schema", // Use a general path for schema errors
+			Message: err.Error(),
+			Span:    nil, // JSON schema errors don't have source spans yet
+		})
+	}
+
+	return errors
+}
+
 // isValidEngine checks if the engine name is supported
 func isValidEngine(engine string) bool {
-	validEngines := []string{"claude", "codex"}
-	for _, valid := range validEngines {
-		if engine == valid {
-			return true
-		}
-	}
-	return false
+	registry := GetGlobalEngineRegistry()
+	return registry.IsValidEngine(engine)
 }
 
 // ConvertValidationErrorsToCompilerErrors converts validation errors to console.CompilerError
@@ -186,7 +229,9 @@ func ConvertValidationErrorsToCompilerErrors(
 func generateHintForValidationError(err FrontmatterValidationError) string {
 	switch {
 	case strings.Contains(err.Path, "engine"):
-		return "Supported engines: claude, codex"
+		registry := GetGlobalEngineRegistry()
+		engines := registry.GetSupportedEngines()
+		return fmt.Sprintf("Supported engines: %s", strings.Join(engines, ", "))
 	case strings.Contains(err.Path, "max-turns"):
 		return "max-turns should be a number between 1 and 100"
 	case strings.Contains(err.Path, "tools") && strings.Contains(err.Message, "name"):
