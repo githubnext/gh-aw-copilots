@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -498,4 +499,144 @@ simple: value`,
 			}
 		})
 	}
+}
+
+// TestFrontmatterLocatorCaching tests the cached locator performance and functionality
+func TestFrontmatterLocatorCaching(t *testing.T) {
+	frontmatterYAML := `engine: claude
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 9 * * 1"
+max-turns: 5
+tools:
+  - name: git
+    type: shell
+  - name: curl
+    type: shell`
+
+	// Create a locator (parses YAML once)
+	locator := NewFrontmatterLocator(frontmatterYAML)
+
+	// Test multiple path lookups using the same parsed AST
+	testPaths := []struct {
+		path         string
+		expectSpan   bool
+		expectError  bool
+	}{
+		{"engine", true, false},
+		{"on.push.branches[0]", true, false},
+		{"on.schedule[0].cron", true, false},
+		{"max-turns", true, false},
+		{"tools[0].name", true, false},
+		{"tools[1].type", true, false},
+		{"nonexistent", false, true},
+		{"tools[999]", false, true},
+	}
+
+	for _, testPath := range testPaths {
+		t.Run(fmt.Sprintf("path_%s", testPath.path), func(t *testing.T) {
+			span, err := locator.LocatePathSpan(testPath.path)
+			
+			if testPath.expectError {
+				if err == nil {
+					t.Errorf("Expected error for path '%s', got nil", testPath.path)
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("Unexpected error for path '%s': %v", testPath.path, err)
+				return
+			}
+			
+			if testPath.expectSpan {
+				if span.StartLine <= 0 || span.StartColumn <= 0 {
+					t.Errorf("Expected valid span for path '%s', got %+v", testPath.path, span)
+				}
+			}
+		})
+	}
+
+	// Test legacy compatibility
+	line, column, err := locator.LocatePath("engine")
+	if err != nil {
+		t.Errorf("Legacy LocatePath failed: %v", err)
+	}
+	if line <= 0 || column <= 0 {
+		t.Errorf("Legacy LocatePath returned invalid position: line=%d, column=%d", line, column)
+	}
+}
+
+// BenchmarkLocatorPerformance compares cached vs non-cached lookups
+func BenchmarkLocatorPerformance(b *testing.B) {
+	frontmatterYAML := `engine: claude
+on:
+  push:
+    branches: [main, develop, feature/*]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "0 9 * * 1"
+    - cron: "0 18 * * 5"
+max-turns: 10
+tools:
+  - name: git
+    type: shell
+  - name: curl
+    type: shell
+  - name: jq
+    type: shell
+variables:
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.9"`
+
+	paths := []string{
+		"engine",
+		"on.push.branches[0]",
+		"on.pull_request.types[2]",
+		"on.schedule[1].cron",
+		"max-turns",
+		"tools[0].name",
+		"tools[2].type",
+		"variables.NODE_VERSION",
+		"variables.PYTHON_VERSION",
+	}
+
+	b.Run("without_caching", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, path := range paths {
+				_, err := LocateFrontmatterPathSpan(frontmatterYAML, path)
+				if err != nil {
+					b.Fatalf("Error locating path %s: %v", path, err)
+				}
+			}
+		}
+	})
+
+	b.Run("with_caching", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			locator := NewFrontmatterLocator(frontmatterYAML)
+			for _, path := range paths {
+				_, err := locator.LocatePathSpan(path)
+				if err != nil {
+					b.Fatalf("Error locating path %s: %v", path, err)
+				}
+			}
+		}
+	})
+
+	b.Run("with_caching_reused_locator", func(b *testing.B) {
+		locator := NewFrontmatterLocator(frontmatterYAML)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			for _, path := range paths {
+				_, err := locator.LocatePathSpan(path)
+				if err != nil {
+					b.Fatalf("Error locating path %s: %v", path, err)
+				}
+			}
+		}
+	})
 }

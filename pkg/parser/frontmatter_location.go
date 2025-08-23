@@ -19,34 +19,52 @@ type SourceSpan struct {
 	EndColumn   int
 }
 
-// LocateFrontmatterPathSpan locates the source span for a given JSONPath in frontmatter YAML
-// frontmatterYAML should be the raw YAML content (without the --- delimiters)
-// jsonPath should be a JSONPath-like expression (e.g., "on.push", "jobs.build.steps[0].run")
-func LocateFrontmatterPathSpan(frontmatterYAML, jsonPath string) (SourceSpan, error) {
-	if frontmatterYAML == "" {
-		return SourceSpan{}, fmt.Errorf("frontmatter YAML is empty")
+// FrontmatterLocator provides cached access to frontmatter YAML for efficient
+// multiple path lookups. It parses the YAML once and reuses the AST.
+type FrontmatterLocator struct {
+	frontmatterYAML string
+	root            ast.Node
+	parseError      error
+}
+
+// NewFrontmatterLocator creates a new locator with cached YAML parsing
+func NewFrontmatterLocator(frontmatterYAML string) *FrontmatterLocator {
+	locator := &FrontmatterLocator{
+		frontmatterYAML: frontmatterYAML,
 	}
+	
+	// Parse YAML once and cache the result
+	if frontmatterYAML != "" {
+		file, err := parser.ParseBytes([]byte(frontmatterYAML), 0)
+		if err != nil {
+			locator.parseError = fmt.Errorf("failed to parse YAML: %w", err)
+		} else if file == nil || len(file.Docs) == 0 {
+			locator.parseError = fmt.Errorf("no YAML documents found")
+		} else {
+			locator.root = file.Docs[0]
+		}
+	} else {
+		locator.parseError = fmt.Errorf("frontmatter YAML is empty")
+	}
+	
+	return locator
+}
+
+// LocatePathSpan finds the source span for the given JSONPath using cached AST
+func (l *FrontmatterLocator) LocatePathSpan(jsonPath string) (SourceSpan, error) {
+	if l.parseError != nil {
+		return SourceSpan{}, l.parseError
+	}
+	
 	if jsonPath == "" {
 		return SourceSpan{}, fmt.Errorf("JSONPath is empty")
 	}
 
-	// Parse YAML into AST
-	file, err := parser.ParseBytes([]byte(frontmatterYAML), 0)
-	if err != nil {
-		return SourceSpan{}, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	if file == nil || len(file.Docs) == 0 {
-		return SourceSpan{}, fmt.Errorf("no YAML documents found")
-	}
-
-	root := file.Docs[0] // Use first document
-
 	// Normalize the JSONPath
 	normalizedPath := normalizeJSONPath(jsonPath)
 
-	// Navigate to the target node
-	node, err := navigateToNode(root, normalizedPath)
+	// Navigate to the target node using cached AST
+	node, err := navigateToNode(l.root, normalizedPath)
 	if err != nil {
 		return SourceSpan{}, fmt.Errorf("path not found: %w", err)
 	}
@@ -54,6 +72,24 @@ func LocateFrontmatterPathSpan(frontmatterYAML, jsonPath string) (SourceSpan, er
 	// Calculate source span for the node
 	span := calculateNodeSpan(node)
 	return span, nil
+}
+
+// LocatePath provides backward compatibility by returning only start position
+func (l *FrontmatterLocator) LocatePath(jsonPath string) (line int, column int, err error) {
+	span, err := l.LocatePathSpan(jsonPath)
+	if err != nil {
+		return 0, 0, err
+	}
+	return span.StartLine, span.StartColumn, nil
+}
+
+// LocateFrontmatterPathSpan locates the source span for a given JSONPath in frontmatter YAML
+// frontmatterYAML should be the raw YAML content (without the --- delimiters)
+// jsonPath should be a JSONPath-like expression (e.g., "on.push", "jobs.build.steps[0].run")
+func LocateFrontmatterPathSpan(frontmatterYAML, jsonPath string) (SourceSpan, error) {
+	// Use the cached locator for single lookups
+	locator := NewFrontmatterLocator(frontmatterYAML)
+	return locator.LocatePathSpan(jsonPath)
 }
 
 // LocateFrontmatterPath provides backward compatibility by returning only start position

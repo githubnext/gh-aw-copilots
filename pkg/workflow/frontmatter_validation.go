@@ -25,13 +25,13 @@ func (e FrontmatterValidationError) Error() string {
 
 // FrontmatterValidator provides validation for frontmatter content
 type FrontmatterValidator struct {
-	frontmatterYAML string // Original YAML content for span calculation
+	locator *parser.FrontmatterLocator // Cached locator for efficient span lookups
 }
 
 // NewFrontmatterValidator creates a new validator for the given frontmatter YAML
 func NewFrontmatterValidator(frontmatterYAML string) *FrontmatterValidator {
 	return &FrontmatterValidator{
-		frontmatterYAML: frontmatterYAML,
+		locator: parser.NewFrontmatterLocator(frontmatterYAML),
 	}
 }
 
@@ -52,7 +52,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 	if engine, exists := frontmatter["engine"]; exists {
 		if engineStr, ok := engine.(string); ok {
 			if !isValidEngine(engineStr) {
-				span, err := parser.LocateFrontmatterPathSpan(v.frontmatterYAML, "engine")
+				span, err := v.locator.LocatePathSpan("engine")
 				var spanPtr *parser.SourceSpan
 				if err == nil {
 					spanPtr = &span
@@ -69,9 +69,28 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 
 	// Example validation: check max-turns if present
 	if maxTurns, exists := frontmatter["max-turns"]; exists {
-		if maxTurnsInt, ok := maxTurns.(int); ok {
+		var maxTurnsInt int
+		var ok bool
+		
+		// Handle both int and uint64 types (YAML can parse numbers as different types)
+		switch v := maxTurns.(type) {
+		case int:
+			maxTurnsInt = v
+			ok = true
+		case uint64:
+			maxTurnsInt = int(v)
+			ok = true
+		case int64:
+			maxTurnsInt = int(v)
+			ok = true
+		case float64:
+			maxTurnsInt = int(v)
+			ok = true
+		}
+		
+		if ok {
 			if maxTurnsInt < 1 || maxTurnsInt > 100 {
-				span, err := parser.LocateFrontmatterPathSpan(v.frontmatterYAML, "max-turns")
+				span, err := v.locator.LocatePathSpan("max-turns")
 				var spanPtr *parser.SourceSpan
 				if err == nil {
 					spanPtr = &span
@@ -93,7 +112,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 				if toolMap, ok := tool.(map[string]any); ok {
 					if _, hasName := toolMap["name"]; !hasName {
 						path := fmt.Sprintf("tools[%d].name", i)
-						span, err := parser.LocateFrontmatterPathSpan(v.frontmatterYAML, path)
+						span, err := v.locator.LocatePathSpan(path)
 						var spanPtr *parser.SourceSpan
 						if err == nil {
 							spanPtr = &span
