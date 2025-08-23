@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,8 +129,8 @@ This workflow tests the agentic output collection functionality.
 	}
 
 	// Verify the artifact upload configuration
-	if !strings.Contains(lockContent, "name: aw_output.txt") {
-		t.Error("Expected artifact name to be 'aw_output.txt'")
+	if !strings.Contains(lockContent, fmt.Sprintf("name: %s", OutputArtifactName)) {
+		t.Errorf("Expected artifact name to be '%s'", OutputArtifactName)
 	}
 
 	if !strings.Contains(lockContent, "path: ${{ env.GITHUB_AW_OUTPUT }}") {
@@ -243,8 +244,8 @@ This workflow tests that Codex engine does not get output collection steps.
 		t.Error("Codex workflow should NOT reference GITHUB_AW_OUTPUT environment variable")
 	}
 
-	if strings.Contains(lockContent, "aw_output.txt") {
-		t.Error("Codex workflow should NOT reference aw_output.txt artifact")
+	if strings.Contains(lockContent, fmt.Sprintf("name: %s", OutputArtifactName)) {
+		t.Errorf("Codex workflow should NOT reference %s artifact", OutputArtifactName)
 	}
 
 	// Verify that job outputs section does not include output
@@ -264,23 +265,23 @@ func TestEngineOutputFileDeclarations(t *testing.T) {
 	// Test Claude engine declares output files
 	claudeEngine := NewClaudeEngine()
 	claudeOutputFiles := claudeEngine.GetDeclaredOutputFiles()
-	
+
 	if len(claudeOutputFiles) == 0 {
 		t.Error("Claude engine should declare at least one output file")
 	}
-	
+
 	if !stringSliceContains(claudeOutputFiles, "output.txt") {
 		t.Errorf("Claude engine should declare 'output.txt' as an output file, got: %v", claudeOutputFiles)
 	}
-	
-	// Test Codex engine declares no output files  
+
+	// Test Codex engine declares no output files
 	codexEngine := NewCodexEngine()
 	codexOutputFiles := codexEngine.GetDeclaredOutputFiles()
-	
+
 	if len(codexOutputFiles) != 0 {
 		t.Errorf("Codex engine should declare no output files, got: %v", codexOutputFiles)
 	}
-	
+
 	t.Logf("Claude engine declares: %v", claudeOutputFiles)
 	t.Logf("Codex engine declares: %v", codexOutputFiles)
 }

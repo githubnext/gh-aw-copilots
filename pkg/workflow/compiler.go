@@ -2231,13 +2231,13 @@ func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
 
 func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine) {
 	yaml.WriteString("      - name: Create prompt\n")
-	
+
 	// Add environment section only if engine declares output files
 	if len(engine.GetDeclaredOutputFiles()) > 0 {
 		yaml.WriteString("        env:\n")
 		yaml.WriteString("          GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}\n")
 	}
-	
+
 	yaml.WriteString("        run: |\n")
 	yaml.WriteString("          mkdir -p /tmp/aw-prompts\n")
 	yaml.WriteString("          cat > /tmp/aw-prompts/prompt.txt << 'EOF'\n")
