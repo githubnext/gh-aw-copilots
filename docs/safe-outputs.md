@@ -1,10 +1,10 @@
 # 🔒 Safe Output Processing
 
-This guide covers safe output processing configuration for agentic workflows, enabling automatic creation of GitHub issues, comments, pull requests, and label addition based on the agent's output without giving the agentic portion of the workflow write permissions.
+One of the primary security features of GitHub Agentic Workflows is "safe output processing", enabling the creation of GitHub issues, comments, pull requests, and other outputs without giving the agentic portion of the workflow write permissions.
 
 ## Overview (`output:`)
 
-The `output:` configuration declares that your agentic workflow should conclude with optional automated actions based on the agent's output. This enables your AI agent to write content that is then automatically processed to create GitHub issues, comments, pull requests, or add labels—all without giving the agentic portion of the workflow any write permissions.
+The `output:` element of your workflow's frontmatter declares that your agentic workflow should conclude with optional automated actions based on the agent's output. This enables your AI agent to write content that is then automatically processed to create GitHub issues, comments, pull requests, or add labels—all without giving the agentic portion of the workflow any write permissions.
 
 **How It Works:**
 1. Your agentic workflow runs with minimal read-only permissions
@@ -140,8 +140,6 @@ Your agentic workflow provides output in two ways:
    - **First non-empty line**: Becomes the PR title
    - **Remaining content**: Becomes the PR description
 
-The workflow automatically generates git patches from any committed changes using `git format-patch` and saves them to `/tmp/aw.patch`.
-
 **What This Configuration Does:**
 When you add `output.pull-request` to your frontmatter, the compiler automatically:
 1. **Adds a git patch generation step** to your main job that:
@@ -166,7 +164,7 @@ output:
 ```
 
 **Example workflow using pull request creation:**
-```yaml
+```markdown
 ---
 on: push
 permissions:
@@ -272,12 +270,7 @@ output:
 
 Analyze the issue content and determine appropriate labels.
 
-Write the labels you want to add (one per line) to ${{ env.GITHUB_AW_OUTPUT }}:
-```
-triage
-bug
-needs-review
-```
+Write the labels you want to add (one per line) to ${{ env.GITHUB_AW_OUTPUT }}.
 
 Only use labels from the allowed list: triage, bug, enhancement, documentation, needs-review.
 ```

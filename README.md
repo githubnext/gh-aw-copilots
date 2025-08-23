@@ -55,8 +55,6 @@ permissions:
 tools:
   github:
     allowed: [add_issue_comment]
-
-timeout_minutes: 5
 ---
 
 # Issue Triage
@@ -69,6 +67,15 @@ Analyze issue #${{ github.event.issue.number }} and help with triage:
 
 Keep responses concise and helpful.
 ```
+
+To explain:
+
+1. This workflow is triggered whenever an issue is opened. 
+2. When triggered, this workflow will use an agentic engine (e.g. Claude Code or OpenAI Codex) to run the markdown section of the workflow. 
+3. The agentic engine will have access to the default readonly GitHub MCP tools and the additional `add_issue_comment` tools.
+4. The agentic engine can read the issue content, study the repository, and post a comment on the issue.
+
+Agentic workflows can be as simple or complex as you like, and can use a variety of tools and permissions. See the [Documentation](docs/index.md) for more details.
 
 ## 📂 Available Demonstrator Workflows from "[The Agentics](https://github.com/githubnext/agentics?tab=readme-ov-file#-the-agentics)"
 
