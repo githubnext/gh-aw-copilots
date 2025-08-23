@@ -11,7 +11,7 @@ Ready to get your first agentic workflow running? Follow our step-by-step [Quick
 
 ## 📖 Overview
 
-Learn about the concepts behind agentic workflows, explore available workflow types, and understand how AI can automate your repository tasks. See [Cocepts](docs/concepts.md).
+Learn about the concepts behind agentic workflows, explore available workflow types, and understand how AI can automate your repository tasks. See [Concepts](docs/concepts.md).
 
 ## 📖 Documentation
 
