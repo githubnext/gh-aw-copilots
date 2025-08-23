@@ -1,4 +1,3 @@
-````markdown
 # 🚀 Tutorial — Get a workflow running in minutes
 
 This short, hands-on tutorial will get you from zero to a running agentic workflow. You'll install the extension, add a sample workflow, set up the required secrets, compile the workflow to a lock file, and run it. Ready? Let's go! 🎉
@@ -139,4 +138,3 @@ What's next?
 
 You did it — you're ready to start automating with agentic workflows! ✨
 
-````
