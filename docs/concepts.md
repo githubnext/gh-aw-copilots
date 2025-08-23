@@ -2,7 +2,9 @@
 
 Now that you've got your first workflow running, let's dive deeper into the concepts and capabilities of GitHub Agentic Workflows.
 
-Agentic workflows represent a new paradigm where AI agents can perform complex, multi-step tasks in your repository automatically. They combine the power of large language models with GitHub's collaboration platform to create truly intelligent automation.
+GitHub Agentic Workflows represent a new paradigm where AI agents can perform complex, multi-step tasks in conjunction with your team automatically. They combine the power of AI with GitHub's collaboration platform to enable [Continuous AI](https://githubnext.com/projects/continuous-ai) — the systematic, automated application of AI to software collaboration.
+
+GitHub Agentic Workflows are both revolutionary and yet familiar: they build on top of GitHub Actions, and use familiar AI engines such as Claude Code and Codex to interpret natural language instructions.
 
 ## Core Concepts
 
@@ -48,7 +50,7 @@ The engine interprets your natural language instructions and executes them using
 
 ### Continuous AI Patterns
 
-GitHub Agentic Workflows enable "Continuous AI" — the systematic application of AI to software collaboration:
+GitHub Agentic Workflows enable [Continuous AI](https://githubnext.com/projects/continuous-ai) — the systematic application of AI to software collaboration:
 
 - **Continuous Documentation** — Keep docs current and comprehensive
 - **Continuous Code Improvement** — Incrementally enhance code quality
