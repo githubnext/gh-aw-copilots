@@ -1,5 +1,3 @@
-'use strict';
-
 async function main() {
   const fs = require('fs');
   const crypto = require('crypto');
