@@ -1,6 +1,6 @@
 # 📖 Introduction to Agentic Workflows
 
-Now that you've got your first workflow running, let's dive deeper into the concepts and capabilities of GitHub Agentic Workflows.
+Now that you've [got your first workflow running](quick-start.md), let's dive deeper into the concepts and capabilities of GitHub Agentic Workflows.
 
 GitHub Agentic Workflows represent a new paradigm where AI agents can perform complex, multi-step tasks in conjunction with your team automatically. They combine the power of AI with GitHub's collaboration platform to enable [Continuous AI](https://githubnext.com/projects/continuous-ai) — the systematic, automated application of AI to software collaboration.
 
@@ -31,20 +31,23 @@ Every agentic workflow has two main parts:
 on: ...
 permissions: ...
 tools: ...
+steps: ...
 ---
 
 # Natural Language Instructions
 Analyze this issue and provide helpful triage comments...
 ```
 
-See [Workflow Structure](workflow-structure.md) for details on file layout and security.
+One crucial difference from traditional agentic prompting is that GitHub Agentic Workflows can contain **both** traditional GitHub Actions steps and agentic natural language instructions. This allows the best of both worlds: traditional steps for deterministic actions, and agentic steps for flexible, context-aware AI-driven actions.
+
+See [Workflow Structure](workflow-structure.md) and [Frontmatter Options](frontmatter.md) for details of file layout and configuration options.
 
 ## Understanding AI Engines
 
-Agentic workflows are powered by different AI engines:
+Agentic workflows are powered by different agentic AI engines:
 
-- **Claude** (default) — Anthropic's AI model, excellent for reasoning and code analysis
-- **Codex** (experimental) — OpenAI's code-focused model
+- **Claude Code** (default) — Anthropic's AI engine, excellent for reasoning and code analysis
+- **Codex** (experimental) — OpenAI's code-focused engine
 
 The engine interprets your natural language instructions and executes them using the tools and permissions you've configured.
 
@@ -58,13 +61,13 @@ GitHub Agentic Workflows enable [Continuous AI](https://githubnext.com/projects/
 - **Continuous Research** — Stay current with industry developments
 - **Continuous Quality** — Automated code review and standards enforcement
 
-#### Demonstrator Research & Planning Workflows
+**Demonstrator Research & Planning Workflows**
 - [📚 Weekly Research](https://github.com/githubnext/agentics?tab=readme-ov-file#-weekly-research) - Collect research updates and industry trends
 - [👥 Daily Team Status](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-team-status) - Assess repository activity and create status reports
 - [📋 Daily Plan](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-plan) - Update planning issues for team coordination
 - [🏷️ Issue Triage](https://github.com/githubnext/agentics?tab=readme-ov-file#️-issue-triage) - Triage issues and pull requests
 
-#### Demonstrator Coding & Development Workflows
+**Demonstrator Coding & Development Workflows**
 - [📦 Daily Dependency Updater](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-dependency-updater) - Update dependencies and create pull requests
 - [📖 Regular Documentation Update](https://github.com/githubnext/agentics?tab=readme-ov-file#-regular-documentation-update) - Update documentation automatically
 - [🔍 Daily QA](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-qa) - Perform quality assurance tasks
@@ -83,6 +86,8 @@ gh aw compile
 ```
 
 This generates a `.lock.yml` file containing the actual GitHub Actions workflow. Both files should be committed to your repository.
+
+The `.lock.yml` file contains the full configuration of the workflow, including the frontmatter and the compiled agentic steps, added security hardening and job orchestration. The `.md` file is the source of truth for authoring and editing.
 
 ### Security and Permissions
 
@@ -115,6 +120,7 @@ Learn more in [Tools Configuration](tools.md) and [MCPs](mcps.md).
 3. **Test iteratively** — Use `gh aw compile --watch` and `gh aw run` during development
 4. **Monitor costs** — Use `gh aw logs` to track AI usage and optimize
 5. **Review outputs** — Always verify AI-generated content before merging
+6. **Use safe outputs** — Leverage [Safe Output Processing](safe-outputs.md) to automatically create issues, comments, and PRs from agent output
 
 ### Common Patterns
 
