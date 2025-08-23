@@ -26,10 +26,9 @@ Every agentic workflow has two main parts:
 
 ```markdown
 ---
-# Configuration
-on: { issues: { types: [opened] } }
-permissions: { issues: write }
-tools: { github: { allowed: [add_issue_comment] } }
+on: ...
+permissions: ...
+tools: ...
 ---
 
 # Natural Language Instructions
@@ -57,15 +56,13 @@ GitHub Agentic Workflows enable "Continuous AI" — the systematic application o
 - **Continuous Research** — Stay current with industry developments
 - **Continuous Quality** — Automated code review and standards enforcement
 
-### 📂 Available Demonstrator Workflows from "[The Agentics](https://github.com/githubnext/agentics?tab=readme-ov-file#-the-agentics)"
-
-#### Research & Planning Workflows
+#### Demonstrator Research & Planning Workflows
 - [📚 Weekly Research](https://github.com/githubnext/agentics?tab=readme-ov-file#-weekly-research) - Collect research updates and industry trends
 - [👥 Daily Team Status](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-team-status) - Assess repository activity and create status reports
 - [📋 Daily Plan](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-plan) - Update planning issues for team coordination
 - [🏷️ Issue Triage](https://github.com/githubnext/agentics?tab=readme-ov-file#️-issue-triage) - Triage issues and pull requests
 
-#### Coding & Development Workflows
+#### Demonstrator Coding & Development Workflows
 - [📦 Daily Dependency Updater](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-dependency-updater) - Update dependencies and create pull requests
 - [📖 Regular Documentation Update](https://github.com/githubnext/agentics?tab=readme-ov-file#-regular-documentation-update) - Update documentation automatically
 - [🔍 Daily QA](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-qa) - Perform quality assurance tasks
@@ -113,7 +110,7 @@ Learn more in [Tools Configuration](tools.md) and [MCPs](mcps.md).
 
 1. **Start simple** — Begin with basic workflows and add complexity gradually
 2. **Be specific** — Clear, detailed instructions produce better results
-3. **Test iteratively** — Use `gh aw compile --watch` during development
+3. **Test iteratively** — Use `gh aw compile --watch` and `gh aw run` during development
 4. **Monitor costs** — Use `gh aw logs` to track AI usage and optimize
 5. **Review outputs** — Always verify AI-generated content before merging
 
@@ -122,7 +119,7 @@ Learn more in [Tools Configuration](tools.md) and [MCPs](mcps.md).
 - **Event-driven** — Respond to issues, PRs, pushes, etc.
 - **Scheduled** — Regular maintenance and reporting tasks
 - **Alias-triggered** — Activated by @mentions in comments
-- **Conditional** — Use frontmatter logic to control execution
+- **Secure** — User minimal permissions and protect against untrusted content, see [Security Notes](security-notes.md)
 
 ## Next Steps
 
@@ -131,6 +128,7 @@ Ready to build more sophisticated workflows? Explore:
 - **[Workflow Structure](workflow-structure.md)** — Detailed file organization and security
 - **[Frontmatter Options](frontmatter.md)** — Complete configuration reference
 - **[Tools Configuration](tools.md)** — Available tools and permissions
+- **[Security Notes](security-notes.md)** — Important security considerations
 - **[VS Code Integration](vscode.md)** — Enhanced authoring experience
 
-The power of agentic workflows lies in their ability to understand context, make intelligent decisions, and take meaningful actions — all while maintaining the security and reliability you expect from GitHub Actions.
+The power of agentic workflows lies in their ability to understand context, make intelligent decisions, and take meaningful actions — all while maintaining the reliability you expect from GitHub Actions.
