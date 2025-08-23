@@ -54,6 +54,8 @@ on:
   workflow_dispatch:
 ```
 
+An additional kind of trigger called `alias:` is supported, see [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
+
 ## Permissions (`permissions:`)
 
 The `permissions:` section uses standard GitHub Actions permissions syntax to specify the permissions relevant to the agentic (natural language) part of the execution of the workflow. See [GitHub Actions permissions documentation](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions).
@@ -176,10 +178,6 @@ ai-reaction: "eyes"
 ## Output Configuration (`output:`)
 
 See [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
-
-## Alias Triggers and Context Text
-
-See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
 
 ## Run Configuration (`run-name:`, `runs-on:`, `timeout_minutes:`)
 
