@@ -2778,34 +2778,3 @@ func (c *Compiler) validateMaxTurnsSupport(frontmatter map[string]any, engine Ag
 
 	return nil
 }
-
-// generateEngineOutputCollection generates a step that collects engine-declared output files as artifacts
-func (c *Compiler) generateEngineOutputCollection(yaml *strings.Builder, engine AgenticEngine) {
-	outputFiles := engine.GetDeclaredOutputFiles()
-	if len(outputFiles) == 0 {
-		return
-	}
-
-	yaml.WriteString("      - name: Collect engine output files\n")
-	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        run: |\n")
-	yaml.WriteString("          mkdir -p /tmp/engine-outputs\n")
-	yaml.WriteString("          echo \"Collecting engine output files...\"\n")
-
-	for _, file := range outputFiles {
-		yaml.WriteString(fmt.Sprintf("          if [ -f \"%s\" ]; then\n", file))
-		yaml.WriteString(fmt.Sprintf("            cp \"%s\" /tmp/engine-outputs/\n", file))
-		yaml.WriteString(fmt.Sprintf("            echo \"Collected: %s\"\n", file))
-		yaml.WriteString("          else\n")
-		yaml.WriteString(fmt.Sprintf("            echo \"File not found: %s\"\n", file))
-		yaml.WriteString("          fi\n")
-	}
-
-	yaml.WriteString("      - name: Upload engine output files\n")
-	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
-	yaml.WriteString("        with:\n")
-	yaml.WriteString("          name: agent_outputs\n")
-	yaml.WriteString("          path: /tmp/engine-outputs/\n")
-	yaml.WriteString("          if-no-files-found: warn\n")
-}

@@ -83,11 +83,7 @@ This workflow tests the agentic output collection functionality.
 		t.Error("Expected output instructions to be injected into prompt")
 	}
 
-	// Verify Claude engine declared outputs are collected separately
-	if !strings.Contains(lockContent, "- name: Collect engine output files") {
-		t.Error("Expected 'Collect engine output files' step for Claude engine")
-	}
-
+	// Verify Claude engine declared outputs are uploaded separately
 	if !strings.Contains(lockContent, "- name: Upload engine output files") {
 		t.Error("Expected 'Upload engine output files' step for Claude engine")
 	}
