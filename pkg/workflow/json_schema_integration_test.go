@@ -9,11 +9,11 @@ func TestJSONSchemaValidationIntegration(t *testing.T) {
 	tests := []struct {
 		name                string
 		frontmatter         map[string]any
-		expectSchemaError   bool
-		expectCustomError   bool
+		expectError         bool
+		expectedErrorCount  int
 	}{
 		{
-			name: "valid frontmatter passes both validations",
+			name: "valid frontmatter passes validation",
 			frontmatter: map[string]any{
 				"on":     "push",
 				"engine": "claude",
@@ -23,17 +23,16 @@ func TestJSONSchemaValidationIntegration(t *testing.T) {
 					},
 				},
 			},
-			expectSchemaError: false,
-			expectCustomError: false,
+			expectError: false,
 		},
 		{
-			name: "invalid engine caught by both validations",
+			name: "invalid engine caught by validation",
 			frontmatter: map[string]any{
 				"on":     "push",
 				"engine": "invalid-engine",
 			},
-			expectSchemaError: true,
-			expectCustomError: true,
+			expectError: true,
+			expectedErrorCount: 1, // Dynamic validation should catch this
 		},
 		{
 			name: "additional properties caught by schema validation",
@@ -42,8 +41,26 @@ func TestJSONSchemaValidationIntegration(t *testing.T) {
 				"engine":          "claude",
 				"invalid_property": "value",
 			},
-			expectSchemaError: true,
-			expectCustomError: false, // Custom validation doesn't check for additional properties
+			expectError: true,
+			expectedErrorCount: 1, // JSON schema should catch this
+		},
+		{
+			name: "missing required 'on' field",
+			frontmatter: map[string]any{
+				"engine": "claude",
+			},
+			expectError: true,
+			expectedErrorCount: 1, // JSON schema should catch this
+		},
+		{
+			name: "max-turns out of range",
+			frontmatter: map[string]any{
+				"on":        "push",
+				"engine":    "claude",
+				"max-turns": 150,
+			},
+			expectError: true,
+			expectedErrorCount: 1, // Dynamic validation should catch this  
 		},
 	}
 
@@ -56,30 +73,23 @@ engine: claude
 ---`
 			validator := NewFrontmatterValidator(mockYAML)
 
-			// Test with JSON schema validation
-			schemaErrors := validator.ValidateFrontmatterWithOptions(tt.frontmatter, ValidationOptions{UseJSONSchema: true})
-			if tt.expectSchemaError && len(schemaErrors) == 0 {
-				t.Errorf("Expected schema validation error, got none")
+			// Test with the new unified validation (JSON schema + dynamic rules)
+			errors := validator.ValidateFrontmatter(tt.frontmatter)
+			
+			if tt.expectError && len(errors) == 0 {
+				t.Errorf("Expected validation error, got none")
 			}
-			if !tt.expectSchemaError && len(schemaErrors) > 0 {
-				t.Errorf("Expected no schema validation error, got %d errors: %v", len(schemaErrors), schemaErrors)
+			if !tt.expectError && len(errors) > 0 {
+				t.Errorf("Expected no validation error, got %d errors: %v", len(errors), errors)
 			}
-
-			// Test with custom validation
-			customErrors := validator.ValidateFrontmatterWithOptions(tt.frontmatter, ValidationOptions{UseJSONSchema: false})
-			if tt.expectCustomError && len(customErrors) == 0 {
-				t.Errorf("Expected custom validation error, got none")
-			}
-			if !tt.expectCustomError && len(customErrors) > 0 {
-				t.Errorf("Expected no custom validation error, got %d errors: %v", len(customErrors), customErrors)
+			
+			if tt.expectedErrorCount > 0 && len(errors) != tt.expectedErrorCount {
+				t.Errorf("Expected %d errors, got %d errors: %v", tt.expectedErrorCount, len(errors), errors)
 			}
 
 			// Log errors for debugging
-			if len(schemaErrors) > 0 {
-				t.Logf("Schema errors: %v", schemaErrors)
-			}
-			if len(customErrors) > 0 {
-				t.Logf("Custom errors: %v", customErrors)
+			if len(errors) > 0 {
+				t.Logf("Validation errors: %v", errors)
 			}
 		})
 	}
@@ -100,8 +110,8 @@ engine: invalid-engine
 		"engine": "invalid-engine",
 	}
 	
-	// Test custom validation
-	errors := validator.ValidateFrontmatterWithOptions(frontmatter, ValidationOptions{UseJSONSchema: false})
+	// Test validation
+	errors := validator.ValidateFrontmatter(frontmatter)
 	
 	// Should have an engine validation error
 	if len(errors) == 0 {

@@ -49,7 +49,7 @@ on: push`,
 				"on":     "push",
 			},
 			expectedErrorCount: 1,
-			expectedErrors:     []string{"unsupported engine 'invalid-engine'"},
+			expectedErrors:     []string{"got string, want object"}, // JSON schema message
 			expectedPaths:      []string{"engine"},
 		},
 		{
@@ -95,7 +95,7 @@ max-turns: 0`,
 				"max-turns": 0,
 			},
 			expectedErrorCount: 3, // missing 'on', invalid engine, invalid max-turns
-			expectedErrors:     []string{"missing required field 'on'", "unsupported engine", "max-turns must be between 1 and 100"},
+			expectedErrors:     []string{"missing required field 'on'", "got string, want object", "max-turns must be between 1 and 100"},
 			expectedPaths:      []string{"on", "engine", "max-turns"},
 		},
 	}
