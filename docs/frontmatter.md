@@ -248,6 +248,8 @@ steps:
       node-version: '18'
 ```
 
+If no custom steps are specified, a default step to checkout the repository is added automatically.
+
 ## Cache Configuration (`cache:`)
 
 Cache configuration using standard GitHub Actions `actions/cache` syntax:
