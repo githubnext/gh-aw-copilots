@@ -28,7 +28,7 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 
 ## Trigger Events (`on:`)
 
-Standard GitHub Actions `on:` trigger section:
+The `on:` section uses standard GitHub Actions syntax to define workflow triggers. Here are some common examples:
 
 ```yaml
 on:
@@ -56,7 +56,7 @@ on:
 
 ## Permissions (`permissions:`)
 
-Standard GitHub Actions permissions syntax. See [GitHub Actions permissions documentation](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions).
+The `permissions:` section uses standard GitHub Actions permissions syntax to specify the permissions relevant to the agentic (natural language) part of the execution of the workflow. See [GitHub Actions permissions documentation](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions).
 
 ```yaml
 # Specific permissions
@@ -185,6 +185,7 @@ See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and cont
 
 ## Run Configuration (`run-name:`, `runs-on:`, `timeout_minutes:`)
 
+Standard GitHub Actions properties:
 ```yaml
 run-name: "Custom workflow run name"  # Defaults to workflow name
 runs-on: ubuntu-latest               # Defaults to ubuntu-latest
