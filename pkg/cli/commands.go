@@ -30,8 +30,6 @@ var (
 	version = "dev"
 )
 
-
-
 //go:embed templates/instructions.md
 var copilotInstructionsTemplate string
 
