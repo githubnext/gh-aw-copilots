@@ -17,7 +17,7 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 - `if`: Conditional execution of the workflow
 - `steps`: Custom steps for the job
 
-**Agentic-Specific Properties:**
+**Properties specific to GitHub Agentic Workflows:**
 - `engine`: AI engine configuration (claude/codex)
 - `tools`: Available tools and MCP servers for the AI engine  
 - `stop-time`: Deadline when workflow should stop running (absolute or relative time)
