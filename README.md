@@ -70,12 +70,6 @@ Analyze issue #${{ github.event.issue.number }} and help with triage:
 Keep responses concise and helpful.
 ```
 
-> **💡 Learn more**: For complete workflow configuration details, see the [Documentation](docs/index.md)
-
-> **📚 Workflow commands**: See [Commands Documentation](docs/commands.md) for complete workflow management commands including `list`, `status`, `enable`, `disable`, and more.
-
-> **🤖 Teach AI** how write agentic workflows with [custom instructions](docs/vscode.md#copilot-instructions).
-
 ## 📂 Available Demonstrator Workflows from "[The Agentics](https://github.com/githubnext/agentics?tab=readme-ov-file#-the-agentics)"
 
 ### Research & Planning Workflows
@@ -142,9 +136,15 @@ gh aw compile
 
 You will see the changes reflected in the `.lock.yml` file, which is the actual workflow that will run on GitHub Actions. You should commit changes to both files to your repository.
 
-## Security of Agentic Workflows
+### Security of Agentic Workflows
 
 Security is a key consideration when using agentic workflows. Please see the [Security Notes](docs/security-notes.md) for guidelines related to workflow security and handling untrusted inputs.
+
+> **💡 Learn more**: For complete workflow configuration details, see the [Documentation](docs/index.md)
+
+> **📚 Workflow commands**: See [Commands Documentation](docs/commands.md) for complete workflow management commands including `list`, `status`, `enable`, `disable`, and more.
+
+> **🤖 Teach AI** how write agentic workflows with [custom instructions](docs/vscode.md#copilot-instructions).
 
 ## 💬 Share Feedback
 
