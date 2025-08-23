@@ -96,12 +96,14 @@ stop-time: +7d
 
 will mean the agentic workflow no longer operates 7 days after time of compilation.
 
-#### Limit workflow runs by `max-turns:`
+#### Limit workflow runs by `engine.max-turns`
 
-Use `max-turns:` to limit the number of chat iterations per run. This prevents runaway loops and excessive resource consumption. For example:
+Use `max-turns` within the engine configuration to limit the number of chat iterations per run. This prevents runaway loops and excessive resource consumption. For example:
 
 ```yaml
-max-turns: 5
+engine:
+  id: claude
+  max-turns: 5
 ```
 
 This limits the workflow to a maximum of 5 interactions with the AI engine per run.

@@ -21,7 +21,6 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 - `engine`: AI engine configuration (claude/codex)
 - `tools`: Available tools and MCP servers for the AI engine  
 - `stop-time`: Deadline when workflow should stop running (absolute or relative time)
-- `max-turns`: Maximum number of chat iterations per run
 - `alias`: Alias name for the workflow
 - `ai-reaction`: Emoji reaction to add/remove on triggering GitHub item
 - `cache`: Cache configuration for workflow dependencies
@@ -175,12 +174,14 @@ engine:
   id: claude                        # Required: engine identifier
   version: beta                     # Optional: version of the action
   model: claude-3-5-sonnet-20241022 # Optional: specific LLM model
+  max-turns: 5                      # Optional: maximum chat iterations per run
 ```
 
 **Fields:**
 - **`id`** (required): Engine identifier (`claude`, `codex`)
 - **`version`** (optional): Action version (`beta`, `stable`)
 - **`model`** (optional): Specific LLM model to use
+- **`max-turns`** (optional): Maximum number of chat iterations per run
 
 **Model Defaults:**
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)
@@ -188,12 +189,14 @@ engine:
 
 ## Cost Control Options
 
-### Maximum Turns (`max-turns:`)
+### Maximum Turns (engine.max-turns)
 
-Limit the number of chat iterations within a single agentic run:
+Limit the number of chat iterations within a single agentic run by specifying `max-turns` inside the engine configuration:
 
 ```yaml
-max-turns: 5
+engine:
+  id: claude
+  max-turns: 5
 ```
 
 **Behavior:**
@@ -201,6 +204,8 @@ max-turns: 5
 2. Engine stops iterating when the turn limit is reached
 3. Helps prevent runaway chat loops and control costs
 4. Only applies to engines that support turn limiting (currently Claude)
+
+**Note:** Previously specified as a top-level `max-turns:` field, now moved under `engine:` configuration.
 
 ### Stop Time (`stop-time:`)
 
