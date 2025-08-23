@@ -173,7 +173,15 @@ ai-reaction: "eyes"
 - `rocket` (🚀)
 - `eyes` (👀)
 
-**Note**: Using this feature results in the addition of ".github/actions/reaction/action.yml" file to the repository when the workflow is compiled.
+**Note**: Using this feature results in the addition of `.github/actions/reaction/action.yml` file to the repository when the workflow is compiled.
+
+## Output Configuration (`output:`)
+
+See [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
+
+## Alias Triggers and Context Text
+
+See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
 
 ## Standard GitHub Actions Properties
 
@@ -226,6 +234,8 @@ env:
 
 ### Conditional Execution
 
+Standard GitHub Actions `if:` syntax:
+
 ```yaml
 if: github.event_name == 'push'
 ```
@@ -243,9 +253,9 @@ steps:
       node-version: '18'
 ```
 
-## Cache Configuration (`cache:`)
+### Cache Configuration (`cache:`)
 
-Cache configuration using GitHub Actions `actions/cache` syntax:
+Cache configuration using standard GitHub Actions `actions/cache` syntax:
 
 ### Single Cache
 ```yaml
@@ -271,22 +281,6 @@ cache:
       - build-cache-
     fail-on-cache-miss: false
 ```
-
-**Supported Parameters:**
-- `key:` - Cache key (required)
-- `path:` - Files/directories to cache (required, string or array)
-- `restore-keys:` - Fallback keys (string or array)
-- `upload-chunk-size:` - Chunk size for large files (integer)
-- `fail-on-cache-miss:` - Fail if cache not found (boolean)
-- `lookup-only:` - Only check cache existence (boolean)
-
-## Output Configuration (`output:`)
-
-See [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
-
-## Alias Triggers and Context Text
-
-See [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
 
 ## Related Documentation
 
