@@ -201,7 +201,22 @@ engine:
 ---
 
 # Zero Max Turns`,
-			expectError: false, // Zero should be valid (might mean unlimited)
+			expectError: true, // Zero is now invalid due to schema validation (minimum: 1)
+		},
+		{
+			name: "negative max-turns",
+			content: `---
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+engine:
+  id: claude
+  max-turns: -5
+---
+
+# Negative Max Turns`,
+			expectError: true, // Negative is now invalid due to schema validation (minimum: 1)
 		},
 	}
 

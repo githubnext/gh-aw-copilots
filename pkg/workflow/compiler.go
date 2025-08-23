@@ -2582,7 +2582,7 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 				yaml.WriteString(fmt.Sprintf("          %s: %s\n", key, value))
 			}
 		}
-		
+
 		// Add max_turns if specified in engine config
 		if data.MaxTurns != "" {
 			yaml.WriteString(fmt.Sprintf("          max_turns: %s\n", data.MaxTurns))

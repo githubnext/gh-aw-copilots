@@ -101,15 +101,26 @@ func TestExtractEngineConfig(t *testing.T) {
 			expectedConfig:        &EngineConfig{ID: "claude", MaxTurns: &[]int{10}[0]},
 		},
 		{
-			name: "object format - with max-turns float64",
+			name: "object format - with zero max-turns (invalid)",
 			frontmatter: map[string]any{
 				"engine": map[string]any{
 					"id":        "claude",
-					"max-turns": float64(3),
+					"max-turns": 0,
 				},
 			},
 			expectedEngineSetting: "claude",
-			expectedConfig:        &EngineConfig{ID: "claude", MaxTurns: &[]int{3}[0]},
+			expectedConfig:        &EngineConfig{ID: "claude"}, // MaxTurns should be nil for invalid values
+		},
+		{
+			name: "object format - with negative max-turns (invalid)",
+			frontmatter: map[string]any{
+				"engine": map[string]any{
+					"id":        "claude",
+					"max-turns": -1,
+				},
+			},
+			expectedEngineSetting: "claude",
+			expectedConfig:        &EngineConfig{ID: "claude"}, // MaxTurns should be nil for invalid values
 		},
 		{
 			name: "object format - complete with max-turns",
