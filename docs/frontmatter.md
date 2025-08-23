@@ -115,25 +115,9 @@ engine:
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)
 - **Codex**: Defaults to `o4-mini` when no model is specified
 
-## Cost Control Options
+## Stop Time (`stop-time:`)
 
-### Maximum Turns (`max-turns:`)
-
-Limit the number of chat iterations within a single agentic run:
-
-```yaml
-max-turns: 5
-```
-
-**Behavior:**
-1. Passes the limit to the AI engine (e.g., Claude Code action)
-2. Engine stops iterating when the turn limit is reached
-3. Helps prevent runaway chat loops and control costs
-4. Only applies to engines that support turn limiting (currently Claude)
-
-### Stop Time (`stop-time:`)
-
-Automatically disable workflow after a deadline:
+This is a cost-control option to automatically disable workflow triggering after a deadline:
 
 **Relative time delta (calculated from compilation time):**
 ```yaml
@@ -154,6 +138,20 @@ stop-time: "+25h"      # 25 hours from now
 - `m` - minutes
 
 Note that if you specify a relative time, it is calculated at the time of workflow compilation, not when the workflow runs. If you re-compile your workflow, e.g. after a change, the effective stop time will be reset.
+
+## Maximum Turns (`max-turns:`)
+
+This is a cost-control option to limit the number of chat iterations within a single agentic run:
+
+```yaml
+max-turns: 5
+```
+
+**Behavior:**
+1. Passes the limit to the AI engine (e.g., Claude Code action)
+2. Engine stops iterating when the turn limit is reached
+3. Helps prevent runaway chat loops and control costs
+4. Only applies to engines that support turn limiting (currently Claude)
 
 ## Visual Feedback (`ai-reaction:`)
 
