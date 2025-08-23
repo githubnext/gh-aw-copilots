@@ -77,7 +77,7 @@ If you specify any permission, unspecified ones are set to `none`.
 
 ## AI Engine (`engine:`)
 
-Specifies which AI engine to use. Defaults to `claude`.
+The `engine:` section specifies which AI engine to use to interpret the markdown section of the workflow, and controls options about how this execution proceeds. Defaults to `claude`.
 
 ```yaml
 engine: claude  # Default: Claude Code
