@@ -39,7 +39,7 @@ jobs:
 				StartLine:   6,
 				StartColumn: 14,
 				EndLine:     6,
-				EndColumn:   27,
+				EndColumn:   26,
 			},
 		},
 		{
@@ -66,9 +66,9 @@ jobs:
 			path: "on.push.branches[2]",
 			expectedSpan: SourceSpan{
 				StartLine:   3,
-				StartColumn: 26,
+				StartColumn: 31,
 				EndLine:     3,
-				EndColumn:   36,
+				EndColumn:   39,
 			},
 		},
 		{
@@ -80,10 +80,10 @@ jobs:
       - uses: actions/checkout@v2`,
 			path: "jobs.build",
 			expectedSpan: SourceSpan{
-				StartLine:   2,
-				StartColumn: 3,
+				StartLine:   3,
+				StartColumn: 12,
 				EndLine:     5,
-				EndColumn:   32,
+				EndColumn:   33,
 			},
 		},
 		{
@@ -97,8 +97,8 @@ name: Test`,
 			expectedSpan: SourceSpan{
 				StartLine:   1,
 				StartColumn: 14,
-				EndLine:     4,
-				EndColumn:   14,
+				EndLine:     3,
+				EndColumn:   13,
 			},
 		},
 		{
@@ -112,8 +112,8 @@ name: Test`,
 			expectedSpan: SourceSpan{
 				StartLine:   1,
 				StartColumn: 14,
-				EndLine:     4,
-				EndColumn:   19,
+				EndLine:     1,
+				EndColumn:   14,
 			},
 		},
 		{
@@ -169,7 +169,7 @@ on: push`,
 				StartLine:   5,
 				StartColumn: 15,
 				EndLine:     5,
-				EndColumn:   37,
+				EndColumn:   33,
 			},
 		},
 		{
@@ -188,7 +188,7 @@ jobs:
 				StartLine:   2,
 				StartColumn: 12,
 				EndLine:     2,
-				EndColumn:   25,
+				EndColumn:   24,
 			},
 		},
 		{
@@ -443,8 +443,8 @@ name: test`,
 			expectedSpan: SourceSpan{
 				StartLine:   1,
 				StartColumn: 14,
-				EndLine:     4,
-				EndColumn:   22,
+				EndLine:     3,
+				EndColumn:   21,
 			},
 		},
 		{
@@ -458,8 +458,8 @@ name: test`,
 			expectedSpan: SourceSpan{
 				StartLine:   1,
 				StartColumn: 14,
-				EndLine:     4,
-				EndColumn:   29,
+				EndLine:     1,
+				EndColumn:   14,
 			},
 		},
 		{

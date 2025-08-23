@@ -71,6 +71,8 @@ func LocateFrontmatterPath(frontmatterYAML, jsonPath string) (line int, column i
 func normalizeJSONPath(path string) []string {
 	// Remove leading $. if present
 	path = strings.TrimPrefix(path, "$.")
+	// Remove leading $ if present (just dollar)
+	path = strings.TrimPrefix(path, "$")
 	
 	// Handle empty path
 	if path == "" {
@@ -143,6 +145,9 @@ func navigateToObjectKey(node ast.Node, key string) (ast.Node, error) {
 			}
 		}
 		return nil, fmt.Errorf("key '%s' not found in mapping", key)
+	case *ast.AnchorNode:
+		// For anchor nodes, navigate to the actual value
+		return navigateToObjectKey(n.Value, key)
 	default:
 		return nil, fmt.Errorf("expected mapping node, got %T", node)
 	}
@@ -158,6 +163,9 @@ func navigateToArrayElement(node ast.Node, index int) (ast.Node, error) {
 			return nil, fmt.Errorf("array index %d out of range (length: %d)", index, len(n.Values))
 		}
 		return n.Values[index], nil
+	case *ast.AnchorNode:
+		// For anchor nodes, navigate to the actual value
+		return navigateToArrayElement(n.Value, index)
 	default:
 		return nil, fmt.Errorf("expected sequence node, got %T", node)
 	}
@@ -217,6 +225,9 @@ func calculateNodeSpan(node ast.Node) SourceSpan {
 		endLine, endColumn = calculateMappingNodeEnd(n, tok)
 	case *ast.SequenceNode:
 		endLine, endColumn = calculateSequenceNodeEnd(n, tok)
+	case *ast.AnchorNode:
+		// For anchor nodes, return the span of the anchor definition itself
+		endColumn = calculateStringNodeEnd(tok)
 	default:
 		// For other node types, use token value length
 		if tok.Value != "" {
@@ -242,24 +253,37 @@ func calculateStringNodeEnd(tok *token.Token) int {
 
 // calculateLiteralNodeEnd calculates end position for literal nodes (including multi-line)
 func calculateLiteralNodeEnd(node *ast.LiteralNode, tok *token.Token) (int, int) {
+	// For multi-line literals, we need to look at the original source structure
+	// The token points to the | or > indicator
 	if tok.Type == token.LiteralType && (strings.Contains(tok.Value, "|") || strings.Contains(tok.Value, ">")) {
-		// Multi-line literal - get the actual content
+		// This is a multi-line literal indicator
+		// For now, let's calculate based on the content lines
 		var content string
 		if node.Value != nil {
 			content = node.Value.Value
 		}
 		
-		// Count line breaks in the value
+		// Count actual newlines in the content to estimate span
 		lines := strings.Split(content, "\n")
+		// Remove empty trailing line if present (common in YAML literals)
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		
 		if len(lines) > 1 {
-			// Multi-line literal
+			// Multi-line literal spans from the indicator to the last content line
+			// Calculate approximate end line based on content lines
 			endLine := tok.Position.Line + len(lines) - 1
+			// For end column, use the length of the last line of content
 			endColumn := len(lines[len(lines)-1])
+			if endColumn == 0 {
+				endColumn = 1 // Minimum column
+			}
 			return endLine, endColumn
 		}
 	}
 	
-	// Single line literal
+	// Single line literal or other cases
 	endColumn := tok.Position.Column + len(tok.Value) - 1
 	return tok.Position.Line, endColumn
 }
