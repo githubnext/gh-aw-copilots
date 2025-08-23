@@ -47,21 +47,6 @@ Agentic workflows are powered by different AI engines:
 
 The engine interprets your natural language instructions and executes them using the tools and permissions you've configured.
 
-## 📂 Available Workflow Types
-
-### Research & Planning Workflows
-- **Weekly Research** — Automatically research and summarize industry trends
-- **Daily Team Status** — Generate status reports from repository activity
-- **Daily Plan** — Update planning issues and coordinate team efforts
-- **Issue Triage** — Automatically categorize and respond to new issues
-
-### Code Quality & Maintenance
-- **Daily Dependency Updater** — Keep dependencies current with automated PRs
-- **Documentation Updates** — Maintain docs in sync with code changes
-- **Test Coverage Improver** — Add meaningful tests to under-tested areas
-- **Performance Optimizer** — Analyze and improve code performance
-- **Accessibility Reviewer** — Ensure applications meet accessibility standards
-
 ### Continuous AI Patterns
 
 GitHub Agentic Workflows enable "Continuous AI" — the systematic application of AI to software collaboration:
@@ -71,6 +56,22 @@ GitHub Agentic Workflows enable "Continuous AI" — the systematic application o
 - **Continuous Triage** — Intelligent issue and PR management
 - **Continuous Research** — Stay current with industry developments
 - **Continuous Quality** — Automated code review and standards enforcement
+
+### 📂 Available Demonstrator Workflows from "[The Agentics](https://github.com/githubnext/agentics?tab=readme-ov-file#-the-agentics)"
+
+#### Research & Planning Workflows
+- [📚 Weekly Research](https://github.com/githubnext/agentics?tab=readme-ov-file#-weekly-research) - Collect research updates and industry trends
+- [👥 Daily Team Status](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-team-status) - Assess repository activity and create status reports
+- [📋 Daily Plan](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-plan) - Update planning issues for team coordination
+- [🏷️ Issue Triage](https://github.com/githubnext/agentics?tab=readme-ov-file#️-issue-triage) - Triage issues and pull requests
+
+#### Coding & Development Workflows
+- [📦 Daily Dependency Updater](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-dependency-updater) - Update dependencies and create pull requests
+- [📖 Regular Documentation Update](https://github.com/githubnext/agentics?tab=readme-ov-file#-regular-documentation-update) - Update documentation automatically
+- [🔍 Daily QA](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-qa) - Perform quality assurance tasks
+- [🧪 Daily Test Coverage Improver](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-test-coverage-improver) - Improve test coverage by adding meaningful tests to under-tested areas
+- [⚡ Daily Performance Improver](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-performance-improver) - Analyze and improve code performance through benchmarking and optimization
+- [🔍 Daily Accessibility Review](https://github.com/githubnext/agentics?tab=readme-ov-file#-daily-accessibility-review) - Review application accessibility
 
 ## Advanced Concepts
 
