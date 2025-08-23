@@ -2,9 +2,10 @@ package workflow
 
 // EngineConfig represents the parsed engine configuration
 type EngineConfig struct {
-	ID      string
-	Version string
-	Model   string
+	ID       string
+	Version  string
+	Model    string
+	MaxTurns *int
 }
 
 // extractEngineConfig extracts engine configuration from frontmatter, supporting both string and object formats
@@ -37,6 +38,30 @@ func (c *Compiler) extractEngineConfig(frontmatter map[string]any) (string, *Eng
 			if model, hasModel := engineObj["model"]; hasModel {
 				if modelStr, ok := model.(string); ok {
 					config.Model = modelStr
+				}
+			}
+
+			// Extract optional 'max-turns' field
+			if maxTurns, hasMaxTurns := engineObj["max-turns"]; hasMaxTurns {
+				// Handle different numeric types that YAML parsers might return
+				var maxTurnsInt int
+				var validMaxTurns bool
+				switch v := maxTurns.(type) {
+				case int:
+					maxTurnsInt = v
+					validMaxTurns = true
+				case int64:
+					maxTurnsInt = int(v)
+					validMaxTurns = true
+				case uint64:
+					maxTurnsInt = int(v)
+					validMaxTurns = true
+				case float64:
+					maxTurnsInt = int(v)
+					validMaxTurns = true
+				}
+				if validMaxTurns {
+					config.MaxTurns = &maxTurnsInt
 				}
 			}
 

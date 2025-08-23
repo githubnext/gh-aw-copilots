@@ -79,6 +79,52 @@ func TestExtractEngineConfig(t *testing.T) {
 			expectedConfig:        &EngineConfig{ID: "claude", Version: "beta", Model: "claude-3-5-sonnet-20241022"},
 		},
 		{
+			name: "object format - with max-turns integer",
+			frontmatter: map[string]any{
+				"engine": map[string]any{
+					"id":        "claude",
+					"max-turns": 5,
+				},
+			},
+			expectedEngineSetting: "claude",
+			expectedConfig:        &EngineConfig{ID: "claude", MaxTurns: &[]int{5}[0]},
+		},
+		{
+			name: "object format - with max-turns int64",
+			frontmatter: map[string]any{
+				"engine": map[string]any{
+					"id":        "claude",
+					"max-turns": int64(10),
+				},
+			},
+			expectedEngineSetting: "claude",
+			expectedConfig:        &EngineConfig{ID: "claude", MaxTurns: &[]int{10}[0]},
+		},
+		{
+			name: "object format - with max-turns float64",
+			frontmatter: map[string]any{
+				"engine": map[string]any{
+					"id":        "claude",
+					"max-turns": float64(3),
+				},
+			},
+			expectedEngineSetting: "claude",
+			expectedConfig:        &EngineConfig{ID: "claude", MaxTurns: &[]int{3}[0]},
+		},
+		{
+			name: "object format - complete with max-turns",
+			frontmatter: map[string]any{
+				"engine": map[string]any{
+					"id":        "claude",
+					"version":   "beta",
+					"model":     "claude-3-5-sonnet-20241022",
+					"max-turns": 8,
+				},
+			},
+			expectedEngineSetting: "claude",
+			expectedConfig:        &EngineConfig{ID: "claude", Version: "beta", Model: "claude-3-5-sonnet-20241022", MaxTurns: &[]int{8}[0]},
+		},
+		{
 			name: "object format - missing id",
 			frontmatter: map[string]any{
 				"engine": map[string]any{
@@ -119,6 +165,17 @@ func TestExtractEngineConfig(t *testing.T) {
 
 				if config.Model != test.expectedConfig.Model {
 					t.Errorf("Expected config.Model '%s', got '%s'", test.expectedConfig.Model, config.Model)
+				}
+
+				// Compare MaxTurns pointers
+				if test.expectedConfig.MaxTurns == nil {
+					if config.MaxTurns != nil {
+						t.Errorf("Expected config.MaxTurns to be nil, got %d", *config.MaxTurns)
+					}
+				} else if config.MaxTurns == nil {
+					t.Errorf("Expected config.MaxTurns to be %d, got nil", *test.expectedConfig.MaxTurns)
+				} else if *config.MaxTurns != *test.expectedConfig.MaxTurns {
+					t.Errorf("Expected config.MaxTurns %d, got %d", *test.expectedConfig.MaxTurns, *config.MaxTurns)
 				}
 			}
 		})
@@ -233,6 +290,17 @@ This is a test workflow.`,
 
 				if workflowData.EngineConfig.Model != test.expectedConfig.Model {
 					t.Errorf("Expected EngineConfig.Model '%s', got '%s'", test.expectedConfig.Model, workflowData.EngineConfig.Model)
+				}
+
+				// Compare MaxTurns pointers
+				if test.expectedConfig.MaxTurns == nil {
+					if workflowData.EngineConfig.MaxTurns != nil {
+						t.Errorf("Expected EngineConfig.MaxTurns to be nil, got %d", *workflowData.EngineConfig.MaxTurns)
+					}
+				} else if workflowData.EngineConfig.MaxTurns == nil {
+					t.Errorf("Expected EngineConfig.MaxTurns to be %d, got nil", *test.expectedConfig.MaxTurns)
+				} else if *workflowData.EngineConfig.MaxTurns != *test.expectedConfig.MaxTurns {
+					t.Errorf("Expected EngineConfig.MaxTurns %d, got %d", *test.expectedConfig.MaxTurns, *workflowData.EngineConfig.MaxTurns)
 				}
 			}
 		})

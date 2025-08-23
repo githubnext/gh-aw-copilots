@@ -52,7 +52,6 @@ func (e *ClaudeEngine) GetExecutionConfig(workflowName string, logFile string, e
 			"claude_env":        "|\n            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n            GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}",
 			"allowed_tools":     "", // Will be filled in during generation
 			"timeout_minutes":   "", // Will be filled in during generation
-			"max_turns":         "", // Will be filled in during generation
 		},
 		Environment: map[string]string{
 			"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}",
