@@ -40,7 +40,7 @@ You can explore other samples at [githubnext/agentics](https://github.com/github
 
 ## 📝 Agentic Workflow Example
 
-Here's what a simple agentic workflow looks like. This example automatically triages new issues:
+Let's run through what a simple agentic workflow looks like. This example automatically triages new issues:
 
 ```markdown
 ---
