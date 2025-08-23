@@ -710,133 +710,98 @@
       }
     },
     "tools": {
+      "type": "object",
       "description": "Tools configuration for the workflow",
-      "oneOf": [
-        {
-          "type": "object",
-          "description": "Object-based tools configuration",
-          "properties": {
-            "github": {
-              "description": "GitHub tools configuration",
-              "oneOf": [
-                {
-                  "type": "string",
-                  "description": "Simple github tool string"
+      "properties": {
+        "github": {
+          "description": "GitHub tools configuration",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Simple github tool string"
+            },
+            {
+              "type": "object",
+              "description": "GitHub tools object configuration",
+              "properties": {
+                "allowed": {
+                  "type": "array",
+                  "description": "List of allowed GitHub tools",
+                  "items": {
+                    "type": "string"
+                  }
                 },
-                {
-                  "type": "object",
-                  "description": "GitHub tools object configuration",
-                  "properties": {
-                    "allowed": {
+                "use_docker_mcp": {
+                  "type": "boolean",
+                  "description": "Whether to use Docker MCP for GitHub tools"
+                },
+                "docker_image_version": {
+                  "type": "string",
+                  "description": "Docker image version for GitHub MCP server"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "claude": {
+          "description": "Claude tools configuration",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Simple claude tool string"
+            },
+            {
+              "type": "object",
+              "description": "Claude tools object configuration",
+              "properties": {
+                "allowed": {
+                  "description": "Allowed Claude tools",
+                  "oneOf": [
+                    {
                       "type": "array",
-                      "description": "List of allowed GitHub tools",
                       "items": {
                         "type": "string"
                       }
                     },
-                    "use_docker_mcp": {
-                      "type": "boolean",
-                      "description": "Whether to use Docker MCP for GitHub tools"
-                    },
-                    "docker_image_version": {
-                      "type": "string",
-                      "description": "Docker image version for GitHub MCP server"
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              ]
-            },
-            "claude": {
-              "description": "Claude tools configuration",
-              "oneOf": [
-                {
-                  "type": "string",
-                  "description": "Simple claude tool string"
-                },
-                {
-                  "type": "object",
-                  "description": "Claude tools object configuration",
-                  "properties": {
-                    "allowed": {
-                      "description": "Allowed Claude tools",
-                      "oneOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
-                        },
-                        {
-                          "type": "object",
-                          "additionalProperties": {
-                            "oneOf": [
-                              {
-                                "type": "null"
-                              },
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      ]
+                        ]
+                      }
                     }
-                  },
-                  "additionalProperties": false
+                  ]
                 }
-              ]
+              },
+              "additionalProperties": false
             }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "description": "Custom tool configuration",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Simple tool string"
           },
-          "additionalProperties": {
-            "description": "Custom tool configuration",
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "Simple tool string"
-              },
-              {
-                "type": "object",
-                "description": "Custom tool object configuration",
-                "properties": {
-                  "mcp": {
-                    "description": "MCP server configuration",
-                    "additionalProperties": true
-                  },
-                  "allowed": {
-                    "type": "array",
-                    "description": "List of allowed tool functions",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
-        {
-          "type": "array",
-          "description": "Array-based tools configuration",
-          "items": {
+          {
             "type": "object",
-            "description": "Tool configuration object",
+            "description": "Custom tool object configuration",
             "properties": {
-              "name": {
-                "type": "string",
-                "description": "Tool name identifier"
-              },
-              "type": {
-                "type": "string",
-                "description": "Tool type"
-              },
-              "description": {
-                "type": "string",
-                "description": "Tool description"
+              "mcp": {
+                "description": "MCP server configuration",
+                "additionalProperties": true
               },
               "allowed": {
                 "type": "array",
@@ -846,17 +811,14 @@
                 }
               }
             },
-            "required": ["name"],
             "additionalProperties": false
           }
-        }
-      ]
+        ]
+      }
     },
     "max-turns": {
       "type": "integer",
-      "description": "Maximum number of chat iterations per run",
-      "minimum": 1,
-      "maximum": 100
+      "description": "Maximum number of chat iterations per run"
     },
     "stop-time": {
       "type": "string",
@@ -1068,6 +1030,5 @@
       "additionalProperties": false
     }
   },
-  "required": ["on"],
   "additionalProperties": false
 }
