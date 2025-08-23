@@ -24,7 +24,6 @@ describe('setup_agent_output.cjs', () => {
     
     // Make fs available globally for the evaluated script
     global.fs = fs;
-    global.crypto = require('crypto');
   });
 
   afterEach(() => {
@@ -40,7 +39,6 @@ describe('setup_agent_output.cjs', () => {
     
     // Clean up globals
     delete global.fs;
-    delete global.crypto;
   });
 
   describe('main function', () => {
