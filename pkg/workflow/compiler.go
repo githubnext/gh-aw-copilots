@@ -29,9 +29,6 @@ type FileTracker interface {
 	TrackCreated(filePath string)
 }
 
-//go:embed templates/compute_text_action.yaml
-var computeTextActionTemplate string
-
 //go:embed templates/reaction_action.yaml
 var reactionActionTemplate string
 
@@ -257,6 +254,22 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 				},
 				Type:    "error",
 				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
+			})
+			return errors.New(formattedErr)
+		}
+	}
+
+	// Write shared reaction action (only if ai-reaction is configured)
+	if workflowData.AIReaction != "" {
+		if err := c.writeReactionAction(markdownPath); err != nil {
+			formattedErr := console.FormatError(console.CompilerError{
+				Position: console.ErrorPosition{
+					File:   markdownPath,
+					Line:   1,
+					Column: 1,
+				},
+				Type:    "error",
+				Message: fmt.Sprintf("failed to write reaction action: %v", err),
 			})
 			return errors.New(formattedErr)
 		}
@@ -1605,20 +1618,20 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 	reactionCondition := buildReactionCondition()
 
 	var steps []string
+	
+	// Add checkout step to access shared actions
+	steps = append(steps, "      - uses: actions/checkout@v5\n")
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          sparse-checkout: .github\n")
+	steps = append(steps, "          fetch-depth: 1\n")
+	
 	steps = append(steps, fmt.Sprintf("      - name: Add %s reaction to the triggering item\n", data.AIReaction))
 	steps = append(steps, "        id: react\n")
-	steps = append(steps, "        uses: actions/github-script@v7\n")
-
-	// Add environment variables
-	steps = append(steps, "        env:\n")
-	steps = append(steps, fmt.Sprintf("          GITHUB_AW_REACTION: %s\n", data.AIReaction))
-
+	steps = append(steps, "        uses: ./.github/actions/reaction\n")
 	steps = append(steps, "        with:\n")
-	steps = append(steps, "          script: |\n")
-
-	// Add each line of the script with proper indentation
-	formattedScript := FormatJavaScriptForYAML(addReactionScript)
-	steps = append(steps, formattedScript...)
+	steps = append(steps, "          github-token: ${{ secrets.GITHUB_TOKEN }}\n")
+	steps = append(steps, "          mode: add\n")
+	steps = append(steps, fmt.Sprintf("          reaction: %s\n", data.AIReaction))
 
 	outputs := map[string]string{
 		"reaction_id": "${{ steps.react.outputs.reaction-id }}",
@@ -2085,6 +2098,11 @@ func (c *Compiler) writeComputeTextAction(markdownPath string) error {
 	WriteJavaScriptToYAML(&actionContent, computeTextScript)
 
 	return c.writeSharedAction(markdownPath, "compute-text", actionContent.String(), "compute-text")
+}
+
+// writeReactionAction writes the shared reaction action
+func (c *Compiler) writeReactionAction(markdownPath string) error {
+	return c.writeSharedAction(markdownPath, "reaction", reactionActionTemplate, "reaction")
 }
 
 // generateMainJobSteps generates the steps section for the main job
