@@ -32,6 +32,9 @@ type FileTracker interface {
 //go:embed templates/compute_text_action.yaml
 var computeTextActionTemplate string
 
+//go:embed templates/reaction_action.yaml
+var reactionActionTemplate string
+
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
 	verbose        bool
@@ -2061,7 +2064,27 @@ func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, con
 
 // writeComputeTextAction writes the shared compute-text action
 func (c *Compiler) writeComputeTextAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "compute-text", computeTextActionTemplate, "compute-text")
+	// Generate the action content with embedded JavaScript
+	var actionContent strings.Builder
+
+	actionContent.WriteString("name: \"Compute current body text\"\n")
+	actionContent.WriteString("description: \"Computes the current body text based on the GitHub event context\"\n")
+	actionContent.WriteString("outputs:\n")
+	actionContent.WriteString("  text:\n")
+	actionContent.WriteString("    description: \"The computed current body text based on event type\"\n")
+	actionContent.WriteString("runs:\n")
+	actionContent.WriteString("  using: \"composite\"\n")
+	actionContent.WriteString("  steps:\n")
+	actionContent.WriteString("    - name: Compute current body text\n")
+	actionContent.WriteString("      id: compute-text\n")
+	actionContent.WriteString("      uses: actions/github-script@v7\n")
+	actionContent.WriteString("      with:\n")
+	actionContent.WriteString("        script: |\n")
+
+	// Embed the JavaScript with proper indentation
+	WriteJavaScriptToYAML(&actionContent, computeTextScript)
+
+	return c.writeSharedAction(markdownPath, "compute-text", actionContent.String(), "compute-text")
 }
 
 // generateMainJobSteps generates the steps section for the main job
