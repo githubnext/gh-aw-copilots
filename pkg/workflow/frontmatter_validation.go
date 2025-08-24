@@ -46,7 +46,7 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 			Span:    nil,
 		}}
 	}
-	
+
 	return nil
 }
 
@@ -88,5 +88,3 @@ func ConvertValidationErrorsToCompilerErrors(
 
 	return compilerErrors
 }
-
-

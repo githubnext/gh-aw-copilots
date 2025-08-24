@@ -8,10 +8,10 @@ import (
 
 func TestFrontmatterValidator(t *testing.T) {
 	tests := []struct {
-		name               string
-		frontmatterYAML    string
-		frontmatter        map[string]any
-		shouldHaveError    bool // Simplified - just check if there should be any error
+		name            string
+		frontmatterYAML string
+		frontmatter     map[string]any
+		shouldHaveError bool // Simplified - just check if there should be any error
 	}{
 		{
 			name: "valid frontmatter",
@@ -133,5 +133,3 @@ func TestConvertValidationErrorsToCompilerErrors(t *testing.T) {
 		t.Error("Expected second error to not have span information")
 	}
 }
-
-

@@ -10,12 +10,12 @@ import (
 // for agentic workflow files with various validation errors.
 func TestAgenticWorkflowValidationSimplified(t *testing.T) {
 	testCases := []struct {
-		name           string
-		workflowYAML   string
+		name            string
+		workflowYAML    string
 		shouldHaveError bool
 	}{
 		{
-			name:        "valid_agentic_workflow",
+			name: "valid_agentic_workflow",
 			workflowYAML: `---
 engine: claude
 on: push
@@ -26,7 +26,7 @@ tools:
 			shouldHaveError: false,
 		},
 		{
-			name:        "invalid_engine_type",
+			name: "invalid_engine_type",
 			workflowYAML: `---
 engine: gpt-4
 on: push

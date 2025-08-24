@@ -196,7 +196,7 @@ max-turns: 0
 ---
 
 # Zero Max Turns`,
-			expectError: false, // JSON schema validation may not catch this
+			expectError: true, // JSON schema validation now catches this with minimum: 1
 		},
 	}
 

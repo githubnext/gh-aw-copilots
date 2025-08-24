@@ -7,9 +7,9 @@ import (
 // TestJSONSchemaValidationIntegration demonstrates that JSON schema validation is working
 func TestJSONSchemaValidationIntegration(t *testing.T) {
 	tests := []struct {
-		name                string
-		frontmatter         map[string]any
-		expectError         bool
+		name        string
+		frontmatter map[string]any
+		expectError bool
 	}{
 		{
 			name: "valid frontmatter passes validation",
@@ -35,8 +35,8 @@ func TestJSONSchemaValidationIntegration(t *testing.T) {
 		{
 			name: "additional properties caught by schema validation",
 			frontmatter: map[string]any{
-				"on":              "push",
-				"engine":          "claude",
+				"on":               "push",
+				"engine":           "claude",
 				"invalid_property": "value",
 			},
 			expectError: true,
@@ -54,7 +54,7 @@ engine: claude
 
 			// Test with JSON schema validation
 			errors := validator.ValidateFrontmatter(tt.frontmatter)
-			
+
 			if tt.expectError && len(errors) == 0 {
 				t.Errorf("Expected validation error, got none")
 			}
@@ -77,27 +77,27 @@ func TestEngineRegistryIntegration(t *testing.T) {
 on: push
 engine: invalid-engine
 ---`
-	
+
 	validator := NewFrontmatterValidator(mockYAML)
-	
+
 	frontmatter := map[string]any{
-		"on":     "push", 
+		"on":     "push",
 		"engine": "invalid-engine",
 	}
-	
+
 	// Test validation
 	errors := validator.ValidateFrontmatter(frontmatter)
-	
+
 	// Should have validation errors for invalid engine
 	if len(errors) == 0 {
 		t.Fatal("Expected validation errors for invalid engine")
 	}
-	
+
 	// Just check that validation catches invalid engines
 	hasError := len(errors) > 0
 	if !hasError {
 		t.Error("Expected validation to catch invalid engine")
 	}
-	
+
 	t.Logf("Validation errors: %v", errors)
 }
