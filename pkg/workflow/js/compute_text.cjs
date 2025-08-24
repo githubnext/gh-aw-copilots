@@ -135,23 +135,16 @@ async function main() {
   const { owner, repo } = context.repo;
 
   // Check if the actor has repository access (admin, maintain permissions)
-  try {
-    const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
-      owner: owner,
-      repo: repo,
-      username: actor
-    });
-    
-    const permission = repoPermission.data.permission;
-    console.log(`Repository permission level: ${permission}`);
-    
-    if (permission !== 'admin' && permission !== 'maintain') {
-      core.setOutput('text', '');
-      return;
-    }
-  } catch (repoError) {
-    const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
-    console.log(`Repository permission check failed: ${errorMessage}`);
+  const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+    owner: owner,
+    repo: repo,
+    username: actor
+  });
+  
+  const permission = repoPermission.data.permission;
+  console.log(`Repository permission level: ${permission}`);
+  
+  if (permission !== 'admin' && permission !== 'maintain') {
     core.setOutput('text', '');
     return;
   }
@@ -169,6 +162,15 @@ async function main() {
       
     case 'pull_request':
       // For pull requests: title + body
+      if (context.payload.pull_request) {
+        const title = context.payload.pull_request.title || '';
+        const body = context.payload.pull_request.body || '';
+        text = `${title}\n\n${body}`;
+      }
+      break;
+      
+    case 'pull_request_target':
+      // For pull request target events: title + body
       if (context.payload.pull_request) {
         const title = context.payload.pull_request.title || '';
         const body = context.payload.pull_request.body || '';

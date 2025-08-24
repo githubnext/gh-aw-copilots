@@ -200,6 +200,20 @@ describe('compute_text.cjs', () => {
       expect(mockCore.setOutput).toHaveBeenCalledWith('text', 'This is a comment');
     });
 
+    it('should extract text from pull request target payload', async () => {
+      mockContext.eventName = 'pull_request_target';
+      mockContext.payload = {
+        pull_request: {
+          title: 'Test PR Target',
+          body: 'PR target description'
+        }
+      };
+
+      await testMain();
+
+      expect(mockCore.setOutput).toHaveBeenCalledWith('text', 'Test PR Target\n\nPR target description');
+    });
+
     it('should extract text from pull request review comment payload', async () => {
       mockContext.eventName = 'pull_request_review_comment';
       mockContext.payload = {
@@ -239,24 +253,6 @@ describe('compute_text.cjs', () => {
       mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
         data: { permission: 'read' }
       });
-
-      mockContext.eventName = 'issues';
-      mockContext.payload = {
-        issue: {
-          title: 'Test Issue',
-          body: 'Issue description'
-        }
-      };
-
-      await testMain();
-
-      expect(mockCore.setOutput).toHaveBeenCalledWith('text', '');
-    });
-
-    it('should handle permission check errors', async () => {
-      mockGithub.rest.repos.getCollaboratorPermissionLevel.mockRejectedValue(
-        new Error('Permission check failed')
-      );
 
       mockContext.eventName = 'issues';
       mockContext.payload = {
