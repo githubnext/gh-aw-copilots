@@ -210,7 +210,7 @@ func TestStopTimeResolutionError(t *testing.T) {
 		{
 			name:        "invalid relative format",
 			stopTime:    "+invalid",
-			expectedErr: "invalid stop-time format",
+			expectedErr: "does not match pattern",
 		},
 		{
 			name:        "invalid absolute format",
