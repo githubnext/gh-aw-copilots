@@ -30,6 +30,9 @@ var setupAgentOutputScript string
 //go:embed js/check_team_member.cjs
 var checkTeamMemberScript string
 
+//go:embed js/add_reaction.cjs
+var addReactionScript string
+
 // FormatJavaScriptForYAML formats a JavaScript script with proper indentation for embedding in YAML
 func FormatJavaScriptForYAML(script string) []string {
 	var formattedLines []string
