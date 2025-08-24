@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"

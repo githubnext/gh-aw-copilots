@@ -15,9 +15,6 @@ var createIssueScript string
 //go:embed js/create_comment.cjs
 var createCommentScript string
 
-//go:embed js/compute_text.cjs
-var computeTextScript string
-
 //go:embed js/sanitize_output.cjs
 var sanitizeOutputScript string
 
