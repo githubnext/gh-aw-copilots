@@ -239,21 +239,8 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 		}
 	}
 
-	// Write shared compute-text action (only if needed for task job)
-	if workflowData.NeedsTextOutput {
-		if err := c.writeComputeTextAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
+	// Note: compute-text functionality is now inlined directly in the task job
+	// instead of using a shared action file
 
 	// Generate the YAML content
 	if c.verbose {
@@ -1572,11 +1559,17 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "          exit 1\n")
 	}
 
-	// Use shared compute-text action only if needed
+	// Use inlined compute-text script only if needed (no shared action)
 	if data.NeedsTextOutput {
 		steps = append(steps, "      - name: Compute current body text\n")
 		steps = append(steps, "        id: compute-text\n")
-		steps = append(steps, "        uses: ./.github/actions/compute-text\n")
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+
+		// Inline the JavaScript directly instead of using shared action
+		steps = append(steps, FormatJavaScriptForYAML(computeTextScript)...)
+
 		// Set up outputs
 		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
@@ -1993,91 +1986,6 @@ func getGitHubDockerImageVersion(githubTool any) string {
 		}
 	}
 	return githubDockerImageVersion
-}
-
-// writeSharedAction writes a shared action file, creating directories as needed and updating only if content differs
-func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, content string, actionName string) error {
-	// Get git root to write action relative to it, fallback to markdown directory for tests
-	gitRoot := filepath.Dir(markdownPath)
-	for {
-		if _, err := os.Stat(filepath.Join(gitRoot, ".git")); err == nil {
-			break
-		}
-		parent := filepath.Dir(gitRoot)
-		if parent == gitRoot {
-			// Reached filesystem root without finding .git - use markdown directory as fallback
-			gitRoot = filepath.Dir(markdownPath)
-			break
-		}
-		gitRoot = parent
-	}
-
-	actionsDir := filepath.Join(gitRoot, ".github", "actions", actionPath)
-	actionFile := filepath.Join(actionsDir, "action.yml")
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(actionsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create actions directory: %w", err)
-	}
-
-	// Write the action file if it doesn't exist or is different
-	if _, err := os.Stat(actionFile); os.IsNotExist(err) {
-		if c.verbose {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Creating shared %s action: %s", actionName, actionFile)))
-		}
-		if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write %s action: %w", actionName, err)
-		}
-		// Track the created file
-		if c.fileTracker != nil {
-			c.fileTracker.TrackCreated(actionFile)
-		}
-	} else {
-		// Check if the content is different and update if needed
-		existing, err := os.ReadFile(actionFile)
-		if err != nil {
-			return fmt.Errorf("failed to read existing action file: %w", err)
-		}
-		if string(existing) != content {
-			if c.verbose {
-				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Updating shared %s action: %s", actionName, actionFile)))
-			}
-			if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-				return fmt.Errorf("failed to update %s action: %w", actionName, err)
-			}
-			// Track the updated file
-			if c.fileTracker != nil {
-				c.fileTracker.TrackCreated(actionFile)
-			}
-		}
-	}
-
-	return nil
-}
-
-// writeComputeTextAction writes the shared compute-text action
-func (c *Compiler) writeComputeTextAction(markdownPath string) error {
-	// Generate the action content with embedded JavaScript
-	var actionContent strings.Builder
-
-	actionContent.WriteString("name: \"Compute current body text\"\n")
-	actionContent.WriteString("description: \"Computes the current body text based on the GitHub event context\"\n")
-	actionContent.WriteString("outputs:\n")
-	actionContent.WriteString("  text:\n")
-	actionContent.WriteString("    description: \"The computed current body text based on event type\"\n")
-	actionContent.WriteString("runs:\n")
-	actionContent.WriteString("  using: \"composite\"\n")
-	actionContent.WriteString("  steps:\n")
-	actionContent.WriteString("    - name: Compute current body text\n")
-	actionContent.WriteString("      id: compute-text\n")
-	actionContent.WriteString("      uses: actions/github-script@v7\n")
-	actionContent.WriteString("      with:\n")
-	actionContent.WriteString("        script: |\n")
-
-	// Embed the JavaScript with proper indentation
-	WriteJavaScriptToYAML(&actionContent, computeTextScript)
-
-	return c.writeSharedAction(markdownPath, "compute-text", actionContent.String(), "compute-text")
 }
 
 // generateMainJobSteps generates the steps section for the main job
