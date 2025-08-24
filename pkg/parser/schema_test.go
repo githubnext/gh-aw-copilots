@@ -470,6 +470,42 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			wantErr:     true,
 			errContains: "additional properties 'invalid_prop' not allowed",
 		},
+		{
+			name: "valid stop-time with relative time including months and weeks",
+			frontmatter: map[string]any{
+				"on":        "push",
+				"engine":    "claude",
+				"stop-time": "+1mo2w3d5h30m",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid stop-time with months only",
+			frontmatter: map[string]any{
+				"on":        "push",
+				"engine":    "claude",
+				"stop-time": "+2mo",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid stop-time with weeks only",
+			frontmatter: map[string]any{
+				"on":        "push",
+				"engine":    "claude",
+				"stop-time": "+3w",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid stop-time with complex time combination",
+			frontmatter: map[string]any{
+				"on":        "push",
+				"engine":    "claude",
+				"stop-time": "+1mo1w2d5h",
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

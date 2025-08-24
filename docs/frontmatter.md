@@ -123,7 +123,10 @@ This is a cost-control option to automatically disable workflow triggering after
 
 **Relative time delta (calculated from compilation time):**
 ```yaml
-stop-time: "+25h"      # 25 hours from now
+stop-time: "+25h"       # 25 hours from now
+stop-time: "+3w"        # 3 weeks from now  
+stop-time: "+2mo"       # 2 months from now
+stop-time: "+1mo2w3d"   # Complex: 1 month, 2 weeks, 3 days from now
 ```
 
 **Supported absolute date formats:**
@@ -135,6 +138,8 @@ stop-time: "+25h"      # 25 hours from now
 - ISO 8601: `2006-01-02T15:04:05Z`
 
 **Supported delta units:**
+- `mo` - months  
+- `w` - weeks
 - `d` - days
 - `h` - hours
 - `m` - minutes
