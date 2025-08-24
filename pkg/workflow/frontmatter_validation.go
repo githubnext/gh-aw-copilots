@@ -89,14 +89,4 @@ func ConvertValidationErrorsToCompilerErrors(
 	return compilerErrors
 }
 
-// generateHintForValidationError provides basic hints for validation errors
-func generateHintForValidationError(err FrontmatterValidationError) string {
-	// Simplified implementation - return empty hint
-	return ""
-}
 
-// isValidEngine checks if the engine name is supported
-func isValidEngine(engine string) bool {
-	registry := GetGlobalEngineRegistry()
-	return registry.IsValidEngine(engine)
-}
