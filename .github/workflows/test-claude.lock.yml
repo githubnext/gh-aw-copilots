@@ -21,23 +21,7 @@ concurrency:
 run-name: "Test Claude"
 
 jobs:
-  task:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      text: ${{ steps.compute-text.outputs.text }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          sparse-checkout: .github
-          fetch-depth: 1
-      - name: Compute current body text
-        id: compute-text
-        uses: ./.github/actions/compute-text
-
   add_reaction:
-    needs: task
     if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
     permissions:
@@ -141,7 +125,6 @@ jobs:
             await main();
 
   test-claude:
-    needs: task
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -228,9 +211,7 @@ jobs:
           
           **First, get the current time using the get_current_time tool to timestamp your analysis.**
           
-          **Important**: When analyzing the pull request content, use the text output from the context: "${{ needs.task.outputs.text }}"
-          
-          This will provide you with the sanitized text content from the GitHub event that triggered this workflow, which you can use as additional context for your analysis.
+          **Important**: When analyzing the pull request content, gather context directly from the GitHub API to understand what triggered this workflow.
           
           ### Analysis Tasks
           

@@ -48,9 +48,7 @@ You are a code review assistant powered by Claude. Your task is to analyze the c
 
 **First, get the current time using the get_current_time tool to timestamp your analysis.**
 
-**Important**: When analyzing the pull request content, use the text output from the context: "${{ needs.task.outputs.text }}"
-
-This will provide you with the sanitized text content from the GitHub event that triggered this workflow, which you can use as additional context for your analysis.
+**Important**: When analyzing the pull request content, gather context directly from the GitHub API to understand what triggered this workflow.
 
 ### Analysis Tasks
 
