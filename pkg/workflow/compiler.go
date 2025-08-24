@@ -29,12 +29,6 @@ type FileTracker interface {
 	TrackCreated(filePath string)
 }
 
-//go:embed templates/compute_text_action.yaml
-var computeTextActionTemplate string
-
-//go:embed templates/reaction_action.yaml
-var reactionActionTemplate string
-
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
 	verbose        bool
@@ -143,7 +137,6 @@ type WorkflowData struct {
 	AIReaction       string         // AI reaction type like "eyes", "heart", etc.
 	Jobs             map[string]any // custom job configurations with dependencies
 	Cache            string         // cache configuration
-	NeedsTextOutput  bool           // whether the workflow uses ${{ needs.task.outputs.text }}
 	Output           *OutputConfig  // output configuration for automatic output routes
 }
 
@@ -243,22 +236,6 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 		}
 		if workflowData.AIReaction != "" {
 			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("AI reaction configured: %s", workflowData.AIReaction)))
-		}
-	}
-
-	// Write shared compute-text action (only if needed for task job)
-	if workflowData.NeedsTextOutput {
-		if err := c.writeComputeTextAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
-			})
-			return errors.New(formattedErr)
 		}
 	}
 
@@ -566,9 +543,6 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Extracted workflow name: '%s'", workflowName)))
 	}
 
-	// Check if the markdown content uses the text output
-	needsTextOutput := c.detectTextOutputUsage(markdownContent)
-
 	// Build workflow data
 	workflowData := &WorkflowData{
 		Name:            workflowName,
@@ -576,7 +550,6 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		MarkdownContent: markdownContent,
 		AI:              engineSetting,
 		EngineConfig:    engineConfig,
-		NeedsTextOutput: needsTextOutput,
 	}
 
 	// Extract YAML sections from frontmatter - use direct frontmatter map extraction
@@ -1215,20 +1188,6 @@ func (c *Compiler) applyDefaultGitHubMCPTools(tools map[string]any) map[string]a
 	return tools
 }
 
-// detectTextOutputUsage checks if the markdown content uses ${{ needs.task.outputs.text }}
-func (c *Compiler) detectTextOutputUsage(markdownContent string) bool {
-	// Check for the specific GitHub Actions expression
-	hasUsage := strings.Contains(markdownContent, "${{ needs.task.outputs.text }}")
-	if c.verbose {
-		if hasUsage {
-			fmt.Println(console.FormatInfoMessage("Detected usage of task.outputs.text - compute-text step will be included"))
-		} else {
-			fmt.Println(console.FormatInfoMessage("No usage of task.outputs.text found - compute-text step will be skipped"))
-		}
-	}
-	return hasUsage
-}
-
 // computeAllowedTools computes the comma-separated list of allowed tools for Claude
 func (c *Compiler) computeAllowedTools(tools map[string]any) string {
 	var allowedTools []string
@@ -1436,9 +1395,8 @@ func (c *Compiler) generateYAML(data *WorkflowData) (string, error) {
 func (c *Compiler) isTaskJobNeeded(data *WorkflowData) bool {
 	// Task job is needed if:
 	// 1. Alias is configured (for team member checking)
-	// 2. Text output is needed (for compute-text action)
-	// 3. If condition is specified (to handle runtime conditions)
-	return data.Alias != "" || data.NeedsTextOutput || data.If != ""
+	// 2. If condition is specified (to handle runtime conditions)
+	return data.Alias != "" || data.If != ""
 }
 
 // buildJobs creates all jobs for the workflow and adds them to the job manager
@@ -1577,15 +1535,6 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "          echo \"❌ Access denied: Only team members can trigger alias workflows\"\n")
 		steps = append(steps, "          echo \"User ${{ github.actor }} is not a team member\"\n")
 		steps = append(steps, "          exit 1\n")
-	}
-
-	// Use shared compute-text action only if needed
-	if data.NeedsTextOutput {
-		steps = append(steps, "      - name: Compute current body text\n")
-		steps = append(steps, "        id: compute-text\n")
-		steps = append(steps, "        uses: ./.github/actions/compute-text\n")
-		// Set up outputs
-		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
 
 	job := &Job{
@@ -2000,91 +1949,6 @@ func getGitHubDockerImageVersion(githubTool any) string {
 		}
 	}
 	return githubDockerImageVersion
-}
-
-// writeSharedAction writes a shared action file, creating directories as needed and updating only if content differs
-func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, content string, actionName string) error {
-	// Get git root to write action relative to it, fallback to markdown directory for tests
-	gitRoot := filepath.Dir(markdownPath)
-	for {
-		if _, err := os.Stat(filepath.Join(gitRoot, ".git")); err == nil {
-			break
-		}
-		parent := filepath.Dir(gitRoot)
-		if parent == gitRoot {
-			// Reached filesystem root without finding .git - use markdown directory as fallback
-			gitRoot = filepath.Dir(markdownPath)
-			break
-		}
-		gitRoot = parent
-	}
-
-	actionsDir := filepath.Join(gitRoot, ".github", "actions", actionPath)
-	actionFile := filepath.Join(actionsDir, "action.yml")
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(actionsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create actions directory: %w", err)
-	}
-
-	// Write the action file if it doesn't exist or is different
-	if _, err := os.Stat(actionFile); os.IsNotExist(err) {
-		if c.verbose {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Creating shared %s action: %s", actionName, actionFile)))
-		}
-		if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write %s action: %w", actionName, err)
-		}
-		// Track the created file
-		if c.fileTracker != nil {
-			c.fileTracker.TrackCreated(actionFile)
-		}
-	} else {
-		// Check if the content is different and update if needed
-		existing, err := os.ReadFile(actionFile)
-		if err != nil {
-			return fmt.Errorf("failed to read existing action file: %w", err)
-		}
-		if string(existing) != content {
-			if c.verbose {
-				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Updating shared %s action: %s", actionName, actionFile)))
-			}
-			if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-				return fmt.Errorf("failed to update %s action: %w", actionName, err)
-			}
-			// Track the updated file
-			if c.fileTracker != nil {
-				c.fileTracker.TrackCreated(actionFile)
-			}
-		}
-	}
-
-	return nil
-}
-
-// writeComputeTextAction writes the shared compute-text action
-func (c *Compiler) writeComputeTextAction(markdownPath string) error {
-	// Generate the action content with embedded JavaScript
-	var actionContent strings.Builder
-
-	actionContent.WriteString("name: \"Compute current body text\"\n")
-	actionContent.WriteString("description: \"Computes the current body text based on the GitHub event context\"\n")
-	actionContent.WriteString("outputs:\n")
-	actionContent.WriteString("  text:\n")
-	actionContent.WriteString("    description: \"The computed current body text based on event type\"\n")
-	actionContent.WriteString("runs:\n")
-	actionContent.WriteString("  using: \"composite\"\n")
-	actionContent.WriteString("  steps:\n")
-	actionContent.WriteString("    - name: Compute current body text\n")
-	actionContent.WriteString("      id: compute-text\n")
-	actionContent.WriteString("      uses: actions/github-script@v7\n")
-	actionContent.WriteString("      with:\n")
-	actionContent.WriteString("        script: |\n")
-
-	// Embed the JavaScript with proper indentation
-	WriteJavaScriptToYAML(&actionContent, computeTextScript)
-
-	return c.writeSharedAction(markdownPath, "compute-text", actionContent.String(), "compute-text")
 }
 
 // generateMainJobSteps generates the steps section for the main job
