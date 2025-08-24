@@ -1360,3 +1360,117 @@ func TestCalculateTimeRemaining(t *testing.T) {
 		}
 	})
 }
+
+// TestCleanupOrphanedIncludesCommand tests the new CleanupOrphanedIncludes command
+func TestCleanupOrphanedIncludesCommand(t *testing.T) {
+	// Create a temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "test-cleanup-command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create .github/workflows directory
+	workflowsDir := filepath.Join(tmpDir, ".github", "workflows")
+	if err := os.MkdirAll(workflowsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create shared subdirectory
+	sharedDir := filepath.Join(workflowsDir, "shared")
+	if err := os.MkdirAll(sharedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a workflow file that uses some shared templates
+	workflow := `---
+on:
+  workflow_dispatch:
+---
+
+# Test Workflow
+
+@include shared/common.md
+
+This workflow uses a shared template.
+`
+	if err := os.WriteFile(filepath.Join(workflowsDir, "test-workflow.md"), []byte(workflow), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create shared template files
+	includeFiles := map[string]string{
+		"shared/common.md": `---
+tools:
+  github:
+    allowed: []
+---
+
+# Common Template
+This is a shared template.
+`,
+		"shared/unused.md": `---
+tools:
+  github:
+    allowed: []
+---
+
+# Unused Template  
+This template is not used by any workflow.
+`,
+	}
+
+	for name, content := range includeFiles {
+		if err := os.WriteFile(filepath.Join(workflowsDir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Change to the temporary directory to simulate the git root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Logf("Warning: Failed to restore working directory: %v", err)
+		}
+	}()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test preview mode - should show unused.md as orphaned
+	err = CleanupOrphanedIncludes(true, false)
+	if err != nil {
+		t.Errorf("CleanupOrphanedIncludes preview should not fail: %v", err)
+	}
+
+	// Verify unused.md still exists after preview
+	if _, err := os.Stat(filepath.Join(workflowsDir, "shared/unused.md")); os.IsNotExist(err) {
+		t.Error("Preview mode should not remove files")
+	}
+
+	// Test actual cleanup - should remove unused.md
+	err = CleanupOrphanedIncludes(false, false)
+	if err != nil {
+		t.Errorf("CleanupOrphanedIncludes should not fail: %v", err)
+	}
+
+	// Verify unused.md was removed
+	if _, err := os.Stat(filepath.Join(workflowsDir, "shared/unused.md")); !os.IsNotExist(err) {
+		t.Error("Unused shared template should have been removed")
+	}
+
+	// Verify common.md still exists (it's used by the workflow)
+	if _, err := os.Stat(filepath.Join(workflowsDir, "shared/common.md")); os.IsNotExist(err) {
+		t.Error("Used shared template should not have been removed")
+	}
+
+	// Test cleanup when no orphaned files exist
+	err = CleanupOrphanedIncludes(true, false)
+	if err != nil {
+		t.Errorf("CleanupOrphanedIncludes with no orphans should not fail: %v", err)
+	}
+}

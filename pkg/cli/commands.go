@@ -2768,6 +2768,36 @@ func findIncludesInContent(content, baseDir string, verbose bool) ([]string, err
 	return includes, scanner.Err()
 }
 
+// CleanupOrphanedIncludes removes orphaned shared templates that are no longer referenced by any workflow
+func CleanupOrphanedIncludes(preview bool, verbose bool) error {
+	if preview {
+		// Preview mode: show what would be removed without actually removing anything
+		orphanedIncludes, err := previewOrphanedIncludes([]string{}, verbose)
+		if err != nil {
+			return fmt.Errorf("failed to preview orphaned includes: %w", err)
+		}
+
+		if len(orphanedIncludes) == 0 {
+			fmt.Println(console.FormatSuccessMessage("No orphaned shared templates found"))
+			return nil
+		}
+
+		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found %d orphaned shared template(s):", len(orphanedIncludes))))
+		for _, include := range orphanedIncludes {
+			fmt.Printf("  %s\n", include)
+		}
+		fmt.Println(console.FormatWarningMessage("Use 'gh aw cleanup' without --preview to remove these files"))
+		return nil
+	}
+
+	// Actual cleanup mode
+	if err := cleanupOrphanedIncludes(verbose); err != nil {
+		return fmt.Errorf("failed to cleanup orphaned includes: %w", err)
+	}
+
+	return nil
+}
+
 // listPackageWorkflows lists workflows from installed packages
 func listPackageWorkflows(verbose bool) error {
 	// Check both local and global packages

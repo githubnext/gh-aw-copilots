@@ -282,6 +282,24 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var cleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Remove dangling shared workflow templates that are no longer used by any workflow",
+	Long: `Remove dangling shared workflow templates that are no longer used by any workflow.
+
+This command identifies shared templates (include files) in subdirectories like .github/workflows/agentics/shared/ 
+that are no longer referenced by any workflow files through @include directives and removes them.
+
+Use --preview to see what would be removed without actually removing anything.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		preview, _ := cmd.Flags().GetBool("preview")
+		if err := cli.CleanupOrphanedIncludes(preview, verbose); err != nil {
+			fmt.Fprintln(os.Stderr, console.FormatErrorMessage(err.Error()))
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	// Add global verbose flag to root command
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output showing detailed information")
@@ -338,6 +356,9 @@ func init() {
 	// Add flags to remove command
 	removeCmd.Flags().Bool("keep-orphans", false, "Skip removal of orphaned include files that are no longer referenced by any workflow")
 
+	// Add flags to cleanup command
+	cleanupCmd.Flags().Bool("preview", false, "Preview what would be removed without actually removing anything")
+
 	// Add all commands to root
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(addCmd)
@@ -347,6 +368,7 @@ func init() {
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(cleanupCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(enableCmd)
 	rootCmd.AddCommand(disableCmd)
