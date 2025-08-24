@@ -121,6 +121,8 @@ Your comment should include:
 - Proper markdown formatting for readability
 - Clear structure with headers and bullet points
 
+**Current Context**: You have access to the current pull request content via: "${{ needs.task.outputs.text }}"
+
 ### Action Output: Create a Haiku
 
 **IMPORTANT**: After completing your PR analysis and posting your comment, please create a haiku about the changes you analyzed and write it to the action output. The haiku should capture the essence of the pull request in a creative and poetic way.
