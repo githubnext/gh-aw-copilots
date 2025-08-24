@@ -35,9 +35,6 @@ var reactionActionTemplate string
 //go:embed templates/compute_text_action.yaml
 var computeTextActionTemplate string
 
-//go:embed templates/check_team_member.yaml
-var checkTeamMemberTemplate string
-
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
 	verbose        bool
@@ -276,22 +273,6 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 				},
 				Type:    "error",
 				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
-
-	// Write shared check-team-member action (only for alias workflows)
-	if workflowData.Alias != "" {
-		if err := c.writeCheckTeamMemberAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write check-team-member action: %v", err),
 			})
 			return errors.New(formattedErr)
 		}
@@ -1594,8 +1575,18 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 
 		steps = append(steps, "      - name: Check team membership for alias workflow\n")
 		steps = append(steps, "        id: check-team-member\n")
-		steps = append(steps, "        uses: ./.github/actions/check-team-member\n")
 		steps = append(steps, fmt.Sprintf("        if: %s\n", aliasConditionStr))
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+
+		// Inline the JavaScript code with proper indentation
+		scriptLines := strings.Split(checkTeamMemberScript, "\n")
+		for _, line := range scriptLines {
+			if strings.TrimSpace(line) != "" {
+				steps = append(steps, fmt.Sprintf("            %s\n", line))
+			}
+		}
 		steps = append(steps, "      - name: Validate team membership\n")
 		steps = append(steps, fmt.Sprintf("        if: %s\n", validationConditionStr))
 		steps = append(steps, "        run: |\n")
@@ -2091,11 +2082,6 @@ func (c *Compiler) writeReactionAction(markdownPath string) error {
 // writeComputeTextAction writes the shared compute-text action
 func (c *Compiler) writeComputeTextAction(markdownPath string) error {
 	return c.writeSharedAction(markdownPath, "compute-text", computeTextActionTemplate, "compute-text")
-}
-
-// writeCheckTeamMemberAction writes the shared check-team-member action
-func (c *Compiler) writeCheckTeamMemberAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "check-team-member", checkTeamMemberTemplate, "check-team-member")
 }
 
 // generateMainJobSteps generates the steps section for the main job
