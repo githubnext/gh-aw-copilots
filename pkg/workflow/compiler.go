@@ -29,9 +29,6 @@ type FileTracker interface {
 	TrackCreated(filePath string)
 }
 
-//go:embed templates/reaction_action.yaml
-var reactionActionTemplate string
-
 //go:embed templates/compute_text_action.yaml
 var computeTextActionTemplate string
 
@@ -243,22 +240,6 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 		}
 		if workflowData.AIReaction != "" {
 			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("AI reaction configured: %s", workflowData.AIReaction)))
-		}
-	}
-
-	// Write shared reaction action only if ai-reaction is configured
-	if workflowData.AIReaction != "" {
-		if err := c.writeReactionAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write reaction action: %v", err),
-			})
-			return errors.New(formattedErr)
 		}
 	}
 
@@ -1621,16 +1602,21 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 	reactionCondition := buildReactionCondition()
 
 	var steps []string
-	steps = append(steps, "      - uses: actions/checkout@v5\n")
-	steps = append(steps, "        with:\n")
-	steps = append(steps, "          sparse-checkout: .github\n")
 	steps = append(steps, fmt.Sprintf("      - name: Add %s reaction to the triggering item\n", data.AIReaction))
 	steps = append(steps, "        id: react\n")
-	steps = append(steps, "        uses: ./.github/actions/reaction\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+	
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	steps = append(steps, "          GITHUB_AW_REACTION_MODE: add\n")
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_REACTION: %s\n", data.AIReaction))
+	
 	steps = append(steps, "        with:\n")
-	steps = append(steps, "          github-token: ${{ secrets.GITHUB_TOKEN }}\n")
-	steps = append(steps, "          mode: add\n")
-	steps = append(steps, fmt.Sprintf("          reaction: %s\n", data.AIReaction))
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	formattedScript := FormatJavaScriptForYAML(addReactionScript)
+	steps = append(steps, formattedScript...)
 
 	outputs := map[string]string{
 		"reaction_id": "${{ steps.react.outputs.reaction-id }}",
@@ -2072,11 +2058,6 @@ func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, con
 	}
 
 	return nil
-}
-
-// writeReactionAction writes the shared reaction action if ai-reaction is used
-func (c *Compiler) writeReactionAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "reaction", reactionActionTemplate, "reaction")
 }
 
 // writeComputeTextAction writes the shared compute-text action
