@@ -32,9 +32,6 @@ type FileTracker interface {
 //go:embed templates/reaction_action.yaml
 var reactionActionTemplate string
 
-//go:embed templates/compute_text_action.yaml
-var computeTextActionTemplate string
-
 //go:embed templates/check_team_member.yaml
 var checkTeamMemberTemplate string
 
@@ -260,22 +257,6 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 				},
 				Type:    "error",
 				Message: fmt.Sprintf("failed to write reaction action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
-
-	// Write shared compute-text action (only if needed for task job)
-	if workflowData.NeedsTextOutput {
-		if err := c.writeComputeTextAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
 			})
 			return errors.New(formattedErr)
 		}
@@ -1604,11 +1585,90 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "          exit 1\n")
 	}
 
-	// Use shared compute-text action only if needed
+	// Use inline compute-text JavaScript if needed
 	if data.NeedsTextOutput {
 		steps = append(steps, "      - name: Compute current body text\n")
 		steps = append(steps, "        id: compute-text\n")
-		steps = append(steps, "        uses: ./.github/actions/compute-text\n")
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+		steps = append(steps, "            let text = '';\n")
+		steps = append(steps, "\n")
+		steps = append(steps, "            const actor = context.actor;\n")
+		steps = append(steps, "            const { owner, repo } = context.repo;\n")
+		steps = append(steps, "\n")
+		steps = append(steps, "            // Check if the actor has repository access (admin, maintain permissions)\n")
+		steps = append(steps, "            try {\n")
+		steps = append(steps, "              const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({\n")
+		steps = append(steps, "                owner: owner,\n")
+		steps = append(steps, "                repo: repo,\n")
+		steps = append(steps, "                username: actor\n")
+		steps = append(steps, "              });\n")
+		steps = append(steps, "              \n")
+		steps = append(steps, "              const permission = repoPermission.data.permission;\n")
+		steps = append(steps, "              console.log(`Repository permission level: ${permission}`);\n")
+		steps = append(steps, "              \n")
+		steps = append(steps, "              if (permission !== 'admin' && permission !== 'maintain') {\n")
+		steps = append(steps, "                return;\n")
+		steps = append(steps, "              }\n")
+		steps = append(steps, "            } catch (repoError) {\n")
+		steps = append(steps, "              console.log(`Repository permission check failed: ${repoError.message}`);\n")
+		steps = append(steps, "              core.setOutput('text', '');\n")
+		steps = append(steps, "              return;\n")
+		steps = append(steps, "            }\n")
+		steps = append(steps, "            \n")
+		steps = append(steps, "            // Determine current body text based on event context\n")
+		steps = append(steps, "            switch (context.eventName) {\n")
+		steps = append(steps, "              case 'issues':\n")
+		steps = append(steps, "                // For issues: title + body\n")
+		steps = append(steps, "                if (context.payload.issue) {\n")
+		steps = append(steps, "                  const title = context.payload.issue.title || '';\n")
+		steps = append(steps, "                  const body = context.payload.issue.body || '';\n")
+		steps = append(steps, "                  text = `${title}\\n\\n${body}`;\n")
+		steps = append(steps, "                }\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "                \n")
+		steps = append(steps, "              case 'pull_request':\n")
+		steps = append(steps, "                // For pull requests: title + body\n")
+		steps = append(steps, "                if (context.payload.pull_request) {\n")
+		steps = append(steps, "                  const title = context.payload.pull_request.title || '';\n")
+		steps = append(steps, "                  const body = context.payload.pull_request.body || '';\n")
+		steps = append(steps, "                  text = `${title}\\n\\n${body}`;\n")
+		steps = append(steps, "                }\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "                \n")
+		steps = append(steps, "              case 'issue_comment':\n")
+		steps = append(steps, "                // For issue comments: comment body\n")
+		steps = append(steps, "                if (context.payload.comment) {\n")
+		steps = append(steps, "                  text = context.payload.comment.body || '';\n")
+		steps = append(steps, "                }\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "                \n")
+		steps = append(steps, "              case 'pull_request_review_comment':\n")
+		steps = append(steps, "                // For PR review comments: comment body\n")
+		steps = append(steps, "                if (context.payload.comment) {\n")
+		steps = append(steps, "                  text = context.payload.comment.body || '';\n")
+		steps = append(steps, "                }\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "                \n")
+		steps = append(steps, "              case 'pull_request_review':\n")
+		steps = append(steps, "                // For PR reviews: review body\n")
+		steps = append(steps, "                if (context.payload.review) {\n")
+		steps = append(steps, "                  text = context.payload.review.body || '';\n")
+		steps = append(steps, "                }\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "                \n")
+		steps = append(steps, "              default:\n")
+		steps = append(steps, "                // Default: empty text\n")
+		steps = append(steps, "                text = '';\n")
+		steps = append(steps, "                break;\n")
+		steps = append(steps, "            }\n")
+		steps = append(steps, "            \n")
+		steps = append(steps, "            // display in logs\n")
+		steps = append(steps, "            console.log(`text: ${text}`);\n")
+		steps = append(steps, "\n")
+		steps = append(steps, "            // Set the text as output\n")
+		steps = append(steps, "            core.setOutput('text', text);\n")
 		// Set up outputs
 		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
@@ -2086,11 +2146,6 @@ func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, con
 // writeReactionAction writes the shared reaction action if ai-reaction is used
 func (c *Compiler) writeReactionAction(markdownPath string) error {
 	return c.writeSharedAction(markdownPath, "reaction", reactionActionTemplate, "reaction")
-}
-
-// writeComputeTextAction writes the shared compute-text action
-func (c *Compiler) writeComputeTextAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "compute-text", computeTextActionTemplate, "compute-text")
 }
 
 // writeCheckTeamMemberAction writes the shared check-team-member action

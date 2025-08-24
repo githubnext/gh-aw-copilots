@@ -76,13 +76,13 @@ Create a report based on repository analysis.`
 			t.Fatalf("Failed to compile workflow with text: %v", err)
 		}
 
-		// Check that compute-text action was created
+		// Check that NO compute-text action directory was created (since we inline now)
 		actionPath := filepath.Join(tempDir, ".github", "actions", "compute-text", "action.yml")
-		if _, err := os.Stat(actionPath); os.IsNotExist(err) {
-			t.Error("Expected compute-text action to be created for workflow that uses text output")
+		if _, err := os.Stat(actionPath); !os.IsNotExist(err) {
+			t.Error("Expected compute-text action NOT to be created since JavaScript is now inlined")
 		}
 
-		// Check that the compiled YAML contains compute-text step
+		// Check that the compiled YAML contains inline compute-text step with github-script
 		lockPath := strings.TrimSuffix(workflowWithTextPath, ".md") + ".lock.yml"
 		lockContent, err := os.ReadFile(lockPath)
 		if err != nil {
@@ -95,6 +95,12 @@ Create a report based on repository analysis.`
 		}
 		if !strings.Contains(lockStr, "text: ${{ steps.compute-text.outputs.text }}") {
 			t.Error("Expected compiled workflow to contain text output")
+		}
+		if !strings.Contains(lockStr, "uses: actions/github-script@v7") {
+			t.Error("Expected compiled workflow to use github-script for inlined JavaScript")
+		}
+		if !strings.Contains(lockStr, "let text = '';") {
+			t.Error("Expected compiled workflow to contain inlined JavaScript code")
 		}
 	})
 
