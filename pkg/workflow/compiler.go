@@ -136,6 +136,7 @@ type WorkflowData struct {
 	AIReaction       string         // AI reaction type like "eyes", "heart", etc.
 	Jobs             map[string]any // custom job configurations with dependencies
 	Cache            string         // cache configuration
+	NeedsTextOutput  bool           // whether the workflow uses ${{ needs.task.outputs.text }}
 	Output           *OutputConfig  // output configuration for automatic output routes
 }
 
@@ -542,6 +543,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Extracted workflow name: '%s'", workflowName)))
 	}
 
+	// Check if the markdown content uses the text output
+	needsTextOutput := c.detectTextOutputUsage(markdownContent)
+
 	// Build workflow data
 	workflowData := &WorkflowData{
 		Name:            workflowName,
@@ -549,6 +553,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		MarkdownContent: markdownContent,
 		AI:              engineSetting,
 		EngineConfig:    engineConfig,
+		NeedsTextOutput: needsTextOutput,
 	}
 
 	// Extract YAML sections from frontmatter - use direct frontmatter map extraction
@@ -1187,6 +1192,20 @@ func (c *Compiler) applyDefaultGitHubMCPTools(tools map[string]any) map[string]a
 	return tools
 }
 
+// detectTextOutputUsage checks if the markdown content uses ${{ needs.task.outputs.text }}
+func (c *Compiler) detectTextOutputUsage(markdownContent string) bool {
+	// Check for the specific GitHub Actions expression
+	hasUsage := strings.Contains(markdownContent, "${{ needs.task.outputs.text }}")
+	if c.verbose {
+		if hasUsage {
+			fmt.Println(console.FormatInfoMessage("Detected usage of task.outputs.text - compute-text step will be included"))
+		} else {
+			fmt.Println(console.FormatInfoMessage("No usage of task.outputs.text found - compute-text step will be skipped"))
+		}
+	}
+	return hasUsage
+}
+
 // computeAllowedTools computes the comma-separated list of allowed tools for Claude
 func (c *Compiler) computeAllowedTools(tools map[string]any) string {
 	var allowedTools []string
@@ -1394,8 +1413,9 @@ func (c *Compiler) generateYAML(data *WorkflowData) (string, error) {
 func (c *Compiler) isTaskJobNeeded(data *WorkflowData) bool {
 	// Task job is needed if:
 	// 1. Alias is configured (for team member checking)
-	// 2. If condition is specified (to handle runtime conditions)
-	return data.Alias != "" || data.If != ""
+	// 2. Text output is needed (for compute-text functionality)
+	// 3. If condition is specified (to handle runtime conditions)
+	return data.Alias != "" || data.NeedsTextOutput || data.If != ""
 }
 
 // buildJobs creates all jobs for the workflow and adds them to the job manager
@@ -1534,6 +1554,26 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "          echo \"❌ Access denied: Only team members can trigger alias workflows\"\n")
 		steps = append(steps, "          echo \"User ${{ github.actor }} is not a team member\"\n")
 		steps = append(steps, "          exit 1\n")
+	}
+
+	// Add inline compute-text step if needed (instead of using external shared action)
+	if data.NeedsTextOutput {
+		steps = append(steps, "      - name: Compute current body text\n")
+		steps = append(steps, "        id: compute-text\n")
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+
+		// Inline the JavaScript code with proper indentation
+		scriptLines := strings.Split(computeTextScript, "\n")
+		for _, line := range scriptLines {
+			if strings.TrimSpace(line) != "" {
+				steps = append(steps, fmt.Sprintf("            %s\n", line))
+			}
+		}
+
+		// Set up outputs
+		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
 
 	job := &Job{
