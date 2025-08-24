@@ -42,9 +42,7 @@ describe('add_reaction.cjs', () => {
     vi.clearAllMocks();
     
     // Reset environment variables
-    delete process.env.GITHUB_AW_REACTION_MODE;
     delete process.env.GITHUB_AW_REACTION;
-    delete process.env.GITHUB_AW_REACTION_ID;
     
     // Reset context to default
     global.context = {
@@ -75,7 +73,6 @@ describe('add_reaction.cjs', () => {
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Reaction mode:', 'add');
       expect(consoleSpy).toHaveBeenCalledWith('Reaction type:', 'eyes');
       
       consoleSpy.mockRestore();
@@ -314,121 +311,7 @@ describe('add_reaction.cjs', () => {
     });
   });
 
-  describe('Remove reaction functionality', () => {
-    it('should remove reaction by ID when provided', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'remove';
-      process.env.GITHUB_AW_REACTION = 'heart';
-      process.env.GITHUB_AW_REACTION_ID = '123';
-      
-      mockGithub.request.mockResolvedValue({});
-
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(mockGithub.request).toHaveBeenCalledWith('DELETE /reactions/{reaction_id}', {
-        reaction_id: 123,
-        headers: { 'Accept': 'application/vnd.github+json' }
-      });
-      expect(consoleSpy).toHaveBeenCalledWith('Successfully removed reaction by ID: 123');
-      
-      consoleSpy.mockRestore();
-    });
-
-    it('should fallback to list when remove by ID fails', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'remove';
-      process.env.GITHUB_AW_REACTION = 'laugh';
-      process.env.GITHUB_AW_REACTION_ID = '456';
-      
-      // First call (delete by ID) fails
-      mockGithub.request.mockRejectedValueOnce(new Error('Not found'));
-      
-      // Second call (list) returns reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 789, content: 'laugh', user: { login: 'github-actions[bot]' } }
-        ]
-      });
-      
-      // Third call (delete by ID from list) succeeds
-      mockGithub.request.mockResolvedValueOnce({});
-
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to remove reaction by ID 456, falling back to list method...');
-      expect(consoleLogSpy).toHaveBeenCalledWith('Successfully removed reaction: laugh (id: 789)');
-      
-      consoleSpy.mockRestore();
-      consoleLogSpy.mockRestore();
-    });
-
-    it('should remove multiple matching reactions when listing', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'remove';
-      process.env.GITHUB_AW_REACTION = '+1';
-      
-      // List returns multiple matching reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 111, content: '+1', user: { login: 'github-actions[bot]' } },
-          { id: 222, content: '+1', user: { login: 'github-actions[bot]' } },
-          { id: 333, content: '+1', user: { login: 'other-user' } }
-        ]
-      });
-      
-      // Delete calls succeed
-      mockGithub.request.mockResolvedValue({});
-
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(mockGithub.request).toHaveBeenCalledWith('DELETE /reactions/{reaction_id}', {
-        reaction_id: 111,
-        headers: { 'Accept': 'application/vnd.github+json' }
-      });
-      expect(mockGithub.request).toHaveBeenCalledWith('DELETE /reactions/{reaction_id}', {
-        reaction_id: 222,
-        headers: { 'Accept': 'application/vnd.github+json' }
-      });
-      expect(consoleSpy).toHaveBeenCalledWith('Successfully removed reaction: +1 (id: 111)');
-      expect(consoleSpy).toHaveBeenCalledWith('Successfully removed reaction: +1 (id: 222)');
-      
-      consoleSpy.mockRestore();
-    });
-
-    it('should handle when no matching reactions are found', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'remove';
-      process.env.GITHUB_AW_REACTION = 'eyes';
-      
-      // List returns no matching reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 444, content: 'different', user: { login: 'github-actions[bot]' } }
-        ]
-      });
-
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(consoleSpy).toHaveBeenCalledWith('No matching reactions found to remove for: eyes');
-      
-      consoleSpy.mockRestore();
-    });
-  });
-
   describe('Error handling', () => {
-    it('should fail with invalid mode', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'invalid';
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(mockCore.setFailed).toHaveBeenCalledWith("Invalid mode: invalid. Must be 'add' or 'remove'");
-    });
-
     it('should handle API errors gracefully during add', async () => {
       // Mock the GitHub request to fail both on create and list
       mockGithub.request.mockRejectedValue(new Error('API Error'));
@@ -438,8 +321,8 @@ describe('add_reaction.cjs', () => {
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to process reaction:', 'API Error');
-      expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to process reaction: API Error');
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to add reaction:', 'API Error');
+      expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: API Error');
       
       consoleSpy.mockRestore();
       consoleWarnSpy.mockRestore();
@@ -454,8 +337,8 @@ describe('add_reaction.cjs', () => {
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to process reaction:', 'String error');
-      expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to process reaction: String error');
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to add reaction:', 'String error');
+      expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: String error');
       
       consoleSpy.mockRestore();
       consoleWarnSpy.mockRestore();
@@ -463,8 +346,7 @@ describe('add_reaction.cjs', () => {
   });
 
   describe('Output and logging', () => {
-    it('should log reaction mode and type', async () => {
-      process.env.GITHUB_AW_REACTION_MODE = 'add';
+    it('should log reaction type', async () => {
       process.env.GITHUB_AW_REACTION = 'rocket';
       
       mockGithub.request.mockResolvedValue({
@@ -475,7 +357,6 @@ describe('add_reaction.cjs', () => {
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Reaction mode:', 'add');
       expect(consoleSpy).toHaveBeenCalledWith('Reaction type:', 'rocket');
       
       consoleSpy.mockRestore();

@@ -1605,12 +1605,11 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 	steps = append(steps, fmt.Sprintf("      - name: Add %s reaction to the triggering item\n", data.AIReaction))
 	steps = append(steps, "        id: react\n")
 	steps = append(steps, "        uses: actions/github-script@v7\n")
-	
+
 	// Add environment variables
 	steps = append(steps, "        env:\n")
-	steps = append(steps, "          GITHUB_AW_REACTION_MODE: add\n")
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_REACTION: %s\n", data.AIReaction))
-	
+
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
 

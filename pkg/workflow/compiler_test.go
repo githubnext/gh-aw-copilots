@@ -3340,7 +3340,6 @@ Test workflow with ai-reaction.
 	// Check for reaction-specific content in generated YAML
 	expectedStrings := []string{
 		"add_reaction:",
-		"GITHUB_AW_REACTION_MODE: add",
 		"GITHUB_AW_REACTION: eyes",
 		"uses: actions/github-script@v7",
 	}

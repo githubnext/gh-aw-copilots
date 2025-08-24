@@ -1,10 +1,7 @@
 async function main() {
   // Read inputs from environment variables
-  const mode = process.env.GITHUB_AW_REACTION_MODE || 'add';
   const reaction = process.env.GITHUB_AW_REACTION || 'eyes';
-  const reactionIdIn = process.env.GITHUB_AW_REACTION_ID;
 
-  console.log('Reaction mode:', mode);
   console.log('Reaction type:', reaction);
 
   // Validate reaction type
@@ -67,19 +64,12 @@ async function main() {
 
     console.log('API endpoint:', endpoint);
 
-    if (mode === 'add') {
-      await addReaction(endpoint, reaction);
-    } else if (mode === 'remove') {
-      await removeReaction(endpoint, reaction, reactionIdIn || '');
-    } else {
-      core.setFailed(`Invalid mode: ${mode}. Must be 'add' or 'remove'`);
-      return;
-    }
+    await addReaction(endpoint, reaction);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Failed to process reaction:', errorMessage);
-    core.setFailed(`Failed to process reaction: ${errorMessage}`);
+    console.error('Failed to add reaction:', errorMessage);
+    core.setFailed(`Failed to add reaction: ${errorMessage}`);
   }
 }
 
@@ -149,69 +139,6 @@ async function fallbackToListReaction(endpoint, reaction) {
     console.warn(`Warning: could not list reactions: ${errorMessage}`);
     core.setOutput('reaction-id', '');
     // Rethrow the error so it can be caught by the main error handler
-    throw error;
-  }
-}
-
-/**
- * Remove a reaction from a GitHub issue, PR, or comment
- * @param {string} endpoint - The GitHub API endpoint to remove the reaction from
- * @param {string} reaction - The reaction type to remove
- * @param {string} reactionIdIn - Optional reaction ID for direct removal
- */
-async function removeReaction(endpoint, reaction, reactionIdIn) {
-  // Fast path: if we have the reaction ID, delete directly
-  if (reactionIdIn && reactionIdIn !== 'null' && reactionIdIn.trim() !== '') {
-    try {
-      await github.request('DELETE /reactions/{reaction_id}', {
-        reaction_id: parseInt(reactionIdIn, 10),
-        headers: {
-          'Accept': 'application/vnd.github+json'
-        }
-      });
-      console.log(`Successfully removed reaction by ID: ${reactionIdIn}`);
-      return;
-    } catch (error) {
-      console.warn(`Failed to remove reaction by ID ${reactionIdIn}, falling back to list method...`);
-    }
-  }
-
-  // Fallback: list reactions and delete the bot's matching reaction(s)
-  try {
-    const response = await github.request('GET ' + endpoint, {
-      headers: {
-        'Accept': 'application/vnd.github+json'
-      }
-    });
-
-    const reactions = response.data || [];
-    const botReactions = reactions.filter(/** @param {any} r */ r => 
-      r.content === reaction && 
-      r.user && 
-      r.user.login === 'github-actions[bot]'
-    );
-
-    for (const botReaction of botReactions) {
-      try {
-        await github.request('DELETE /reactions/{reaction_id}', {
-          reaction_id: botReaction.id,
-          headers: {
-            'Accept': 'application/vnd.github+json'
-          }
-        });
-        console.log(`Successfully removed reaction: ${reaction} (id: ${botReaction.id})`);
-      } catch (error) {
-        console.warn(`Failed to remove reaction ${botReaction.id}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (botReactions.length === 0) {
-      console.log(`No matching reactions found to remove for: ${reaction}`);
-    }
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`Failed to list reactions for removal: ${errorMessage}`);
     throw error;
   }
 }
