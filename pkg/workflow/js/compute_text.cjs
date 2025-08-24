@@ -150,7 +150,8 @@ async function main() {
       return;
     }
   } catch (repoError) {
-    console.log(`Repository permission check failed: ${repoError.message}`);
+    const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
+    console.log(`Repository permission check failed: ${errorMessage}`);
     core.setOutput('text', '');
     return;
   }

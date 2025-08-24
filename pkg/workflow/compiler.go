@@ -2080,7 +2080,7 @@ func (c *Compiler) writeReactionAction(markdownPath string) error {
 func (c *Compiler) writeComputeTextAction(markdownPath string) error {
 	// Generate the action content with embedded JavaScript
 	var actionContent strings.Builder
-	
+
 	actionContent.WriteString("name: \"Compute current body text\"\n")
 	actionContent.WriteString("description: \"Computes the current body text based on the GitHub event context\"\n")
 	actionContent.WriteString("outputs:\n")
@@ -2094,10 +2094,10 @@ func (c *Compiler) writeComputeTextAction(markdownPath string) error {
 	actionContent.WriteString("      uses: actions/github-script@v7\n")
 	actionContent.WriteString("      with:\n")
 	actionContent.WriteString("        script: |\n")
-	
+
 	// Embed the JavaScript with proper indentation
 	WriteJavaScriptToYAML(&actionContent, computeTextScript)
-	
+
 	return c.writeSharedAction(markdownPath, "compute-text", actionContent.String(), "compute-text")
 }
 
