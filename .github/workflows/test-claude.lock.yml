@@ -21,7 +21,23 @@ concurrency:
 run-name: "Test Claude"
 
 jobs:
+  task:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      text: ${{ steps.compute-text.outputs.text }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github
+          fetch-depth: 1
+      - name: Compute current body text
+        id: compute-text
+        uses: ./.github/actions/compute-text
+
   test-claude:
+    needs: task
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -105,6 +121,8 @@ jobs:
           ## Job Description
           
           You are a code review assistant powered by Claude. Your task is to analyze the changes in this pull request and provide a comprehensive summary.
+          
+          **Context**: The triggering event provided this context: "${{ needs.task.outputs.text }}"
           
           **First, get the current time using the get_current_time tool to timestamp your analysis.**
           

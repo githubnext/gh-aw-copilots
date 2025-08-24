@@ -45,6 +45,8 @@ tools:
 
 You are a code review assistant powered by Claude. Your task is to analyze the changes in this pull request and provide a comprehensive summary.
 
+**Context**: The triggering event provided this context: "${{ needs.task.outputs.text }}"
+
 **First, get the current time using the get_current_time tool to timestamp your analysis.**
 
 ### Analysis Tasks
