@@ -822,7 +822,7 @@
     },
     "stop-time": {
       "type": "string",
-      "pattern": "^(\\+\\d+(mo|w|d|h|m)(\\d+(mo|w|d|h|m))*|[^+].*|)$",
+      "pattern": "^(\\+\\d+(mo|w|d|h|m)(\\d+(mo|w|d|h|m))*|\\d{4}-\\d{1,2}-\\d{1,2}(T\\d{2}:\\d{2}:\\d{2}Z?|\\s+\\d{1,2}:\\d{1,2}(:\\d{1,2})?)?|\\d{1,2}/\\d{1,2}/\\d{4}(\\s+\\d{1,2}:\\d{1,2}(:\\d{1,2})?)?|[A-Za-z]{3,9}\\s+\\d{1,2}(st|nd|rd|th)?,?\\s+\\d{4}(\\s+\\d{1,2}:\\d{1,2}(:\\d{1,2})?)?|\\d{1,2}(st|nd|rd|th)?\\s+[A-Za-z]{3,9}\\s+\\d{4}(\\s+\\d{1,2}:\\d{1,2}(:\\d{1,2})?)?|)$",
       "description": "Time when workflow should stop running. Supports multiple formats: absolute dates (YYYY-MM-DD HH:MM:SS, June 1 2025, 1st June 2025, 06/01/2025, etc.) or relative time deltas (+25h, +3d, +1w, +2mo, +1mo2w3d5h30m). Relative time units: mo (months), w (weeks), d (days), h (hours), m (minutes)"
     },
     "alias": {

@@ -215,7 +215,7 @@ func TestStopTimeResolutionError(t *testing.T) {
 		{
 			name:        "invalid absolute format",
 			stopTime:    "not-a-date",
-			expectedErr: "invalid stop-time format",
+			expectedErr: "does not match pattern",
 		},
 		{
 			name:        "invalid month name",
