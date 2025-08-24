@@ -29,9 +29,6 @@ type FileTracker interface {
 	TrackCreated(filePath string)
 }
 
-//go:embed templates/compute_text_action.yaml
-var computeTextActionTemplate string
-
 //go:embed templates/reaction_action.yaml
 var reactionActionTemplate string
 
