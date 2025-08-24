@@ -352,7 +352,7 @@ This does NOT use ai-reaction.
 
 	// Remove the existing reaction action to test it's not created again
 	// (Note: Since reaction is now inline, this removal step is no longer needed)
-	
+
 	// Compile the workflow with tracking
 	if err := compileWorkflowWithTracking(workflowFileWithoutReaction, false, "", tracker2); err != nil {
 		t.Fatalf("Failed to compile workflow: %v", err)

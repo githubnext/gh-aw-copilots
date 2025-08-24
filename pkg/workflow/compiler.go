@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,9 +27,6 @@ const (
 type FileTracker interface {
 	TrackCreated(filePath string)
 }
-
-//go:embed templates/reaction_action.yaml
-var reactionActionTemplate string
 
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
