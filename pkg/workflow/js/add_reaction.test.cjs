@@ -237,74 +237,18 @@ describe('add_reaction.cjs', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should fallback to list when create response has no ID', async () => {
+    it('should handle response without ID', async () => {
       process.env.GITHUB_AW_REACTION = 'rocket';
       
-      // First call (create) returns no ID
-      mockGithub.request.mockResolvedValueOnce({
+      mockGithub.request.mockResolvedValue({
         data: { content: 'rocket' }
       });
-      
-      // Second call (list) returns reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 456, content: 'rocket', user: { login: 'github-actions[bot]' } }
-        ]
-      });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('Could not get reaction ID from create response, falling back to list...');
-      expect(consoleSpy).toHaveBeenCalledWith('Found existing reaction: rocket (id: 456)');
-      expect(mockCore.setOutput).toHaveBeenCalledWith('reaction-id', '456');
-      
-      consoleSpy.mockRestore();
-    });
-
-    it('should fallback to list when create fails', async () => {
-      process.env.GITHUB_AW_REACTION = 'hooray';
-      
-      // First call (create) fails
-      mockGithub.request.mockRejectedValueOnce(new Error('Reaction already exists'));
-      
-      // Second call (list) returns reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 789, content: 'hooray', user: { login: 'github-actions[bot]' } }
-        ]
-      });
-
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(consoleSpy).toHaveBeenCalledWith('Create reaction failed, trying to find existing reaction...');
-      expect(consoleSpy).toHaveBeenCalledWith('Found existing reaction: hooray (id: 789)');
-      expect(mockCore.setOutput).toHaveBeenCalledWith('reaction-id', '789');
-      
-      consoleSpy.mockRestore();
-    });
-
-    it('should warn when reaction is not found in list', async () => {
-      process.env.GITHUB_AW_REACTION = 'confused';
-      
-      // Create fails
-      mockGithub.request.mockRejectedValueOnce(new Error('Failed'));
-      
-      // List returns no matching reactions
-      mockGithub.request.mockResolvedValueOnce({
-        data: [
-          { id: 999, content: 'different', user: { login: 'other-user' } }
-        ]
-      });
-
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      await eval(`(async () => { ${addReactionScript} })()`);
-
-      expect(consoleSpy).toHaveBeenCalledWith('Warning: could not determine reaction id; cleanup will list/filter.');
+      expect(consoleSpy).toHaveBeenCalledWith('Successfully added reaction: rocket');
       expect(mockCore.setOutput).toHaveBeenCalledWith('reaction-id', '');
       
       consoleSpy.mockRestore();
@@ -312,12 +256,11 @@ describe('add_reaction.cjs', () => {
   });
 
   describe('Error handling', () => {
-    it('should handle API errors gracefully during add', async () => {
-      // Mock the GitHub request to fail both on create and list
+    it('should handle API errors gracefully', async () => {
+      // Mock the GitHub request to fail
       mockGithub.request.mockRejectedValue(new Error('API Error'));
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
@@ -325,15 +268,13 @@ describe('add_reaction.cjs', () => {
       expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: API Error');
       
       consoleSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
     });
 
-    it('should handle non-Error objects in catch block during add', async () => {
-      // Mock the GitHub request to fail both on create and list
+    it('should handle non-Error objects in catch block', async () => {
+      // Mock the GitHub request to fail with string error
       mockGithub.request.mockRejectedValue('String error');
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
@@ -341,7 +282,6 @@ describe('add_reaction.cjs', () => {
       expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: String error');
       
       consoleSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
     });
   });
 
