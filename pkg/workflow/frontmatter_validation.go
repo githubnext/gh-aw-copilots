@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/githubnext/gh-aw/pkg/console"
 	"github.com/githubnext/gh-aw/pkg/parser"
@@ -39,14 +40,131 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 	// Run JSON schema validation using the parser package
 	err := parser.ValidateMainWorkflowFrontmatterWithSchema(frontmatter)
 	if err != nil {
-		// Create a simple validation error from the JSON schema error
-		return []FrontmatterValidationError{{
-			Path:    "",
-			Message: err.Error(),
-			Span:    nil,
-		}}
+		// Parse JSON schema error to extract validation errors with paths
+		return v.parseJSONSchemaError(err)
 	}
 
+	return nil
+}
+
+// parseJSONSchemaError parses JSON schema validation errors and extracts path information
+func (v *FrontmatterValidator) parseJSONSchemaError(err error) []FrontmatterValidationError {
+	errorMsg := err.Error()
+	
+	// Extract path information from JSON schema error messages
+	// Example error format: "at '/engine': value must be one of 'claude', 'codex'"
+	paths := extractJSONPathsFromError(errorMsg)
+	
+	var validationErrors []FrontmatterValidationError
+	
+	if len(paths) > 0 {
+		// Create individual errors for each path found
+		for _, pathInfo := range paths {
+			span := v.getSourceSpanForPath(pathInfo.path)
+			validationErrors = append(validationErrors, FrontmatterValidationError{
+				Path:    pathInfo.path,
+				Message: pathInfo.message,
+				Span:    span,
+			})
+		}
+	} else {
+		// Fallback: create a single error without specific path
+		validationErrors = append(validationErrors, FrontmatterValidationError{
+			Path:    "",
+			Message: errorMsg,
+			Span:    nil,
+		})
+	}
+	
+	return validationErrors
+}
+
+// pathErrorInfo represents extracted path and message from JSON schema error
+type pathErrorInfo struct {
+	path    string
+	message string
+}
+
+// extractJSONPathsFromError extracts JSONPath and error message pairs from JSON schema errors
+func extractJSONPathsFromError(errorMsg string) []pathErrorInfo {
+	var pathErrors []pathErrorInfo
+	
+	// Parse the error message to extract individual path errors
+	// Look for patterns like "- at '/path': message"
+	lines := strings.Split(errorMsg, "\n")
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		
+		// Look for lines starting with "- at '/path':"
+		if strings.HasPrefix(line, "- at '") {
+			if endQuote := strings.Index(line[6:], "'"); endQuote != -1 {
+				path := line[6 : 6+endQuote]
+				
+				// Extract message after the path
+				messageStart := strings.Index(line, ": ")
+				if messageStart != -1 {
+					message := line[messageStart+2:]
+					
+					// Clean up the path (remove leading slash if present)
+					if strings.HasPrefix(path, "/") {
+						path = path[1:]
+					}
+					
+					pathErrors = append(pathErrors, pathErrorInfo{
+						path:    path,
+						message: message,
+					})
+				}
+			}
+		}
+	}
+	
+	// If no specific paths found, try to extract a general path from the error
+	if len(pathErrors) == 0 {
+		// Look for single path references like "at '/engine'"
+		if strings.Contains(errorMsg, "at '/") {
+			startIdx := strings.Index(errorMsg, "at '/") + 4
+			if endIdx := strings.Index(errorMsg[startIdx:], "'"); endIdx != -1 {
+				path := errorMsg[startIdx : startIdx+endIdx]
+				if strings.HasPrefix(path, "/") {
+					path = path[1:]
+				}
+				
+				pathErrors = append(pathErrors, pathErrorInfo{
+					path:    path,
+					message: errorMsg,
+				})
+			}
+		}
+	}
+	
+	return pathErrors
+}
+
+// getSourceSpanForPath attempts to get source span for a given JSONPath
+func (v *FrontmatterValidator) getSourceSpanForPath(jsonPath string) *parser.SourceSpan {
+	if v.locator == nil || jsonPath == "" {
+		return nil
+	}
+	
+	// Try the original path first
+	span, err := v.locator.LocatePathSpan(jsonPath)
+	if err == nil {
+		return &span
+	}
+	
+	// If the original path fails, try converting slash notation to dot notation
+	// JSON schema uses '/tools/github' but our locator expects 'tools.github'
+	if strings.Contains(jsonPath, "/") {
+		dotPath := strings.ReplaceAll(jsonPath, "/", ".")
+		span, err := v.locator.LocatePathSpan(dotPath)
+		if err == nil {
+			return &span
+		}
+	}
+	
+	// If we still can't find the path, return nil
 	return nil
 }
 
