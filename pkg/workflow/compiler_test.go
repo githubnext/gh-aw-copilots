@@ -5016,3 +5016,222 @@ engine: claude
 		})
 	}
 }
+
+// TestLabelFilter tests the label name filter functionality
+func TestLabelFilter(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "label-filter-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name         string
+		frontmatter  string
+		expectedIf   string // Expected if condition in the generated lock file
+		shouldHaveIf bool   // Whether an if condition should be present
+	}{
+		{
+			name: "label with single name filter",
+			frontmatter: `---
+on:
+  label:
+    name: [bug]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedIf:   "if: ((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'bug')))",
+			shouldHaveIf: true,
+		},
+		{
+			name: "label with multiple name filters",
+			frontmatter: `---
+on:
+  label:
+    name: [bug, feature]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedIf:   "if: ((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'bug') || contains(github.event.issue.labels.*.name, 'feature')))",
+			shouldHaveIf: true,
+		},
+		{
+			name: "label without name field (no filter)",
+			frontmatter: `---
+on:
+  label:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			shouldHaveIf: false,
+		},
+		{
+			name: "label with name filter and existing if condition",
+			frontmatter: `---
+on:
+  label:
+    name: [enhancement]
+if: github.ref == 'refs/heads/main'
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedIf:   "if: (github.ref == 'refs/heads/main') && (((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'enhancement'))))",
+			shouldHaveIf: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Label Filter Workflow
+
+This is a test workflow for label filtering.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Unexpected error compiling workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+
+			lockContent := string(content)
+			if tt.shouldHaveIf {
+				if !strings.Contains(lockContent, tt.expectedIf) {
+					t.Errorf("Expected lock file to contain '%s' but it didn't.\nContent:\n%s", tt.expectedIf, lockContent)
+				}
+			} else {
+				// For no filter case, check that there's no task job at all since no label filter is applied
+				if strings.Contains(lockContent, "task:") {
+					t.Errorf("Expected no task job when no label filter is applied, but found one in lock file.\nContent:\n%s", lockContent)
+				}
+			}
+		})
+	}
+}
+
+// TestLabelNameCommentingInOnSection tests the commentOutLabelNameInOnSection function directly
+func TestLabelNameCommentingInOnSection(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name        string
+		input       string
+		expected    string
+		description string
+	}{
+		{
+			name: "label with name field",
+			input: `on:
+    label:
+        name:
+            - bug
+            - feature
+        types:
+            - created`,
+			expected: `on:
+    label:
+        # name: # Label filtering applied via job conditions
+            - bug
+            - feature
+        types:
+            - created`,
+			description: "Should comment out name but keep types",
+		},
+		{
+			name: "label with only name field",
+			input: `on:
+    label:
+        name: [enhancement]
+    workflow_dispatch: null`,
+			expected: `on:
+    label:
+        # name: [enhancement] # Label filtering applied via job conditions
+    workflow_dispatch: null`,
+			description: "Should comment out name even when it's the only field",
+		},
+		{
+			name: "no label section",
+			input: `on:
+    workflow_dispatch: null
+    push:
+        branches:
+            - main`,
+			expected: `on:
+    workflow_dispatch: null
+    push:
+        branches:
+            - main`,
+			description: "Should leave unchanged when no label section",
+		},
+		{
+			name: "multiple label sections",
+			input: `on:
+    label:
+        name: [bug]
+        types:
+            - created
+    issues:
+        types:
+            - opened`,
+			expected: `on:
+    label:
+        # name: [bug] # Label filtering applied via job conditions
+        types:
+            - created
+    issues:
+        types:
+            - opened`,
+			description: "Should comment out name in label while leaving other sections unchanged",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compiler.commentOutLabelNameInOnSection(tt.input)
+			if result != tt.expected {
+				t.Errorf("Test %s: %s\nExpected:\n%s\nGot:\n%s", tt.name, tt.description, tt.expected, result)
+			}
+		})
+	}
+}

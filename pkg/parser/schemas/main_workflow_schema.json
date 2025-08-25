@@ -147,6 +147,28 @@
                 }
               }
             },
+            "label": {
+              "description": "Label event trigger with filtering",
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "types": {
+                  "type": "array",
+                  "description": "Types of label events",
+                  "items": {
+                    "type": "string",
+                    "enum": ["labeled", "unlabeled"]
+                  }
+                },
+                "name": {
+                  "type": "array",
+                  "description": "Label names to filter on",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
             "issue_comment": {
               "description": "Issue comment event trigger",
               "type": "object",
