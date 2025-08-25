@@ -4807,6 +4807,200 @@ This workflow has custom permissions that should override defaults.
 	}
 }
 
+func TestPermissionsWithoutContentsRead(t *testing.T) {
+	// Test that when permissions are provided without contents:read, the checkout step is not generated
+	tmpDir, err := os.MkdirTemp("", "no-contents-read-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a test workflow WITH permissions that do NOT include contents:read
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [list_issues, create_issue]
+engine: claude
+---
+
+# Test Workflow
+
+This workflow has permissions without contents:read, so checkout step should not be generated.
+`
+
+	testFile := filepath.Join(tmpDir, "test-no-contents-read.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Calculate the lock file path
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+
+	// Read the generated lock file
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read lock file: %v", err)
+	}
+
+	lockContentStr := string(lockContent)
+
+	// Verify that checkout step is NOT present since permissions don't include contents:read
+	checkoutSteps := []string{
+		"uses: actions/checkout@v5",
+		"name: Checkout repository",
+	}
+
+	for _, checkoutStep := range checkoutSteps {
+		if strings.Contains(lockContentStr, checkoutStep) {
+			t.Errorf("Checkout step '%s' should not be present when permissions don't include contents:read.\nGenerated content:\n%s", checkoutStep, lockContentStr)
+		}
+	}
+
+	// Parse the generated YAML to verify structure
+	var workflow map[string]interface{}
+	if err := yaml.Unmarshal(lockContent, &workflow); err != nil {
+		t.Fatalf("Failed to parse generated YAML: %v", err)
+	}
+
+	// Verify that permissions section exists and has the correct custom permissions
+	jobs, exists := workflow["jobs"]
+	if !exists {
+		t.Fatal("Jobs section not found in parsed workflow")
+	}
+
+	jobsMap, ok := jobs.(map[string]interface{})
+	if !ok {
+		t.Fatal("Jobs section is not a map")
+	}
+
+	// Find the main job
+	var mainJob map[string]interface{}
+	for jobName, job := range jobsMap {
+		if jobName == "test-workflow" {
+			if jobMap, ok := job.(map[string]interface{}); ok {
+				mainJob = jobMap
+				break
+			}
+		}
+	}
+
+	if mainJob == nil {
+		t.Fatal("Main workflow job not found")
+	}
+
+	// Verify permissions section exists in the main job
+	permissions, exists := mainJob["permissions"]
+	if !exists {
+		t.Fatal("Permissions section not found in main job")
+	}
+
+	// Verify permissions is a map
+	permissionsMap, ok := permissions.(map[string]interface{})
+	if !ok {
+		t.Fatal("Permissions section is not a map")
+	}
+
+	// Verify custom permissions are applied correctly
+	expectedPermissions := map[string]string{
+		"issues":        "write",
+		"pull-requests": "write",
+	}
+
+	for key, expectedValue := range expectedPermissions {
+		actualValue, exists := permissionsMap[key]
+		if !exists {
+			t.Errorf("Expected permission '%s' not found in permissions map", key)
+			continue
+		}
+		if actualValue != expectedValue {
+			t.Errorf("Expected permission '%s' to have value '%s', but got '%v'", key, expectedValue, actualValue)
+		}
+	}
+
+	// Verify that contents:read is NOT present
+	if contentsValue, exists := permissionsMap["contents"]; exists {
+		t.Errorf("contents permission should not be present when not specified, but found: %v", contentsValue)
+	}
+}
+
+func TestPermissionsWithContentsRead(t *testing.T) {
+	// Test that when permissions include contents:read, the checkout step IS generated
+	tmpDir, err := os.MkdirTemp("", "contents-read-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a test workflow WITH permissions that include contents:read
+	testContent := `---
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: read
+  issues: write
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---
+
+# Test Workflow
+
+This workflow has permissions with contents:read, so checkout step should be generated.
+`
+
+	testFile := filepath.Join(tmpDir, "test-contents-read.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Compile the workflow
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Calculate the lock file path
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+
+	// Read the generated lock file
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read lock file: %v", err)
+	}
+
+	lockContentStr := string(lockContent)
+
+	// Verify that checkout step IS present since permissions include contents:read
+	checkoutSteps := []string{
+		"uses: actions/checkout@v5",
+		"name: Checkout repository",
+	}
+
+	for _, checkoutStep := range checkoutSteps {
+		if !strings.Contains(lockContentStr, checkoutStep) {
+			t.Errorf("Checkout step '%s' should be present when permissions include contents:read.\nGenerated content:\n%s", checkoutStep, lockContentStr)
+		}
+	}
+}
+
 func TestCustomStepsIndentation(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "steps-indentation-test")

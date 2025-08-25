@@ -2098,6 +2098,33 @@ func (c *Compiler) writeCheckTeamMemberAction(markdownPath string) error {
 	return c.writeSharedAction(markdownPath, "check-team-member", checkTeamMemberTemplate, "check-team-member")
 }
 
+// hasContentsReadPermission checks if the permissions string contains "contents: read"
+func hasContentsReadPermission(permissions string) bool {
+	if permissions == "" {
+		return false
+	}
+
+	// Parse the permissions YAML
+	var permissionsMap map[string]interface{}
+	err := yaml.Unmarshal([]byte(permissions), &permissionsMap)
+	if err != nil {
+		return false
+	}
+
+	// Check if permissions section exists and contains contents: read
+	if perms, exists := permissionsMap["permissions"]; exists {
+		if permsMap, ok := perms.(map[string]interface{}); ok {
+			if contents, exists := permsMap["contents"]; exists {
+				if contentsStr, ok := contents.(string); ok {
+					return contentsStr == "read"
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // generateMainJobSteps generates the steps section for the main job
 func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowData) {
 	// Add custom steps or default checkout step
@@ -2117,8 +2144,11 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 			}
 		}
 	} else {
-		yaml.WriteString("      - name: Checkout repository\n")
-		yaml.WriteString("        uses: actions/checkout@v5\n")
+		// Only add checkout step if permissions include contents: read
+		if hasContentsReadPermission(data.Permissions) {
+			yaml.WriteString("      - name: Checkout repository\n")
+			yaml.WriteString("        uses: actions/checkout@v5\n")
+		}
 	}
 
 	// Add cache steps if cache configuration is present
