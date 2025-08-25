@@ -21,7 +21,304 @@ concurrency:
 run-name: "Test Claude"
 
 jobs:
+  task:
+    runs-on: ubuntu-latest
+    outputs:
+      text: ${{ steps.compute-text.outputs.text }}
+    steps:
+      - name: Compute current body text
+        id: compute-text
+        uses: actions/github-script@v7
+        with:
+          script: |
+            /**
+             * Sanitizes content for safe output in GitHub Actions
+             * @param {string} content - The content to sanitize
+             * @returns {string} The sanitized content
+             */
+            function sanitizeContent(content) {
+              if (!content || typeof content !== 'string') {
+                return '';
+              }
+              // Read allowed domains from environment variable
+              const allowedDomainsEnv = process.env.GITHUB_AW_ALLOWED_DOMAINS;
+              const defaultAllowedDomains = [
+                'github.com',
+                'github.io',
+                'githubusercontent.com',
+                'githubassets.com',
+                'github.dev',
+                'codespaces.new'
+              ];
+              const allowedDomains = allowedDomainsEnv
+                ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+                : defaultAllowedDomains;
+              let sanitized = content;
+              // Neutralize @mentions to prevent unintended notifications
+              sanitized = neutralizeMentions(sanitized);
+              // Remove control characters (except newlines and tabs)
+              sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+              // XML character escaping
+              sanitized = sanitized
+                .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+              // URI filtering - replace non-https protocols with "(redacted)"
+              // Step 1: Temporarily mark HTTPS URLs to protect them
+              sanitized = sanitizeUrlProtocols(sanitized);
+              // Domain filtering for HTTPS URIs
+              // Match https:// URIs and check if domain is in allowlist
+              sanitized = sanitizeUrlDomains(sanitized);
+              // Limit total length to prevent DoS (0.5MB max)
+              const maxLength = 524288;
+              if (sanitized.length > maxLength) {
+                sanitized = sanitized.substring(0, maxLength) + '\n[Content truncated due to length]';
+              }
+              // Limit number of lines to prevent log flooding (65k max)
+              const lines = sanitized.split('\n');
+              const maxLines = 65000;
+              if (lines.length > maxLines) {
+                sanitized = lines.slice(0, maxLines).join('\n') + '\n[Content truncated due to line count]';
+              }
+              // Remove ANSI escape sequences
+              sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+              // Neutralize common bot trigger phrases
+              sanitized = neutralizeBotTriggers(sanitized);
+              // Trim excessive whitespace
+              return sanitized.trim();
+              /**
+               * Remove unknown domains
+               * @param {string} s - The string to process
+               * @returns {string} The string with unknown domains redacted
+               */
+              function sanitizeUrlDomains(s) {
+                s = s.replace(/\bhttps:\/\/([^\/\s\])}'"<>&\x00-\x1f]+)/gi, (match, domain) => {
+                  // Extract the hostname part (before first slash, colon, or other delimiter)
+                  const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
+                  // Check if this domain or any parent domain is in the allowlist
+                  const isAllowed = allowedDomains.some(allowedDomain => {
+                    const normalizedAllowed = allowedDomain.toLowerCase();
+                    return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
+                  });
+                  return isAllowed ? match : '(redacted)';
+                });
+                return s;
+              }
+              /**
+               * Remove unknown protocols except https
+               * @param {string} s - The string to process
+               * @returns {string} The string with non-https protocols redacted
+               */
+              function sanitizeUrlProtocols(s) {
+                // Match both protocol:// and protocol: patterns
+                // This covers URLs like https://example.com, javascript:alert(), mailto:user@domain.com, etc.
+                return s.replace(/\b(\w+):(?:\/\/)?[^\s\])}'"<>&\x00-\x1f]+/gi, (match, protocol) => {
+                  // Allow https (case insensitive), redact everything else
+                  return protocol.toLowerCase() === 'https' ? match : '(redacted)';
+                });
+              }
+              /**
+               * Neutralizes @mentions by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized mentions
+               */
+              function neutralizeMentions(s) {
+                // Replace @name or @org/team outside code with `@name`
+                return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                  (_m, p1, p2) => `${p1}\`@${p2}\``);
+              }
+              /**
+               * Neutralizes bot trigger phrases by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized bot triggers
+               */
+              function neutralizeBotTriggers(s) {
+                // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
+                return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+                  (match, action, ref) => `\`${action} #${ref}\``);
+              }
+            }
+            async function main() {
+              let text = '';
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: owner,
+                repo: repo,
+                username: actor
+              });
+              const permission = repoPermission.data.permission;
+              console.log(`Repository permission level: ${permission}`);
+              if (permission !== 'admin' && permission !== 'maintain') {
+                core.setOutput('text', '');
+                return;
+              }
+              // Determine current body text based on event context
+              switch (context.eventName) {
+                case 'issues':
+                  // For issues: title + body
+                  if (context.payload.issue) {
+                    const title = context.payload.issue.title || '';
+                    const body = context.payload.issue.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request':
+                  // For pull requests: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request_target':
+                  // For pull request target events: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'issue_comment':
+                  // For issue comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review_comment':
+                  // For PR review comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review':
+                  // For PR reviews: review body
+                  if (context.payload.review) {
+                    text = context.payload.review.body || '';
+                  }
+                  break;
+                default:
+                  // Default: empty text
+                  text = '';
+                  break;
+              }
+              // Sanitize the text before output
+              const sanitizedText = sanitizeContent(text);
+              // Display sanitized text in logs
+              console.log(`text: ${sanitizedText}`);
+              // Set the sanitized text as output
+              core.setOutput('text', sanitizedText);
+            }
+            await main();
+
+  add_reaction:
+    needs: task
+    if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.react.outputs.reaction-id }}
+    steps:
+      - name: Add eyes reaction to the triggering item
+        id: react
+        uses: actions/github-script@v7
+        env:
+          GITHUB_AW_REACTION: eyes
+        with:
+          script: |
+            async function main() {
+              // Read inputs from environment variables
+              const reaction = process.env.GITHUB_AW_REACTION || 'eyes';
+              console.log('Reaction type:', reaction);
+              // Validate reaction type
+              const validReactions = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
+              if (!validReactions.includes(reaction)) {
+                core.setFailed(`Invalid reaction type: ${reaction}. Valid reactions are: ${validReactions.join(', ')}`);
+                return;
+              }
+              // Determine the API endpoint based on the event type
+              let endpoint;
+              const eventName = context.eventName;
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              try {
+                switch (eventName) {
+                  case 'issues':
+                    const issueNumber = context.payload?.issue?.number;
+                    if (!issueNumber) {
+                      core.setFailed('Issue number not found in event payload');
+                      return;
+                    }
+                    endpoint = `/repos/${owner}/${repo}/issues/${issueNumber}/reactions`;
+                    break;
+                  case 'issue_comment':
+                    const commentId = context.payload?.comment?.id;
+                    if (!commentId) {
+                      core.setFailed('Comment ID not found in event payload');
+                      return;
+                    }
+                    endpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}/reactions`;
+                    break;
+                  case 'pull_request':
+                  case 'pull_request_target':
+                    const prNumber = context.payload?.pull_request?.number;
+                    if (!prNumber) {
+                      core.setFailed('Pull request number not found in event payload');
+                      return;
+                    }
+                    // PRs are "issues" for the reactions endpoint
+                    endpoint = `/repos/${owner}/${repo}/issues/${prNumber}/reactions`;
+                    break;
+                  case 'pull_request_review_comment':
+                    const reviewCommentId = context.payload?.comment?.id;
+                    if (!reviewCommentId) {
+                      core.setFailed('Review comment ID not found in event payload');
+                      return;
+                    }
+                    endpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}/reactions`;
+                    break;
+                  default:
+                    core.setFailed(`Unsupported event type: ${eventName}`);
+                    return;
+                }
+                console.log('API endpoint:', endpoint);
+                await addReaction(endpoint, reaction);
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('Failed to add reaction:', errorMessage);
+                core.setFailed(`Failed to add reaction: ${errorMessage}`);
+              }
+            }
+            /**
+             * Add a reaction to a GitHub issue, PR, or comment
+             * @param {string} endpoint - The GitHub API endpoint to add the reaction to
+             * @param {string} reaction - The reaction type to add
+             */
+            async function addReaction(endpoint, reaction) {
+              const response = await github.request('POST ' + endpoint, {
+                content: reaction,
+                headers: {
+                  'Accept': 'application/vnd.github+json'
+                }
+              });
+              const reactionId = response.data?.id;
+              if (reactionId) {
+                console.log(`Successfully added reaction: ${reaction} (id: ${reactionId})`);
+                core.setOutput('reaction-id', reactionId.toString());
+              } else {
+                console.log(`Successfully added reaction: ${reaction}`);
+                core.setOutput('reaction-id', '');
+              }
+            }
+            await main();
+
   test-claude:
+    needs: task
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -108,6 +405,8 @@ jobs:
           
           **First, get the current time using the get_current_time tool to timestamp your analysis.**
           
+          **Important**: When analyzing the pull request content, gather context directly from the GitHub API to understand what triggered this workflow.
+          
           ### Analysis Tasks
           
           1. **Review the Pull Request Details**
@@ -178,6 +477,8 @@ jobs:
           - The detailed analysis sections outlined above
           - Proper markdown formatting for readability
           - Clear structure with headers and bullet points
+          
+          **Current Context**: You have access to the current pull request content via: "${{ needs.task.outputs.text }}"
           
           ### Action Output: Create a Haiku
           
