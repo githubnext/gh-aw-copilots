@@ -651,6 +651,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Apply pull request draft filter if specified
 	c.applyPullRequestDraftFilter(workflowData, result.Frontmatter)
 
+	// Apply label filter if specified
+	c.applyLabelFilter(workflowData, result.Frontmatter)
+
 	// Compute allowed tools
 	workflowData.AllowedTools = c.computeAllowedTools(tools)
 
@@ -681,9 +684,10 @@ func (c *Compiler) extractTopLevelYAMLSection(frontmatter map[string]any, key st
 	unquotedKey := key + ":"
 	yamlStr = strings.Replace(yamlStr, quotedKeyPattern, unquotedKey, 1)
 
-	// Special handling for "on" section - comment out draft field from pull_request
+	// Special handling for "on" section - comment out draft field from pull_request and name field from label
 	if key == "on" {
 		yamlStr = c.commentOutDraftInOnSection(yamlStr)
+		yamlStr = c.commentOutLabelNameInOnSection(yamlStr)
 	}
 
 	return yamlStr
