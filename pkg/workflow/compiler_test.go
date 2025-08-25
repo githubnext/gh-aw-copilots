@@ -3412,8 +3412,8 @@ Test workflow without explicit ai-reaction (should not create reaction action).
 	// Check that reaction-specific content is NOT in generated YAML
 	unexpectedStrings := []string{
 		"add_reaction:",
-		"uses: ./.github/actions/reaction",
-		"mode: add",
+		"GITHUB_AW_REACTION:",
+		"Add eyes reaction to the triggering item",
 	}
 
 	for _, unexpected := range unexpectedStrings {
