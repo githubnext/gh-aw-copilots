@@ -5075,7 +5075,7 @@ tools:
 			frontmatter: `---
 on:
   label:
-    types: [created]
+    types: [labeled]
 
 permissions:
   contents: read
@@ -5168,14 +5168,14 @@ func TestLabelNameCommentingInOnSection(t *testing.T) {
             - bug
             - feature
         types:
-            - created`,
+            - labeled`,
 			expected: `on:
     label:
         # name: # Label filtering applied via job conditions
             - bug
             - feature
         types:
-            - created`,
+            - labeled`,
 			description: "Should comment out name but keep types",
 		},
 		{
@@ -5210,7 +5210,7 @@ func TestLabelNameCommentingInOnSection(t *testing.T) {
     label:
         name: [bug]
         types:
-            - created
+            - labeled
     issues:
         types:
             - opened`,
@@ -5218,7 +5218,7 @@ func TestLabelNameCommentingInOnSection(t *testing.T) {
     label:
         # name: [bug] # Label filtering applied via job conditions
         types:
-            - created
+            - labeled
     issues:
         types:
             - opened`,
