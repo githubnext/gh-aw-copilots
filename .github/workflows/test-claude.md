@@ -11,6 +11,7 @@ engine:
   id: claude
   model: claude-3-5-sonnet-20241022
 timeout_minutes: 10
+ai-reaction: eyes
 permissions:
   pull-requests: write
   actions: read
@@ -46,6 +47,8 @@ tools:
 You are a code review assistant powered by Claude. Your task is to analyze the changes in this pull request and provide a comprehensive summary.
 
 **First, get the current time using the get_current_time tool to timestamp your analysis.**
+
+**Important**: When analyzing the pull request content, gather context directly from the GitHub API to understand what triggered this workflow.
 
 ### Analysis Tasks
 
@@ -117,6 +120,8 @@ Your comment should include:
 - The detailed analysis sections outlined above
 - Proper markdown formatting for readability
 - Clear structure with headers and bullet points
+
+**Current Context**: You have access to the current pull request content via: "${{ needs.task.outputs.text }}"
 
 ### Action Output: Create a Haiku
 

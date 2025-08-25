@@ -173,7 +173,7 @@ ai-reaction: "eyes"
 - `rocket` (🚀)
 - `eyes` (👀)
 
-**Note**: Using this feature results in the addition of `.github/actions/reaction/action.yml` file to the repository when the workflow is compiled.
+**Note**: This feature uses inline JavaScript code with `actions/github-script@v7` to add reactions, so no additional action files are created in the repository.
 
 ## Output Configuration (`output:`)
 

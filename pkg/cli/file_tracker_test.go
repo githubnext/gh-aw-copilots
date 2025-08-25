@@ -323,23 +323,8 @@ This uses ai-reaction.
 		t.Errorf("Lock file %s should be tracked", lockFile)
 	}
 
-	// Should track the shared reaction action
-	reactionActionFile := filepath.Join(tempDir, ".github", "actions", "reaction", "action.yml")
-	found = false
-	for _, file := range allFiles {
-		if file == reactionActionFile {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("Reaction action file %s should be tracked", reactionActionFile)
-	}
-
-	// Verify the reaction action file was actually created
-	if _, err := os.Stat(reactionActionFile); os.IsNotExist(err) {
-		t.Errorf("Reaction action file %s should be created", reactionActionFile)
-	}
+	// Note: The reaction feature now uses inline GitHub Scripts instead of separate action files
+	// so we don't expect a separate reaction action file to be created
 
 	// Test 2: Workflow WITHOUT ai-reaction should NOT create shared action
 	workflowWithoutReaction := `---
@@ -366,30 +351,13 @@ This does NOT use ai-reaction.
 	}
 
 	// Remove the existing reaction action to test it's not created again
-	if err := os.RemoveAll(filepath.Join(tempDir, ".github", "actions", "reaction")); err != nil {
-		t.Fatalf("Failed to remove existing reaction action: %v", err)
-	}
+	// (Note: Since reaction is now inline, this removal step is no longer needed)
 
 	// Compile the workflow with tracking
 	if err := compileWorkflowWithTracking(workflowFileWithoutReaction, false, "", tracker2); err != nil {
 		t.Fatalf("Failed to compile workflow: %v", err)
 	}
 
-	// Check that reaction action was NOT created
-	if _, err := os.Stat(reactionActionFile); !os.IsNotExist(err) {
-		t.Errorf("Reaction action file %s should NOT be created when ai-reaction is not specified", reactionActionFile)
-	}
-
-	// Check that reaction action is NOT tracked
-	allFiles2 := append(tracker2.CreatedFiles, tracker2.ModifiedFiles...)
-	found = false
-	for _, file := range allFiles2 {
-		if file == reactionActionFile {
-			found = true
-			break
-		}
-	}
-	if found {
-		t.Errorf("Reaction action file %s should NOT be tracked when ai-reaction is not specified", reactionActionFile)
-	}
+	// Note: Since reaction feature now uses inline GitHub Scripts instead of separate action files,
+	// we don't expect any reaction action files to be created or tracked
 }

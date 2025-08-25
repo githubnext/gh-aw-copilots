@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,15 +27,6 @@ const (
 type FileTracker interface {
 	TrackCreated(filePath string)
 }
-
-//go:embed templates/reaction_action.yaml
-var reactionActionTemplate string
-
-//go:embed templates/compute_text_action.yaml
-var computeTextActionTemplate string
-
-//go:embed templates/check_team_member.yaml
-var checkTeamMemberTemplate string
 
 // Compiler handles converting markdown workflows to GitHub Actions YAML
 type Compiler struct {
@@ -249,53 +239,8 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 		}
 	}
 
-	// Write shared reaction action only if ai-reaction is configured
-	if workflowData.AIReaction != "" {
-		if err := c.writeReactionAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write reaction action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
-
-	// Write shared compute-text action (only if needed for task job)
-	if workflowData.NeedsTextOutput {
-		if err := c.writeComputeTextAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write compute-text action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
-
-	// Write shared check-team-member action (only for alias workflows)
-	if workflowData.Alias != "" {
-		if err := c.writeCheckTeamMemberAction(markdownPath); err != nil {
-			formattedErr := console.FormatError(console.CompilerError{
-				Position: console.ErrorPosition{
-					File:   markdownPath,
-					Line:   1,
-					Column: 1,
-				},
-				Type:    "error",
-				Message: fmt.Sprintf("failed to write check-team-member action: %v", err),
-			})
-			return errors.New(formattedErr)
-		}
-	}
+	// Note: compute-text functionality is now inlined directly in the task job
+	// instead of using a shared action file
 
 	// Generate the YAML content
 	if c.verbose {
@@ -1575,12 +1520,6 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 	outputs := map[string]string{}
 	var steps []string
 
-	// Add shallow checkout step to access shared actions
-	steps = append(steps, "      - uses: actions/checkout@v5\n")
-	steps = append(steps, "        with:\n")
-	steps = append(steps, "          sparse-checkout: .github\n")
-	steps = append(steps, "          fetch-depth: 1\n")
-
 	// Add team member check for alias workflows, but only when triggered by alias mention
 	if data.Alias != "" {
 		// Build condition that only applies to alias mentions in comment-related events
@@ -1598,8 +1537,18 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 
 		steps = append(steps, "      - name: Check team membership for alias workflow\n")
 		steps = append(steps, "        id: check-team-member\n")
-		steps = append(steps, "        uses: ./.github/actions/check-team-member\n")
 		steps = append(steps, fmt.Sprintf("        if: %s\n", aliasConditionStr))
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+
+		// Inline the JavaScript code with proper indentation
+		scriptLines := strings.Split(checkTeamMemberScript, "\n")
+		for _, line := range scriptLines {
+			if strings.TrimSpace(line) != "" {
+				steps = append(steps, fmt.Sprintf("            %s\n", line))
+			}
+		}
 		steps = append(steps, "      - name: Validate team membership\n")
 		steps = append(steps, fmt.Sprintf("        if: %s\n", validationConditionStr))
 		steps = append(steps, "        run: |\n")
@@ -1608,11 +1557,17 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "          exit 1\n")
 	}
 
-	// Use shared compute-text action only if needed
+	// Use inlined compute-text script only if needed (no shared action)
 	if data.NeedsTextOutput {
 		steps = append(steps, "      - name: Compute current body text\n")
 		steps = append(steps, "        id: compute-text\n")
-		steps = append(steps, "        uses: ./.github/actions/compute-text\n")
+		steps = append(steps, "        uses: actions/github-script@v7\n")
+		steps = append(steps, "        with:\n")
+		steps = append(steps, "          script: |\n")
+
+		// Inline the JavaScript directly instead of using shared action
+		steps = append(steps, FormatJavaScriptForYAML(computeTextScript)...)
+
 		// Set up outputs
 		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
@@ -1621,7 +1576,7 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		Name:        "task",
 		If:          data.If, // Use the existing condition (which may include alias checks)
 		RunsOn:      "runs-on: ubuntu-latest",
-		Permissions: "permissions:\n      contents: read", // Read permission for checkout
+		Permissions: "", // No permissions needed - task job does not require content access
 		Steps:       steps,
 		Outputs:     outputs,
 	}
@@ -1634,16 +1589,20 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 	reactionCondition := buildReactionCondition()
 
 	var steps []string
-	steps = append(steps, "      - uses: actions/checkout@v5\n")
-	steps = append(steps, "        with:\n")
-	steps = append(steps, "          sparse-checkout: .github\n")
 	steps = append(steps, fmt.Sprintf("      - name: Add %s reaction to the triggering item\n", data.AIReaction))
 	steps = append(steps, "        id: react\n")
-	steps = append(steps, "        uses: ./.github/actions/reaction\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_REACTION: %s\n", data.AIReaction))
+
 	steps = append(steps, "        with:\n")
-	steps = append(steps, "          github-token: ${{ secrets.GITHUB_TOKEN }}\n")
-	steps = append(steps, "          mode: add\n")
-	steps = append(steps, fmt.Sprintf("          reaction: %s\n", data.AIReaction))
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	formattedScript := FormatJavaScriptForYAML(addReactionScript)
+	steps = append(steps, formattedScript...)
 
 	outputs := map[string]string{
 		"reaction_id": "${{ steps.react.outputs.reaction-id }}",
@@ -1658,7 +1617,7 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 		Name:        "add_reaction",
 		If:          fmt.Sprintf("if: %s", reactionCondition.Render()),
 		RunsOn:      "runs-on: ubuntu-latest",
-		Permissions: "permissions:\n      contents: write # Read .github\n      issues: write\n      pull-requests: write",
+		Permissions: "permissions:\n      issues: write\n      pull-requests: write",
 		Steps:       steps,
 		Outputs:     outputs,
 		Depends:     depends,
@@ -2025,81 +1984,6 @@ func getGitHubDockerImageVersion(githubTool any) string {
 		}
 	}
 	return githubDockerImageVersion
-}
-
-// writeSharedAction writes a shared action file, creating directories as needed and updating only if content differs
-func (c *Compiler) writeSharedAction(markdownPath string, actionPath string, content string, actionName string) error {
-	// Get git root to write action relative to it, fallback to markdown directory for tests
-	gitRoot := filepath.Dir(markdownPath)
-	for {
-		if _, err := os.Stat(filepath.Join(gitRoot, ".git")); err == nil {
-			break
-		}
-		parent := filepath.Dir(gitRoot)
-		if parent == gitRoot {
-			// Reached filesystem root without finding .git - use markdown directory as fallback
-			gitRoot = filepath.Dir(markdownPath)
-			break
-		}
-		gitRoot = parent
-	}
-
-	actionsDir := filepath.Join(gitRoot, ".github", "actions", actionPath)
-	actionFile := filepath.Join(actionsDir, "action.yml")
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(actionsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create actions directory: %w", err)
-	}
-
-	// Write the action file if it doesn't exist or is different
-	if _, err := os.Stat(actionFile); os.IsNotExist(err) {
-		if c.verbose {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Creating shared %s action: %s", actionName, actionFile)))
-		}
-		if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to write %s action: %w", actionName, err)
-		}
-		// Track the created file
-		if c.fileTracker != nil {
-			c.fileTracker.TrackCreated(actionFile)
-		}
-	} else {
-		// Check if the content is different and update if needed
-		existing, err := os.ReadFile(actionFile)
-		if err != nil {
-			return fmt.Errorf("failed to read existing action file: %w", err)
-		}
-		if string(existing) != content {
-			if c.verbose {
-				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Updating shared %s action: %s", actionName, actionFile)))
-			}
-			if err := os.WriteFile(actionFile, []byte(content), 0644); err != nil {
-				return fmt.Errorf("failed to update %s action: %w", actionName, err)
-			}
-			// Track the updated file
-			if c.fileTracker != nil {
-				c.fileTracker.TrackCreated(actionFile)
-			}
-		}
-	}
-
-	return nil
-}
-
-// writeReactionAction writes the shared reaction action if ai-reaction is used
-func (c *Compiler) writeReactionAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "reaction", reactionActionTemplate, "reaction")
-}
-
-// writeComputeTextAction writes the shared compute-text action
-func (c *Compiler) writeComputeTextAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "compute-text", computeTextActionTemplate, "compute-text")
-}
-
-// writeCheckTeamMemberAction writes the shared check-team-member action
-func (c *Compiler) writeCheckTeamMemberAction(markdownPath string) error {
-	return c.writeSharedAction(markdownPath, "check-team-member", checkTeamMemberTemplate, "check-team-member")
 }
 
 // generateMainJobSteps generates the steps section for the main job
