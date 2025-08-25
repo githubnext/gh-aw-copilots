@@ -818,6 +818,7 @@
     },
     "max-turns": {
       "type": "integer",
+      "minimum": 1,
       "description": "Maximum number of chat iterations per run"
     },
     "stop-time": {
