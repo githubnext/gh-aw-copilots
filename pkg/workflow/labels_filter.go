@@ -71,55 +71,14 @@ func (c *Compiler) applyLabelFilter(data *WorkflowData, frontmatter map[string]a
 		combinedLabelCondition = &DisjunctionNode{Terms: labelConditions}
 	}
 
-	// The condition should apply to label events on issues/PRs
-	// Only filter when it's a label event, otherwise allow all events
-	isLabelEvent := &OrNode{
-		Left: BuildEquals(
-			BuildPropertyAccess("github.event_name"),
-			BuildStringLiteral("issues"),
-		),
-		Right: BuildEquals(
-			BuildPropertyAccess("github.event_name"),
-			BuildStringLiteral("pull_request"),
-		),
-	}
-
-	// Check if it's a labeling action
-	isLabelingAction := &OrNode{
-		Left: BuildEquals(
-			BuildPropertyAccess("github.event.action"),
-			BuildStringLiteral("labeled"),
-		),
-		Right: BuildEquals(
-			BuildPropertyAccess("github.event.action"),
-			BuildStringLiteral("unlabeled"),
-		),
-	}
-
-	// For label events with labeling actions, apply the label filter
-	// For non-label events or non-labeling actions, allow through
-	labelEventWithFilter := &AndNode{
-		Left: &AndNode{
-			Left:  isLabelEvent,
-			Right: isLabelingAction,
-		},
-		Right: combinedLabelCondition,
-	}
-
-	notLabelEvent := &NotNode{Child: isLabelEvent}
-	notLabelingAction := &NotNode{Child: isLabelingAction}
-
-	finalCondition := &OrNode{
-		Left: &OrNode{
-			Left:  notLabelEvent,
-			Right: notLabelingAction,
-		},
-		Right: labelEventWithFilter,
-	}
+	// Since the workflow's "on" section already restricts to label events,
+	// we only need to check if the label names match.
+	// No need to check for other event types since GitHub Actions won't trigger
+	// this workflow for non-label events.
 
 	// Build condition tree and render
 	existingCondition := strings.TrimPrefix(data.If, "if: ")
-	conditionTree := buildConditionTree(existingCondition, finalCondition.Render())
+	conditionTree := buildConditionTree(existingCondition, combinedLabelCondition.Render())
 	data.If = fmt.Sprintf("if: %s", conditionTree.Render())
 }
 

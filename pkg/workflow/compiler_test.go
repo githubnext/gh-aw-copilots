@@ -5048,7 +5048,7 @@ tools:
   github:
     allowed: [get_issue]
 ---`,
-			expectedIf:   "if: ((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'bug')))",
+			expectedIf:   "if: contains(github.event.issue.labels.*.name, 'bug')",
 			shouldHaveIf: true,
 		},
 		{
@@ -5066,7 +5066,7 @@ tools:
   github:
     allowed: [get_issue]
 ---`,
-			expectedIf:   "if: ((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'bug') || contains(github.event.issue.labels.*.name, 'feature')))",
+			expectedIf:   "if: contains(github.event.issue.labels.*.name, 'bug') || contains(github.event.issue.labels.*.name, 'feature')",
 			shouldHaveIf: true,
 		},
 		{
@@ -5102,7 +5102,7 @@ tools:
   github:
     allowed: [get_issue]
 ---`,
-			expectedIf:   "if: (github.ref == 'refs/heads/main') && (((!((github.event_name == 'issues') || (github.event_name == 'pull_request'))) || (!((github.event.action == 'labeled') || (github.event.action == 'unlabeled')))) || ((((github.event_name == 'issues') || (github.event_name == 'pull_request')) && ((github.event.action == 'labeled') || (github.event.action == 'unlabeled'))) && (contains(github.event.issue.labels.*.name, 'enhancement'))))",
+			expectedIf:   "if: (github.ref == 'refs/heads/main') && (contains(github.event.issue.labels.*.name, 'enhancement'))",
 			shouldHaveIf: true,
 		},
 	}
