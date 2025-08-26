@@ -13,6 +13,13 @@ Ready to get your first agentic workflow running? Follow our step-by-step [Quick
 
 Learn about the concepts behind agentic workflows, explore available workflow types, and understand how AI can automate your repository tasks. See [Concepts](docs/concepts.md).
 
+## 📚 Examples
+
+Explore ready-to-use agentic workflows for research, development, and automation tasks. See [Examples](docs/examples.md) for a complete list of demonstrator workflows including:
+
+- **Research & Planning**: Weekly research, team status reports, daily planning, and issue triage
+- **Coding & Development**: Dependency updates, documentation maintenance, QA tasks, test coverage improvements, performance optimization, and accessibility reviews
+
 ## 📖 Documentation
 
 For complete documentation, examples, and guides, see the [Documentation](docs/index.md).
@@ -32,4 +39,3 @@ For development setup and contribution guidelines, see [CONTRIBUTING.md](CONTRIB
 
 We welcome your feedback on GitHub Agentic Workflows! Please file bugs and feature requests as issues in this repository,
 and share your thoughts in the `#continuous-ai` channel in the [GitHub Next Discord](https://gh.io/next-discord).
-
