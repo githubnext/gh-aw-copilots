@@ -488,7 +488,7 @@ Some content here.
 			content:      "@include nonexistent.md",
 			baseDir:      tempDir,
 			extractTools: false,
-			expected:     "\n<!-- Error: file not found: " + filepath.Join(tempDir, "nonexistent.md") + " -->\n\n",
+			wantErr:      true, // Now expects error instead of embedding comment
 		},
 		{
 			name:         "include file with extra newlines",
@@ -723,8 +723,7 @@ This is just plain markdown content with no frontmatter.`
 			content:      "@include .github/workflows/invalid.md",
 			baseDir:      tempDir,
 			extractTools: false,
-			wantErr:      false,
-			checkContent: "<!-- Error: invalid frontmatter in included file",
+			wantErr:      true, // Now expects error instead of embedding comment
 		},
 		{
 			name:         "invalid non-workflow file inclusion should succeed with warnings",
@@ -1707,6 +1706,89 @@ func BenchmarkStripANSI(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				StripANSI(tc.input)
+			}
+		})
+	}
+}
+
+func TestProcessIncludesOptional(t *testing.T) {
+	// Create temporary directory structure
+	tempDir, err := os.MkdirTemp("", "test_optional_includes")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an existing include file
+	existingFile := filepath.Join(tempDir, "existing.md")
+	existingContent := "# Existing Include\nThis file exists."
+	if err := os.WriteFile(existingFile, []byte(existingContent), 0644); err != nil {
+		t.Fatalf("Failed to write existing file: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		content        string
+		extractTools   bool
+		expectedOutput string
+		expectError    bool
+	}{
+		{
+			name:           "regular include existing file",
+			content:        "@include existing.md\n",
+			extractTools:   false,
+			expectedOutput: existingContent,
+		},
+		{
+			name:         "regular include missing file",
+			content:      "@include missing.md\n",
+			extractTools: false,
+			expectError:  true, // Now expects error instead of embedding comment
+		},
+		{
+			name:           "optional include existing file",
+			content:        "@include? existing.md\n",
+			extractTools:   false,
+			expectedOutput: existingContent,
+		},
+		{
+			name:           "optional include missing file",
+			content:        "@include? missing.md\n",
+			extractTools:   false,
+			expectedOutput: "", // No content added, friendly message goes to stdout
+		},
+		{
+			name:           "optional include missing file extract tools",
+			content:        "@include? missing.md\n",
+			extractTools:   true,
+			expectedOutput: "",
+		},
+		{
+			name:         "regular include missing file extract tools",
+			content:      "@include missing.md\n",
+			extractTools: true,
+			expectError:  true, // Now expects error instead of returning {}
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ProcessIncludes(tt.content, tempDir, tt.extractTools)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("ProcessIncludes expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ProcessIncludes unexpected error: %v", err)
+				return
+			}
+
+			if !strings.Contains(result, tt.expectedOutput) {
+				t.Errorf("ProcessIncludes output = %q, expected to contain %q", result, tt.expectedOutput)
 			}
 		})
 	}
