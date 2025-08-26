@@ -419,6 +419,11 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		return nil, fmt.Errorf("no markdown content found")
 	}
 
+	// Check for deprecated stop-time usage at root level BEFORE schema validation
+	if stopTimeValue := c.extractYAMLValue(result.Frontmatter, "stop-time"); stopTimeValue != "" {
+		return nil, fmt.Errorf("'stop-time' is no longer supported at the root level. Please move it under the 'on:' section and rename to 'stop-after:'.\n\nExample:\n---\non:\n  schedule:\n    - cron: \"0 9 * * 1\"\n  stop-after: \"%s\"\n---", stopTimeValue)
+	}
+
 	// Validate main workflow frontmatter contains only expected entries
 	if err := parser.ValidateMainWorkflowFrontmatterWithSchemaAndLocation(result.Frontmatter, markdownPath); err != nil {
 		return nil, err
@@ -572,38 +577,57 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.PostSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "post-steps")
 	workflowData.RunsOn = c.extractTopLevelYAMLSection(result.Frontmatter, "runs-on")
 	workflowData.Cache = c.extractTopLevelYAMLSection(result.Frontmatter, "cache")
-	workflowData.MaxTurns = c.extractYAMLValue(result.Frontmatter, "max-turns")
-	workflowData.StopTime = c.extractYAMLValue(result.Frontmatter, "stop-time")
 
-	// Resolve relative stop-time to absolute time if needed
+	// Extract max-turns from engine config instead of top-level frontmatter
+	if engineConfig != nil && engineConfig.MaxTurns != "" {
+		workflowData.MaxTurns = engineConfig.MaxTurns
+	}
+
+	// Extract stop-after from the on: section
+	stopAfter, err := c.extractStopAfterFromOn(result.Frontmatter)
+	if err != nil {
+		return nil, err
+	}
+	workflowData.StopTime = stopAfter
+
+	// Resolve relative stop-after to absolute time if needed
 	if workflowData.StopTime != "" {
 		resolvedStopTime, err := resolveStopTime(workflowData.StopTime, time.Now().UTC())
 		if err != nil {
-			return nil, fmt.Errorf("invalid stop-time format: %w", err)
+			return nil, fmt.Errorf("invalid stop-after format: %w", err)
 		}
-		originalStopTime := c.extractYAMLValue(result.Frontmatter, "stop-time")
+		originalStopTime := stopAfter
 		workflowData.StopTime = resolvedStopTime
 
 		if c.verbose && isRelativeStopTime(originalStopTime) {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Resolved relative stop-time to: %s", resolvedStopTime)))
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Resolved relative stop-after to: %s", resolvedStopTime)))
 		} else if c.verbose && originalStopTime != resolvedStopTime {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Parsed absolute stop-time from '%s' to: %s", originalStopTime, resolvedStopTime)))
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Parsed absolute stop-after from '%s' to: %s", originalStopTime, resolvedStopTime)))
 		}
 	}
 
 	workflowData.Alias = c.extractAliasName(result.Frontmatter)
-	workflowData.AIReaction = c.extractYAMLValue(result.Frontmatter, "ai-reaction")
 	workflowData.Jobs = c.extractJobsFromFrontmatter(result.Frontmatter)
 
 	// Parse output configuration
 	workflowData.Output = c.extractOutputConfig(result.Frontmatter)
 
 	// Check if "alias" is used as a trigger in the "on" section
+	// Also extract "reaction" from the "on" section
 	var hasAlias bool
+	var hasReaction bool
 	var otherEvents map[string]any
 	if onValue, exists := result.Frontmatter["on"]; exists {
-		// Check for new format: on.alias
+		// Check for new format: on.alias and on.reaction
 		if onMap, ok := onValue.(map[string]any); ok {
+			// Extract reaction from on section
+			if reactionValue, hasReactionField := onMap["reaction"]; hasReactionField {
+				hasReaction = true
+				if reactionStr, ok := reactionValue.(string); ok {
+					workflowData.AIReaction = reactionStr
+				}
+			}
+
 			if _, hasAliasKey := onMap["alias"]; hasAliasKey {
 				hasAlias = true
 				// Set default alias to filename if not specified in the alias section
@@ -622,13 +646,21 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 				// Extract other (non-conflicting) events
 				otherEvents = make(map[string]any)
 				for key, value := range onMap {
-					if key != "alias" {
+					if key != "alias" && key != "reaction" {
 						otherEvents[key] = value
 					}
 				}
 
 				// Clear the On field so applyDefaults will handle alias trigger generation
 				workflowData.On = ""
+			} else if hasReaction {
+				// Extract other events (excluding reaction which is not an event)
+				otherEvents = make(map[string]any)
+				for key, value := range onMap {
+					if key != "reaction" {
+						otherEvents[key] = value
+					}
+				}
 			}
 		}
 	}
@@ -643,6 +675,17 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		// We'll store this and handle it in applyDefaults
 		workflowData.On = "" // This will trigger alias handling in applyDefaults
 		workflowData.AliasOtherEvents = otherEvents
+	} else if !hasAlias && hasReaction && len(otherEvents) > 0 {
+		// If we have events and reaction but no alias, we need to preserve the On field
+		// but without the reaction field, so rebuild without it
+		// Convert other events (without reaction) back to YAML
+		onEventsYAML, err := yaml.Marshal(map[string]any{"on": otherEvents})
+		if err == nil {
+			workflowData.On = strings.TrimSuffix(string(onEventsYAML), "\n")
+		} else {
+			// Fallback to extracting the original on field (this will include reaction but shouldn't matter for compilation)
+			workflowData.On = c.extractTopLevelYAMLSection(result.Frontmatter, "on")
+		}
 	}
 
 	// Apply defaults
@@ -751,6 +794,32 @@ func (c *Compiler) extractYAMLValue(frontmatter map[string]any, key string) stri
 		}
 	}
 	return ""
+}
+
+// extractStopAfterFromOn extracts the stop-after value from the on: section
+func (c *Compiler) extractStopAfterFromOn(frontmatter map[string]any) (string, error) {
+	onSection, exists := frontmatter["on"]
+	if !exists {
+		return "", nil
+	}
+
+	// Handle different formats of the on: section
+	switch on := onSection.(type) {
+	case string:
+		// Simple string format like "on: push" - no stop-after possible
+		return "", nil
+	case map[string]any:
+		// Complex object format - look for stop-after
+		if stopAfter, exists := on["stop-after"]; exists {
+			if str, ok := stopAfter.(string); ok {
+				return str, nil
+			}
+			return "", fmt.Errorf("stop-after value must be a string")
+		}
+		return "", nil
+	default:
+		return "", fmt.Errorf("invalid on: section format")
+	}
 }
 
 // generateJobName converts a workflow name to a valid YAML job identifier
@@ -2631,8 +2700,15 @@ func (c *Compiler) validateHTTPTransportSupport(tools map[string]any, engine Age
 
 // validateMaxTurnsSupport validates that max-turns is only used with engines that support this feature
 func (c *Compiler) validateMaxTurnsSupport(frontmatter map[string]any, engine AgenticEngine) error {
-	// Check if max-turns is specified in the frontmatter
-	_, hasMaxTurns := frontmatter["max-turns"]
+	// Check if max-turns is specified in the engine config
+	engineSetting, engineConfig := c.extractEngineConfig(frontmatter)
+	_ = engineSetting // Suppress unused variable warning
+
+	hasMaxTurns := false
+	if engineConfig != nil && engineConfig.MaxTurns != "" {
+		hasMaxTurns = true
+	}
+
 	if !hasMaxTurns {
 		// No max-turns specified, no validation needed
 		return nil
