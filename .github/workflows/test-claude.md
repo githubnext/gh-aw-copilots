@@ -11,22 +11,13 @@ on:
 engine: 
   id: claude
   model: claude-3-5-sonnet-20241022
-  permissions:
-    network:
-      allowed: []
 timeout_minutes: 10
 permissions:
   pull-requests: write
   actions: read
   contents: read
-output:
-  labels:
-    allowed: ["bug", "feature"]
-  issue:
-    title-prefix: "[claude-test] "
-    labels: [claude, automation, haiku]
-  issue_comment: {}
-  pull-request:
+safe-outputs:
+  create-pull-request:
     title-prefix: "[claude-test] "
     labels: [claude, automation, bot]
 tools:
@@ -125,14 +116,6 @@ Your comment should include:
 - Clear structure with headers and bullet points
 
 **Current Context**: You have access to the current pull request content via: "${{ needs.task.outputs.text }}"
-
-### Action Output: Create a Haiku
-
-**IMPORTANT**: After completing your PR analysis and posting your comment, please create a haiku about the changes you analyzed and write it to the action output. The haiku should capture the essence of the pull request in a creative and poetic way.
-
-Write your haiku to the file "${{ env.GITHUB_AW_OUTPUT }}" (use the `Write` tool). This will make it available as a workflow output that other jobs can access.
-
-Make your haiku relevant to the specific changes you analyzed in this PR. Be creative and thoughtful in your poetic interpretation of the code changes.
 
 ### Additional Task: Random Quote Generation
 

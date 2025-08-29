@@ -81,30 +81,30 @@ The YAML frontmatter supports these fields:
   - `claude:` - Claude-specific tools  
   - Custom tool names for MCP servers
 
-- **`output:`** - Output processing configuration
-  - `issue:` - Automatic GitHub issue creation from agent output
+- **`safe-outputs:`** - Safe output processing configuration
+  - `create-issue:` - Automatic GitHub issue creation from agent output
     ```yaml
-    output:
-      issue:
+    safe-outputs:
+      create-issue:
         title-prefix: "[ai] "           # Optional: prefix for issue titles  
         labels: [automation, ai-agent]  # Optional: labels to attach to issues
     ```
-    **Important**: When using `output.issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
-  - `comment:` - Automatic comment creation on issues/PRs from agent output
+    **Important**: When using `safe-outputs.create-issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
+  - `add_issue_comment:` - Automatic comment creation on issues/PRs from agent output
     ```yaml
-    output:
-      comment: {}
+    safe-outputs:
+      add_issue_comment: {}
     ```
-    **Important**: When using `output.comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
-  - `pull-request:` - Automatic pull request creation from agent output with git patches
+    **Important**: When using `safe-outputs.add-issue-comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
+  - `create-pull-request:` - Automatic pull request creation from agent output with git patches
     ```yaml
-    output:
-      pull-request:
+    safe-outputs:
+      create-pull-request:
         title-prefix: "[ai] "           # Optional: prefix for PR titles
         labels: [automation, ai-agent]  # Optional: labels to attach to PRs
         draft: true                     # Optional: create as draft PR (defaults to true)
     ```
-    **Important**: When using `output.pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. The agent must create git patches in `/tmp/aw.patch`.
+    **Important**: When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. The agent must create git patches in `/tmp/aw.patch`.
   
 - **`alias:`** - Alternative workflow name (string)
 - **`cache:`** - Cache configuration for workflow dependencies (object or array)
@@ -152,7 +152,7 @@ Cache steps are automatically added to the workflow job and the cache configurat
 
 ### Automatic GitHub Issue Creation
 
-Use the `output.issue` configuration to automatically create GitHub issues from AI agent output:
+Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from AI agent output:
 
 ```yaml
 ---
@@ -161,8 +161,8 @@ permissions:
   contents: read      # Main job only needs minimal permissions
   actions: read
 engine: claude
-output:
-  issue:
+safe-outputs:
+  create-issue:
     title-prefix: "[analysis] "
     labels: [automation, ai-generated]
 ---
@@ -170,7 +170,7 @@ output:
 # Code Analysis Agent
 
 Analyze the latest code changes and provide insights.
-Write your final analysis to ${{ env.GITHUB_AW_OUTPUT }}.
+Create an issue with your final analysis.
 ```
 
 **Key Benefits:**
@@ -178,13 +178,6 @@ Write your final analysis to ${{ env.GITHUB_AW_OUTPUT }}.
 - **Automatic Processing**: AI output is automatically parsed and converted to GitHub issues
 - **Job Dependencies**: Issue creation only happens after the AI agent completes successfully
 - **Output Variables**: The created issue number and URL are available to downstream jobs
-
-**How It Works:**
-1. AI agent writes output to `${{ env.GITHUB_AW_OUTPUT }}`
-2. Main job completes and passes output via job output variables
-3. Separate `create_issue` job runs with `issues: write` permission
-4. JavaScript parses the output (first line = title, rest = body)
-5. GitHub issue is created with optional title prefix and labels
 
 ## Trigger Patterns
 
@@ -306,11 +299,6 @@ tools:
       - add_issue_comment
       - update_issue
       - create_issue
-      - get_issue
-      - list_issues
-      - search_issues
-      - get_pull_request
-      - list_pull_requests
 ```
 
 ### Claude Tools
@@ -424,17 +412,9 @@ permissions:
 permissions:
   contents: read      # Main job minimal permissions
   actions: read
-output:
-  issue:
-    title-prefix: "[ai] "
-    labels: [automation]
-  # OR for pull requests:
-  # pull-request:
-  #   title-prefix: "[ai] " 
-  #   labels: [automation]
-  #   draft: false                      # Create non-draft PR
-  # OR for comments:
-  # comment: {}
+
+safe-outputs:
+  create-issue:       # Automatic issue creation
 ```
 
 **Note**: With output processing, the main job doesn't need `issues: write`, `pull-requests: write`, or `contents: write` permissions. The separate output creation jobs automatically get the required permissions.
@@ -443,7 +423,7 @@ output:
 
 ### Automatic GitHub Issue Creation
 
-Use the `output.issue` configuration to automatically create GitHub issues from AI agent output:
+Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from AI agent output:
 
 ```yaml
 ---
@@ -452,8 +432,8 @@ permissions:
   contents: read      # Main job only needs minimal permissions
   actions: read
 engine: claude
-output:
-  issue:
+safe-outputs:
+  create-issue:
     title-prefix: "[analysis] "
     labels: [automation, ai-generated]
 ---
@@ -461,7 +441,7 @@ output:
 # Code Analysis Agent
 
 Analyze the latest code changes and provide insights.
-Write your final analysis to ${{ env.GITHUB_AW_OUTPUT }}.
+Create an issue with your final analysis.
 ```
 
 **Key Benefits:**
@@ -470,16 +450,9 @@ Write your final analysis to ${{ env.GITHUB_AW_OUTPUT }}.
 - **Job Dependencies**: Issue creation only happens after the AI agent completes successfully
 - **Output Variables**: The created issue number and URL are available to downstream jobs
 
-**How It Works:**
-1. AI agent writes output to `${{ env.GITHUB_AW_OUTPUT }}`
-2. Main job completes and passes output via job output variables
-3. Separate `create_issue` job runs with `issues: write` permission
-4. JavaScript parses the output (first line = title, rest = body)
-5. GitHub issue is created with optional title prefix and labels
-
 ### Automatic Pull Request Creation
 
-Use the `output.pull-request` configuration to automatically create pull requests from AI agent output:
+Use the `safe-outputs.pull-request` configuration to automatically create pull requests from AI agent output:
 
 ```yaml
 ---
@@ -487,8 +460,8 @@ on: push
 permissions:
   actions: read       # Main job only needs minimal permissions
 engine: claude
-output:
-  pull-request:
+safe-outputs:
+  create-pull-request:
     title-prefix: "[bot] "
     labels: [automation, ai-generated]
     draft: false                        # Create non-draft PR for immediate review
@@ -497,7 +470,7 @@ output:
 # Code Improvement Agent
 
 Analyze the latest code and suggest improvements.
-Generate git patches in /tmp/aw.patch and write summary to ${{ env.GITHUB_AW_OUTPUT }}.
+Create a pull request with your changes.
 ```
 
 **Key Features:**
@@ -506,18 +479,9 @@ Generate git patches in /tmp/aw.patch and write summary to ${{ env.GITHUB_AW_OUT
 - **Environment-based Configuration**: Resolves base branch from GitHub Action context
 - **Fail-Fast Error Handling**: Validates required environment variables and patch file existence
 
-**How It Works:**
-1. AI agent creates git patches in `/tmp/aw.patch` and writes title/description to `${{ env.GITHUB_AW_OUTPUT }}`
-2. Main job completes and passes output via job output variables
-3. Separate `create_output_pull_request` job runs with `contents: write` and `pull-requests: write` permissions
-4. Job creates a new branch using `{workflowId}/{randomHex}` pattern
-5. Git patches are applied using `git apply`
-6. Changes are committed and pushed to the new branch
-7. Pull request is created with parsed title/body and optional labels
-
 ### Automatic Comment Creation
 
-Use the `output.comment` configuration to automatically create comments from AI agent output:
+Use the `safe-outputs.add-issue-comment` configuration to automatically create an issue or pull request comment from AI agent output:
 
 ```yaml
 ---
@@ -528,22 +492,15 @@ permissions:
   contents: read      # Main job only needs minimal permissions
   actions: read
 engine: claude
-output:
-  comment: {}
+safe-outputs:
+  add-issue-comment:
 ---
 
 # Issue Analysis Agent
 
 Analyze the issue and provide feedback.
-Write your analysis to ${{ env.GITHUB_AW_OUTPUT }}.
+Add a comment to the issue with your analysis.
 ```
-
-**How It Works:**
-1. AI agent writes output to `${{ env.GITHUB_AW_OUTPUT }}`
-2. Main job completes and passes output via job output variables
-3. Separate `create_issue_comment` job runs with `issues: write` and `pull-requests: write` permissions
-4. Job posts the entire agent output as a comment on the triggering issue or pull request
-5. Automatically skips if not running in an issue or pull request context
 
 ## Permission Patterns
 

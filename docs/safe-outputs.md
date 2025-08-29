@@ -2,32 +2,36 @@
 
 One of the primary security features of GitHub Agentic Workflows is "safe output processing", enabling the creation of GitHub issues, comments, pull requests, and other outputs without giving the agentic portion of the workflow write permissions.
 
-## Overview (`output:`)
+## Overview (`safe-outputs:`)
 
-The `output:` element of your workflow's frontmatter declares that your agentic workflow should conclude with optional automated actions based on the agentic workflow's output. This enables your workflow to write content that is then automatically processed to create GitHub issues, comments, pull requests, or add labels—all without giving the agentic portion of the workflow any write permissions.
+The `safe-outputs:` element of your workflow's frontmatter declares that your agentic workflow should conclude with optional automated actions based on the agentic workflow's output. This enables your workflow to write content that is then automatically processed to create GitHub issues, comments, pull requests, or add labels—all without giving the agentic portion of the workflow any write permissions.
 
 **How It Works:**
-1. The agentic part of your workflow runs with minimal read-only permissions
-2. The workflow writes its output to the special `${{ env.GITHUB_AW_OUTPUT }}` environment variable
-3. The compiler automatically generates additional jobs that read this output and perform the requested actions
-4. Only these generated jobs receive the necessary write permissions
+1. The agentic part of your workflow runs with minimal read-only permissions. It is given additional prompting to write its output to the special known files
+2. The compiler automatically generates additional jobs that read this output and perform the requested actions
+3. Only these generated jobs receive the necessary write permissions
 
 ## Available Output Types
 
-### New Issue Creation (`issue:`)
+### New Issue Creation (`create-issue:`)
 
-Adding `issue:` to the `output:` section of your workflow declares that the workflow should conclude with the creation of a GitHub issue based on the workflow's output.
+Adding `create-issue:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with the creation of a GitHub issue based on the workflow's output.
 
 ```yaml
-output:
-  issue:
+safe-outputs:
+  create-issue:
+```
+
+or with further configuration:
+
+```yaml
+safe-outputs:
+  create-issue:
     title-prefix: "[ai] "           # Optional: prefix for issue titles
     labels: [automation, agent]     # Optional: labels to attach to issues
 ```
 
-The agentic part of your workflow should write its content to `${{ env.GITHUB_AW_OUTPUT }}`. The output should be structured as:
-- **First non-empty line**: Becomes the issue title (markdown heading syntax like `# Title` is automatically stripped)
-- **Remaining content**: Becomes the issue body
+The agentic part of your workflow should describe the issue it wants created.
 
 **Example natural language to generate the output:**
 
@@ -35,22 +39,21 @@ The agentic part of your workflow should write its content to `${{ env.GITHUB_AW
 # Code Analysis Agent
 
 Analyze the latest commit and provide insights.
-Write your analysis to ${{ env.GITHUB_AW_OUTPUT }} at the end.
-
-The first line of your output will become the issue title.
-The rest will become the issue body.
+Create a new issue with your findings with title "AI Code Analysis" and description "Here are the details of the analysis..."
 ```
 
-### Issue Comment Creation (`issue_comment:`)
+The workflow will have additional prompting describing that, to create the issue, the agent should write the issue title and body to a file.
 
-Adding `issue_comment:` to the output section of your workflow declares that the workflow should conclude with posting a comment on the triggering issue or pull request based on the workflow's output.
+### Issue Comment Creation (`add-issue-comment:`)
+
+Adding `add-issue-comment:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with posting a comment on the triggering issue or pull request based on the workflow's output.
 
 ```yaml
-output:
-  issue_comment: {}                 # Create comments on issues/PRs from workflow output
+safe-outputs:
+  add-issue-comment:
 ```
 
-The agentic part of your workflow should writes its content to `${{ env.GITHUB_AW_OUTPUT }}`. The entire content becomes the comment body—no special formatting is required.
+The agentic part of your workflow should describe the comment it wants posted.
 
 **Example natural language to generate the output:**
 
@@ -58,30 +61,33 @@ The agentic part of your workflow should writes its content to `${{ env.GITHUB_A
 # Issue/PR Analysis Agent
 
 Analyze the issue or pull request and provide feedback.
-Write your analysis to ${{ env.GITHUB_AW_OUTPUT }} at the end.
-
-Your entire output will be posted as a comment on the triggering issue or PR.
+Create an issue comment on the triggering issue or PR starting with the text "Here is my analysis of the issue/PR..."
 ```
 
-This automatically creates GitHub issues or comments from the workflow's analysis without requiring write permissions on the main job.
+The workflow will have additional prompting describing that, to create the issue, the agent should write the comment body to a special file..
 
-### Pull Request Creation (`pull-request:`)
+### Pull Request Creation (`create-pull-request:`)
 
-Adding `pull-request:` to the `output:` section of your workflow declares that the workflow should conclude with the creation of a pull request containing code changes generated by the workflow.
+Adding `create-pull-request:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with the creation of a pull request containing code changes generated by the workflow.
 
 ```yaml
-output:
-  pull-request:
+safe-outputs:
+  create-pull-request:
+```
+
+or with further configuration:
+
+```yaml
+safe-outputs:
+  create-pull-request:
     title-prefix: "[ai] "           # Optional: prefix for PR titles
     labels: [automation, ai-agent]  # Optional: labels to attach to PRs
     draft: true                     # Optional: create as draft PR (defaults to true)
 ```
 
-The agentic part of your workflow should provide output in two ways:
-1. **File changes**: Make any file changes in the working directory—these are automatically collected using `git add -A` and committed
-2. **PR description**: Write to `${{ env.GITHUB_AW_OUTPUT }}` with:
-   - **First non-empty line**: Becomes the PR title
-   - **Remaining content**: Becomes the PR description
+The agentic part of your workflow should instruct to 
+1. **Make code changes**: Make any code changes in the working directory—these are automatically collected using `git add -A` and committed
+2. **Create a pull request**: Describe the pull request title and body you want
 
 **Example natural language to generate the output:**
 
@@ -91,47 +97,47 @@ The agentic part of your workflow should provide output in two ways:
 Analyze the latest commit and suggest improvements.
 
 1. Make any file changes directly in the working directory
-2. Write a PR title and description to ${{ env.GITHUB_AW_OUTPUT }}
+2. Create a PR with title "First change" and description "THis is a first change"
 ```
 
-### Label Addition (`labels:`)
+### Label Addition (`add-issue-labels:`)
 
-Adding `labels:` to the `output:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the agent's analysis.
+Adding `add-issue-labels:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the agent's analysis.
 
 ```yaml
-output:
-  labels:
-    allowed: [triage, bug, enhancement] # Mandatory: allowed labels for addition
+safe-outputs:
+  add-issue-labels:
+```
+
+or with further configuration:
+
+```yaml
+safe-outputs:
+  add-issue-labels:
+    allowed: [triage, bug, enhancement] # Optional: allowed labels for addition.
     max-count: 3                        # Optional: maximum number of labels to add (default: 3)
 ```
 
-The agentic part of your workflow writes should labels to add to `${{ env.GITHUB_AW_OUTPUT }}`, one label per line:
+The agentic part of your workflow should analyze the issue content and determine appropriate labels. 
+
+**Example of natural language to generate the output:**
+
+```markdown
+# Issue Labeling Agent
+
+Analyze the issue content and add appropriate labels to the issue.
 ```
-triage
-bug
-needs-review
-```
+
+The agentic part of your workflow will have implicit additional prompting saying that, to add labels to a GitHub issue, you must write labels to a special file, one label per line.
 
 **Safety Features:**
 
 - Empty lines in agent output are ignored
 - Lines starting with `-` are rejected (no removal operations allowed)
 - Duplicate labels are automatically removed
-- All requested labels must be in the `allowed` list or the job fails with a clear error message
+- If `allowed` is provided, all requested labels must be in the `allowed` list or the job fails with a clear error message. If `allowed` is not provided then any labels are allowed (including creating new labels).
 - Label count is limited by `max-count` setting (default: 3) - exceeding this limit causes job failure
 - Only GitHub's `issues.addLabels` API endpoint is used (no removal endpoints)
-
-**Example natural language to generate the output:**
-
-```markdown
-# Issue Labeling Agent
-
-Analyze the issue content and determine appropriate labels.
-
-Write the labels you want to add (one per line) to ${{ env.GITHUB_AW_OUTPUT }}.
-
-Only use labels from the allowed list: triage, bug, enhancement, documentation, needs-review.
-```
 
 ## Security and Sanitization
 
@@ -153,7 +159,7 @@ All agent output is automatically sanitized for security before being processed:
 **Configuration:**
 
 ```yaml
-output:
+safe-outputs:
   allowed-domains:                    # Optional: domains allowed in agent output URIs
     - github.com                      # Default GitHub domains are always included
     - api.github.com                  # Additional trusted domains can be specified

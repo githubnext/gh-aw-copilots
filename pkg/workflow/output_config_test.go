@@ -20,17 +20,17 @@ func TestAllowedDomainsParsing(t *testing.T) {
 		{
 			name: "output config with allowed-domains",
 			frontmatter: map[string]any{
-				"output": map[string]any{
+				"safe-outputs": map[string]any{
 					"allowed-domains": []any{"example.com", "trusted.org"},
 				},
 			},
 			expectedDomains: []string{"example.com", "trusted.org"},
 		},
 		{
-			name: "output config with issue and allowed-domains",
+			name: "output config with create-issue and allowed-domains",
 			frontmatter: map[string]any{
-				"output": map[string]any{
-					"issue": map[string]any{
+				"safe-outputs": map[string]any{
+					"create-issue": map[string]any{
 						"title-prefix": "[auto] ",
 					},
 					"allowed-domains": []any{"github.com", "api.github.com"},
@@ -41,8 +41,8 @@ func TestAllowedDomainsParsing(t *testing.T) {
 		{
 			name: "output config without allowed-domains",
 			frontmatter: map[string]any{
-				"output": map[string]any{
-					"issue": map[string]any{
+				"safe-outputs": map[string]any{
+					"create-issue": map[string]any{
 						"title-prefix": "[auto] ",
 					},
 				},
@@ -54,7 +54,7 @@ func TestAllowedDomainsParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewCompiler(false, "", "test")
-			config := c.extractOutputConfig(tt.frontmatter)
+			config := c.extractSafeOutputsConfig(tt.frontmatter)
 
 			if tt.expectedDomains == nil {
 				if config == nil {
@@ -93,12 +93,12 @@ func TestAllowedDomainsInWorkflow(t *testing.T) {
 	// Test workflow with allowed domains
 	frontmatter := map[string]any{
 		"engine": "claude",
-		"output": map[string]any{
+		"safe-outputs": map[string]any{
 			"allowed-domains": []any{"example.com", "trusted.org"},
 		},
 	}
 
-	config := c.extractOutputConfig(frontmatter)
+	config := c.extractSafeOutputsConfig(frontmatter)
 	if config == nil {
 		t.Fatal("Expected output config, but got nil")
 	}

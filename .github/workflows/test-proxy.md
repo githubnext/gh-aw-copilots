@@ -4,8 +4,8 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-output:
-  issue_comment: {}
+safe-outputs:
+  add-issue-comment:
 
 tools:
   fetch:
@@ -21,7 +21,8 @@ tools:
   
   github:
     allowed:
-      - "get_issue"
+      - "create_issue"
+      - "create_comment"
 
 engine: claude
 runs-on: ubuntu-latest
@@ -46,10 +47,10 @@ Test the MCP network permissions feature to validate that domain restrictions ar
 
 If there are any failures, security issues, or unexpected behaviors:
 
-- Write a detailed report to ${{ env.GITHUB_AW_OUTPUT }} documenting:
-- Which domains were successfully accessed vs blocked
-- Error messages received for blocked domains  
-- Any security observations or recommendations
-- Specific failure details that need attention
+- Write a detailed report documenting:
+  - Which domains were successfully accessed vs blocked
+  - Error messages received for blocked domains  
+  - Any security observations or recommendations
+  - Specific failure details that need attention
 
-The test results will be automatically posted as a comment on PR #${{ github.event.pull_request.number }}.
+Post the test results as an issue comment on PR #${{ github.event.pull_request.number }}.
