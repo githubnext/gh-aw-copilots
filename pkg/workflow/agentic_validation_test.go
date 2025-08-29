@@ -200,7 +200,7 @@ tools:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing: %s", tc.description)
-			
+
 			// Parse frontmatter for validation
 			result, err := parser.ExtractFrontmatterFromContent(tc.workflowYAML)
 			if err != nil {
@@ -223,7 +223,7 @@ tools:
 				for i, err := range errors {
 					t.Logf("  Error %d: Path='%s', Message='%s'", i+1, err.Path, err.Message)
 					if err.Span != nil {
-						t.Logf("    Span: Line %d:%d to %d:%d", 
+						t.Logf("    Span: Line %d:%d to %d:%d",
 							err.Span.StartLine, err.Span.StartColumn,
 							err.Span.EndLine, err.Span.EndColumn)
 					}

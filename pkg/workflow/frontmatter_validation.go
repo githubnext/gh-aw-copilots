@@ -50,13 +50,13 @@ func (v *FrontmatterValidator) ValidateFrontmatter(frontmatter map[string]any) [
 // parseJSONSchemaError parses JSON schema validation errors and extracts path information
 func (v *FrontmatterValidator) parseJSONSchemaError(err error) []FrontmatterValidationError {
 	errorMsg := err.Error()
-	
+
 	// Extract path information from JSON schema error messages
 	// Example error format: "at '/engine': value must be one of 'claude', 'codex'"
 	paths := extractJSONPathsFromError(errorMsg)
-	
+
 	var validationErrors []FrontmatterValidationError
-	
+
 	if len(paths) > 0 {
 		// Create individual errors for each path found
 		for _, pathInfo := range paths {
@@ -75,7 +75,7 @@ func (v *FrontmatterValidator) parseJSONSchemaError(err error) []FrontmatterVali
 			Span:    nil,
 		})
 	}
-	
+
 	return validationErrors
 }
 
@@ -88,29 +88,27 @@ type pathErrorInfo struct {
 // extractJSONPathsFromError extracts JSONPath and error message pairs from JSON schema errors
 func extractJSONPathsFromError(errorMsg string) []pathErrorInfo {
 	var pathErrors []pathErrorInfo
-	
+
 	// Parse the error message to extract individual path errors
 	// Look for patterns like "- at '/path': message"
 	lines := strings.Split(errorMsg, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Look for lines starting with "- at '/path':"
 		if strings.HasPrefix(line, "- at '") {
 			if endQuote := strings.Index(line[6:], "'"); endQuote != -1 {
 				path := line[6 : 6+endQuote]
-				
+
 				// Extract message after the path
 				messageStart := strings.Index(line, ": ")
 				if messageStart != -1 {
 					message := line[messageStart+2:]
-					
+
 					// Clean up the path (remove leading slash if present)
-					if strings.HasPrefix(path, "/") {
-						path = path[1:]
-					}
-					
+					path = strings.TrimPrefix(path, "/")
+
 					pathErrors = append(pathErrors, pathErrorInfo{
 						path:    path,
 						message: message,
@@ -119,7 +117,7 @@ func extractJSONPathsFromError(errorMsg string) []pathErrorInfo {
 			}
 		}
 	}
-	
+
 	// If no specific paths found, try to extract a general path from the error
 	if len(pathErrors) == 0 {
 		// Look for single path references like "at '/engine'"
@@ -127,10 +125,8 @@ func extractJSONPathsFromError(errorMsg string) []pathErrorInfo {
 			startIdx := strings.Index(errorMsg, "at '/") + 4
 			if endIdx := strings.Index(errorMsg[startIdx:], "'"); endIdx != -1 {
 				path := errorMsg[startIdx : startIdx+endIdx]
-				if strings.HasPrefix(path, "/") {
-					path = path[1:]
-				}
-				
+				path = strings.TrimPrefix(path, "/")
+
 				pathErrors = append(pathErrors, pathErrorInfo{
 					path:    path,
 					message: errorMsg,
@@ -138,7 +134,7 @@ func extractJSONPathsFromError(errorMsg string) []pathErrorInfo {
 			}
 		}
 	}
-	
+
 	return pathErrors
 }
 
@@ -147,13 +143,13 @@ func (v *FrontmatterValidator) getSourceSpanForPath(jsonPath string) *parser.Sou
 	if v.locator == nil || jsonPath == "" {
 		return nil
 	}
-	
+
 	// Try the original path first
 	span, err := v.locator.LocatePathSpan(jsonPath)
 	if err == nil {
 		return &span
 	}
-	
+
 	// If the original path fails, try converting slash notation to dot notation
 	// JSON schema uses '/tools/github' but our locator expects 'tools.github'
 	if strings.Contains(jsonPath, "/") {
@@ -163,7 +159,7 @@ func (v *FrontmatterValidator) getSourceSpanForPath(jsonPath string) *parser.Sou
 			return &span
 		}
 	}
-	
+
 	// If we still can't find the path, return nil
 	return nil
 }

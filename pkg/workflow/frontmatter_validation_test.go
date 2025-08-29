@@ -138,9 +138,9 @@ tools:
 
 func TestValidationErrorSpans(t *testing.T) {
 	testCases := []struct {
-		name            string
-		frontmatterYAML string
-		frontmatter     map[string]any
+		name              string
+		frontmatterYAML   string
+		frontmatter       map[string]any
 		minExpectedErrors int // Minimum expected errors (JSON schema can produce multiple detailed errors)
 	}{
 		{
@@ -215,18 +215,18 @@ tools:
 			// Check if we can extract JSONPath information from error messages
 			for _, err := range errors {
 				t.Logf("Error path: '%s', message: '%s'", err.Path, err.Message)
-				
+
 				// Verify we get some error information
 				if err.Message == "" {
 					t.Errorf("Error message should not be empty")
 				}
-				
+
 				// Test source span mapping if path is available
 				if err.Path != "" && err.Span != nil {
-					t.Logf("  Source span: Line %d:%d to %d:%d", 
+					t.Logf("  Source span: Line %d:%d to %d:%d",
 						err.Span.StartLine, err.Span.StartColumn,
 						err.Span.EndLine, err.Span.EndColumn)
-					
+
 					// Verify span has reasonable values
 					if err.Span.StartLine <= 0 || err.Span.StartColumn <= 0 {
 						t.Errorf("Invalid span for error at path '%s': %+v", err.Path, err.Span)
@@ -354,7 +354,7 @@ max-turns: "not-a-number"`,
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing: %s", tc.description)
-			
+
 			validator := NewFrontmatterValidator(tc.frontmatterYAML)
 			errors := validator.ValidateFrontmatter(tc.frontmatter)
 
@@ -366,7 +366,7 @@ max-turns: "not-a-number"`,
 			for i, err := range errors {
 				t.Logf("Error %d: Path='%s', Message='%s'", i+1, err.Path, err.Message)
 				if err.Span != nil {
-					t.Logf("  Span: Line %d:%d to %d:%d", 
+					t.Logf("  Span: Line %d:%d to %d:%d",
 						err.Span.StartLine, err.Span.StartColumn,
 						err.Span.EndLine, err.Span.EndColumn)
 				} else {
@@ -381,7 +381,7 @@ max-turns: "not-a-number"`,
 			}
 
 			for i, compilerErr := range compilerErrors {
-				t.Logf("Compiler Error %d: File='%s', Line=%d, Column=%d", 
+				t.Logf("Compiler Error %d: File='%s', Line=%d, Column=%d",
 					i+1, compilerErr.Position.File, compilerErr.Position.Line, compilerErr.Position.Column)
 			}
 		})

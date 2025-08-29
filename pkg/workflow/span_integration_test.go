@@ -178,7 +178,7 @@ This workflow has an invalid engine object configuration.`,
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing: %s", tc.description)
-			
+
 			// Create temporary test file
 			tmpDir, err := os.MkdirTemp("", "comprehensive-span-integration-test")
 			if err != nil {
@@ -262,7 +262,7 @@ tools:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing: %s", tc.description)
-			
+
 			// Create temporary test file
 			tmpDir, err := os.MkdirTemp("", "location-accuracy-test")
 			if err != nil {
@@ -286,7 +286,7 @@ tools:
 
 			// Log the error for manual inspection of location accuracy
 			t.Logf("Compilation error (should reference line %d): %v", tc.expectedLine, err)
-			
+
 			// Note: For now, we're primarily testing that errors are caught
 			// Future enhancement could parse error messages to verify exact line numbers
 		})
