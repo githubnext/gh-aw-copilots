@@ -1638,6 +1638,13 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		outputs["text"] = "${{ steps.compute-text.outputs.text }}"
 	}
 
+	// If no steps have been added, add a dummy step to make the job valid
+	// This can happen when the task job is created only for an if condition
+	if len(steps) == 0 {
+		steps = append(steps, "      - name: Task job condition barrier\n")
+		steps = append(steps, "        run: echo \"Task job executed - conditions satisfied\"\n")
+	}
+
 	job := &Job{
 		Name:        "task",
 		If:          data.If, // Use the existing condition (which may include alias checks)
