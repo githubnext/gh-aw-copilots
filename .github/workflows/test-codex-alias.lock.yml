@@ -428,13 +428,17 @@ jobs:
     needs: task
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-      discussions: read
-      deployments: read
       actions: read
       checks: read
+      contents: read
+      deployments: read
+      discussions: read
+      issues: read
+      packages: read
+      pages: read
+      pull-requests: read
+      repository-projects: read
+      security-events: read
       statuses: read
     outputs:
       output: ${{ steps.collect_output.outputs.output }}
