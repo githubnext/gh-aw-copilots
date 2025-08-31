@@ -1,14 +1,13 @@
 ---
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch:
   reaction: eyes
 
 engine: 
   id: claude
 
 safe-outputs:
-  add-issue-comment:
+  create-issue:
 
 tools:
   time:
@@ -22,11 +21,11 @@ tools:
 
 **First, get the current time using the get_current_time tool to timestamp your analysis.**
 
-If the title of the issue #${{ github.event.issue.number }} is "Hello from Claude" then add a comment on the issue "Reply from Claude" with the current time.
+Create an issue with title "Hello from Claude" and a comment in the body saying what the current time is and if you were successful in using the MCP tool
 
 ### AI Attribution
 
-Include this footer in your PR comment:
+Include this footer in your issue description:
 
 ```markdown
 > AI-generated content by [${{ github.workflow }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) may contain mistakes.

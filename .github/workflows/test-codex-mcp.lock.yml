@@ -4,14 +4,12 @@
 
 name: "Test Codex Mcp"
 "on":
-  issues:
-    types:
-    - opened
+  workflow_dispatch: null
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
+  group: "gh-aw-${{ github.workflow }}"
 
 run-name: "Test Codex Mcp"
 
@@ -202,11 +200,11 @@ jobs:
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
           **First, get the current time using the get_current_time tool to timestamp your analysis.**
           
-          If the title of the issue #${{ github.event.issue.number }} is "Hello from Codex" then add a comment on the issue "Reply from Codex" with the current time.
+          Create an issue with title "Hello from Codex" and a comment in the body saying what the current time is and if you were successful in using the MCP tool
           
           ### AI Attribution
           
-          Include this footer in your PR comment:
+          Include this footer in your issue description:
           
           ```markdown
           > AI-generated content by [${{ github.workflow }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) may contain mistakes.
@@ -215,9 +213,9 @@ jobs:
           
           ---
           
-          ## Adding a Comment to an Issue or Pull Request
+          ## Issue Creation
           
-          To add a comment to an issue or pull request on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write the issue comment you want to make to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", in markdown.
+          To create an issue on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", where the first line of the file is the title , and the rest of the file is the body , in markdown.
           
           EOF
       - name: Print prompt to step summary
@@ -751,21 +749,19 @@ jobs:
           path: /tmp/aw.patch
           if-no-files-found: ignore
 
-  create_issue_comment:
+  create_issue:
     needs: test-codex-mcp
-    if: github.event.issue.number || github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-      pull-requests: write
     timeout-minutes: 10
     outputs:
-      comment_id: ${{ steps.create_comment.outputs.comment_id }}
-      comment_url: ${{ steps.create_comment.outputs.comment_url }}
+      issue_number: ${{ steps.create_issue.outputs.issue_number }}
+      issue_url: ${{ steps.create_issue.outputs.issue_url }}
     steps:
-      - name: Add Issue Comment
-        id: create_comment
+      - name: Create Output Issue
+        id: create_issue
         uses: actions/github-script@v7
         env:
           GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-mcp.outputs.output }}
@@ -783,62 +779,91 @@ jobs:
                 return;
               }
               console.log('Agent output content length:', outputContent.length);
-              // Check if we're in an issue or pull request context
-              const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
-              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
-              if (!isIssueContext && !isPRContext) {
-                console.log('Not running in issue or pull request context, skipping comment creation');
-                return;
-              }
-              // Determine the issue/PR number and comment endpoint
-              let issueNumber;
-              let commentEndpoint;
-              if (isIssueContext) {
-                if (context.payload.issue) {
-                  issueNumber = context.payload.issue.number;
-                  commentEndpoint = 'issues';
-                } else {
-                  console.log('Issue context detected but no issue found in payload');
-                  return;
+              // Check if we're in an issue context (triggered by an issue event)
+              const parentIssueNumber = context.payload?.issue?.number;
+              // Parse labels from environment variable (comma-separated string)
+              const labelsEnv = process.env.GITHUB_AW_ISSUE_LABELS;
+              const labels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
+              // Parse the output to extract title and body
+              const lines = outputContent.split('\n');
+              let title = '';
+              let bodyLines = [];
+              let foundTitle = false;
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                // Skip empty lines until we find the title
+                if (!foundTitle && line === '') {
+                  continue;
                 }
-              } else if (isPRContext) {
-                if (context.payload.pull_request) {
-                  issueNumber = context.payload.pull_request.number;
-                  commentEndpoint = 'issues'; // PR comments use the issues API endpoint
-                } else {
-                  console.log('Pull request context detected but no pull request found in payload');
-                  return;
+                // First non-empty line becomes the title
+                if (!foundTitle && line !== '') {
+                  // Remove markdown heading syntax if present
+                  title = line.replace(/^#+\s*/, '').trim();
+                  foundTitle = true;
+                  continue;
+                }
+                // Everything else goes into the body
+                if (foundTitle) {
+                  bodyLines.push(lines[i]); // Keep original formatting
                 }
               }
-              if (!issueNumber) {
-                console.log('Could not determine issue or pull request number');
-                return;
+              // If no title was found, use a default
+              if (!title) {
+                title = 'Agent Output';
               }
-              let body = outputContent.trim();
+              // Apply title prefix if provided via environment variable
+              const titlePrefix = process.env.GITHUB_AW_ISSUE_TITLE_PREFIX;
+              if (titlePrefix && !title.startsWith(titlePrefix)) {
+                title = titlePrefix + title;
+              }
+              if (parentIssueNumber) {
+                console.log('Detected issue context, parent issue #' + parentIssueNumber);
+                // Add reference to parent issue in the child issue body
+                bodyLines.push(`Related to #${parentIssueNumber}`);
+              }
               // Add AI disclaimer with run id, run htmlurl
+              // Add AI disclaimer with workflow run information
               const runId = context.runId;
               const runUrl = context.payload.repository 
                 ? `${context.payload.repository.html_url}/actions/runs/${runId}`
                 : `https://github.com/actions/runs/${runId}`;  
-              body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
-              console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
-              console.log('Comment content length:', body.length);
-              // Create the comment using GitHub API
-              const { data: comment } = await github.rest.issues.createComment({
+              bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
+              // Prepare the body content
+              const body = bodyLines.join('\n').trim();
+              console.log('Creating issue with title:', title);
+              console.log('Labels:', labels);
+              console.log('Body length:', body.length);
+              // Create the issue using GitHub API
+              const { data: issue } = await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: body
+                title: title,
+                body: body,
+                labels: labels
               });
-              console.log('Created comment #' + comment.id + ': ' + comment.html_url);
+              console.log('Created issue #' + issue.number + ': ' + issue.html_url);
+              // If we have a parent issue, add a comment to it referencing the new child issue
+              if (parentIssueNumber) {
+                try {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: parentIssueNumber,
+                    body: `Created related issue: #${issue.number}`
+                  });
+                  console.log('Added comment to parent issue #' + parentIssueNumber);
+                } catch (error) {
+                  console.log('Warning: Could not add comment to parent issue:', error instanceof Error ? error.message : String(error));
+                }
+              }
               // Set output for other jobs to use
-              core.setOutput('comment_id', comment.id);
-              core.setOutput('comment_url', comment.html_url);
-              // write comment id, url to the github_step_summary
+              core.setOutput('issue_number', issue.number);
+              core.setOutput('issue_url', issue.html_url);
+              // write issue to summary
               await core.summary.addRaw(`
-            ## GitHub Comment
-            - Comment ID: ${comment.id}
-            - Comment URL: ${comment.html_url}
+            ## GitHub Issue
+            - Issue ID: ${issue.number}
+            - Issue URL: ${issue.html_url}
             `).write();
             }
             await main();
