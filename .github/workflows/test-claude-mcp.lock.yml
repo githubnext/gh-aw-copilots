@@ -2,19 +2,18 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Add Issue Labels"
+name: "Test Claude Mcp"
 "on":
   issues:
     types:
     - opened
-    - reopened
 
 permissions: {}
 
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
 
-run-name: "Test Claude Add Issue Labels"
+run-name: "Test Claude Mcp"
 
 jobs:
   add_reaction:
@@ -119,7 +118,7 @@ jobs:
             }
             await main();
 
-  test-claude-add-issue-labels:
+  test-claude-mcp:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -177,6 +176,20 @@ jobs:
                 "env": {
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 }
+              },
+              "time": {
+                "command": "docker",
+                "args": [
+                  "run",
+                  "--rm",
+                  "-i",
+                  "-e",
+                  "LOCAL_TIMEZONE",
+                  "mcp/time"
+                ],
+                "env": {
+                  "LOCAL_TIMEZONE": "${LOCAL_TIMEZONE}"
+                }
               }
             }
           }
@@ -187,14 +200,24 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} is "Hello" then add the issue labels "claude-safe-output-label-test" to the issue.
+          **First, get the current time using the get_current_time tool to timestamp your analysis.**
+          
+          If the title of the issue #${{ github.event.issue.number }} is "Hello from Claude" then add a comment on the issue "Reply from Claude" with the current time.
+          
+          ### AI Attribution
+          
+          Include this footer in your PR comment:
+          
+          ```markdown
+          > AI-generated content by [${{ github.workflow }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) may contain mistakes.
+          ```
           
           
           ---
           
-          ## Adding Labels to Issues or Pull Requests
+          ## Adding a Comment to an Issue or Pull Request
           
-          To add labels to an issue or pull request on GitHub, do NOT attempt to use MCP tools, do NOT attempt to use `gh` and do NOT attempt to use the GitHub API. Instead, write the list of labels, one on each line, to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", where each line is a label.
+          To add a comment to an issue or pull request on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write the issue comment you want to make to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", in markdown.
           
           EOF
       - name: Print prompt to step summary
@@ -215,7 +238,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Add Issue Labels",
+              workflow_name: "Test Claude Mcp",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -300,7 +323,8 @@ jobs:
           # - mcp__github__search_pull_requests
           # - mcp__github__search_repositories
           # - mcp__github__search_users
-          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
+          # - mcp__time__get_current_time
+          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users,mcp__time__get_current_time"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_env: |
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -315,13 +339,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-add-issue-labels.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-mcp.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-add-issue-labels.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-mcp.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-add-issue-labels.log
+          touch /tmp/test-claude-mcp.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -506,7 +530,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-add-issue-labels.log
+          AGENT_LOG_FILE: /tmp/test-claude-mcp.log
         with:
           script: |
             function main() {
@@ -781,8 +805,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-add-issue-labels.log
-          path: /tmp/test-claude-add-issue-labels.log
+          name: test-claude-mcp.log
+          path: /tmp/test-claude-mcp.log
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
@@ -847,8 +871,8 @@ jobs:
           path: /tmp/aw.patch
           if-no-files-found: ignore
 
-  add_labels:
-    needs: test-claude-add-issue-labels
+  create_issue_comment:
+    needs: test-claude-mcp
     if: github.event.issue.number || github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
@@ -857,15 +881,14 @@ jobs:
       pull-requests: write
     timeout-minutes: 10
     outputs:
-      labels_added: ${{ steps.add_labels.outputs.labels_added }}
+      comment_id: ${{ steps.create_comment.outputs.comment_id }}
+      comment_url: ${{ steps.create_comment.outputs.comment_url }}
     steps:
-      - name: Add Labels
-        id: add_labels
+      - name: Add Issue Comment
+        id: create_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-add-issue-labels.outputs.output }}
-          GITHUB_AW_LABELS_ALLOWED: ""
-          GITHUB_AW_LABELS_MAX_COUNT: 3
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-mcp.outputs.output }}
         with:
           script: |
             async function main() {
@@ -880,124 +903,63 @@ jobs:
                 return;
               }
               console.log('Agent output content length:', outputContent.length);
-              // Read the allowed labels from environment variable (optional)
-              const allowedLabelsEnv = process.env.GITHUB_AW_LABELS_ALLOWED;
-              let allowedLabels = null;
-              if (allowedLabelsEnv && allowedLabelsEnv.trim() !== '') {
-                allowedLabels = allowedLabelsEnv.split(',').map(label => label.trim()).filter(label => label);
-                if (allowedLabels.length === 0) {
-                  allowedLabels = null; // Treat empty list as no restrictions
-                }
-              }
-              if (allowedLabels) {
-                console.log('Allowed labels:', allowedLabels);
-              } else {
-                console.log('No label restrictions - any labels are allowed');
-              }
-              // Read the max-count limit from environment variable (default: 3)
-              const maxCountEnv = process.env.GITHUB_AW_LABELS_MAX_COUNT;
-              const maxCount = maxCountEnv ? parseInt(maxCountEnv, 10) : 3;
-              if (isNaN(maxCount) || maxCount < 1) {
-                core.setFailed(`Invalid max-count value: ${maxCountEnv}. Must be a positive integer`);
-                return;
-              }
-              console.log('Max count:', maxCount);
               // Check if we're in an issue or pull request context
               const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
               const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
               if (!isIssueContext && !isPRContext) {
-                core.setFailed('Not running in issue or pull request context, skipping label addition');
+                console.log('Not running in issue or pull request context, skipping comment creation');
                 return;
               }
-              // Determine the issue/PR number
+              // Determine the issue/PR number and comment endpoint
               let issueNumber;
-              let contextType;
+              let commentEndpoint;
               if (isIssueContext) {
                 if (context.payload.issue) {
                   issueNumber = context.payload.issue.number;
-                  contextType = 'issue';
+                  commentEndpoint = 'issues';
                 } else {
-                  core.setFailed('Issue context detected but no issue found in payload');
+                  console.log('Issue context detected but no issue found in payload');
                   return;
                 }
               } else if (isPRContext) {
                 if (context.payload.pull_request) {
                   issueNumber = context.payload.pull_request.number;
-                  contextType = 'pull request';
+                  commentEndpoint = 'issues'; // PR comments use the issues API endpoint
                 } else {
-                  core.setFailed('Pull request context detected but no pull request found in payload');
+                  console.log('Pull request context detected but no pull request found in payload');
                   return;
                 }
               }
               if (!issueNumber) {
-                core.setFailed('Could not determine issue or pull request number');
+                console.log('Could not determine issue or pull request number');
                 return;
               }
-              // Parse labels from agent output (one per line, ignore empty lines)
-              const lines = outputContent.split('\n');
-              const requestedLabels = [];
-              for (const line of lines) {
-                const trimmedLine = line.trim();
-                // Skip empty lines
-                if (trimmedLine === '') {
-                  continue;
-                }
-                // Reject lines that start with '-' (removal indication)
-                if (trimmedLine.startsWith('-')) {
-                  core.setFailed(`Label removal is not permitted. Found line starting with '-': ${trimmedLine}`);
-                  return;
-                }
-                requestedLabels.push(trimmedLine);
-              }
-              console.log('Requested labels:', requestedLabels);
-              // Validate that all requested labels are in the allowed list (if restrictions are set)
-              let validLabels;
-              if (allowedLabels) {
-                validLabels = requestedLabels.filter(label => allowedLabels.includes(label));
-              } else {
-                // No restrictions, all requested labels are valid
-                validLabels = requestedLabels;
-              }
-              // Remove duplicates from requested labels
-              let uniqueLabels = [...new Set(validLabels)];
-              // Enforce max-count limit
-              if (uniqueLabels.length > maxCount) {
-                console.log(`too many labels, keep ${maxCount}`)
-                uniqueLabels = uniqueLabels.slice(0, maxCount);
-              }
-              if (uniqueLabels.length === 0) {
-                console.log('No labels to add');
-                core.setOutput('labels_added', '');
-                await core.summary.addRaw(`
-            ## Label Addition
-            No labels were added (no valid labels found in agent output).
+              let body = outputContent.trim();
+              // Add AI disclaimer with run id, run htmlurl
+              const runId = context.runId;
+              const runUrl = context.payload.repository 
+                ? `${context.payload.repository.html_url}/actions/runs/${runId}`
+                : `https://github.com/actions/runs/${runId}`;  
+              body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
+              console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
+              console.log('Comment content length:', body.length);
+              // Create the comment using GitHub API
+              const { data: comment } = await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: body
+              });
+              console.log('Created comment #' + comment.id + ': ' + comment.html_url);
+              // Set output for other jobs to use
+              core.setOutput('comment_id', comment.id);
+              core.setOutput('comment_url', comment.html_url);
+              // write comment id, url to the github_step_summary
+              await core.summary.addRaw(`
+            ## GitHub Comment
+            - Comment ID: ${comment.id}
+            - Comment URL: ${comment.html_url}
             `).write();
-                return;
-              }
-              console.log(`Adding ${uniqueLabels.length} labels to ${contextType} #${issueNumber}:`, uniqueLabels);
-              try {
-                // Add labels using GitHub API
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  labels: uniqueLabels
-                });
-                console.log(`Successfully added ${uniqueLabels.length} labels to ${contextType} #${issueNumber}`);
-                // Set output for other jobs to use
-                core.setOutput('labels_added', uniqueLabels.join('\n'));
-                // Write summary
-                const labelsListMarkdown = uniqueLabels.map(label => `- \`${label}\``).join('\n');
-                await core.summary.addRaw(`
-            ## Label Addition
-            Successfully added ${uniqueLabels.length} label(s) to ${contextType} #${issueNumber}:
-            ${labelsListMarkdown}
-            `).write();
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error('Failed to add labels:', errorMessage);
-                core.setFailed(`Failed to add labels: ${errorMessage}`);
-              }
             }
             await main();
 
