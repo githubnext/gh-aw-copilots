@@ -1221,6 +1221,8 @@ func (c *Compiler) applyDefaultGitHubMCPTools(tools map[string]any) map[string]a
 		"Task",
 		"Glob",
 		"Grep",
+		"ExitPlanMode",
+		"TodoWrite",
 		"LS",
 		"Read",
 		"NotebookRead",

@@ -1190,6 +1190,8 @@ func TestDefaultClaudeToolsList(t *testing.T) {
 		"Task",
 		"Glob",
 		"Grep",
+		"ExitPlanMode",
+		"TodoWrite",
 		"LS",
 		"Read",
 		"NotebookRead",
