@@ -576,7 +576,6 @@ jobs:
           script: |
             function main() {
               const fs = require('fs');
-              const core = require('@actions/core');
               try {
                 // Get the log file path from environment
                 const logFile = process.env.AGENT_LOG_FILE;

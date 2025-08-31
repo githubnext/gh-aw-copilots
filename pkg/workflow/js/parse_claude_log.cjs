@@ -1,6 +1,5 @@
 function main() {
   const fs = require('fs');
-  const core = require('@actions/core');
   
   try {
     // Get the log file path from environment

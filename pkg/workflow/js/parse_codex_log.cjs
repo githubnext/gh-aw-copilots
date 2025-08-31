@@ -1,6 +1,5 @@
 function main() {
   const fs = require('fs');
-  const core = require('@actions/core');
   
   try {
     const logFile = process.env.AGENT_LOG_FILE;
