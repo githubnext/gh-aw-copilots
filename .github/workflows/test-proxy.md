@@ -28,8 +28,6 @@ engine: claude
 runs-on: ubuntu-latest
 ---
 
-# Test Network Permissions
-
 ## Task Description
 
 Test the MCP network permissions feature to validate that domain restrictions are properly enforced.

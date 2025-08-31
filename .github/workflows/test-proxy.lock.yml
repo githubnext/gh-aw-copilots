@@ -2,7 +2,7 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Network Permissions"
+name: "Test Proxy"
 on:
   pull_request:
     branches:
@@ -15,10 +15,10 @@ concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
   cancel-in-progress: true
 
-run-name: "Test Network Permissions"
+run-name: "Test Proxy"
 
 jobs:
-  test-network-permissions:
+  test-proxy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -229,8 +229,6 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          # Test Network Permissions
-          
           ## Task Description
           
           Test the MCP network permissions feature to validate that domain restrictions are properly enforced.
@@ -282,7 +280,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Network Permissions",
+              workflow_name: "Test Proxy",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -385,13 +383,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-network-permissions.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-proxy.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-network-permissions.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-proxy.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-network-permissions.log
+          touch /tmp/test-proxy.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -576,7 +574,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-network-permissions.log
+          AGENT_LOG_FILE: /tmp/test-proxy.log
         with:
           script: |
             function main() {
@@ -851,8 +849,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-network-permissions.log
-          path: /tmp/test-network-permissions.log
+          name: test-proxy.log
+          path: /tmp/test-proxy.log
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
@@ -918,7 +916,7 @@ jobs:
           if-no-files-found: ignore
 
   create_issue_comment:
-    needs: test-network-permissions
+    needs: test-proxy
     if: github.event.issue.number || github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
@@ -934,7 +932,7 @@ jobs:
         id: create_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-network-permissions.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-proxy.outputs.output }}
         with:
           script: |
             async function main() {
