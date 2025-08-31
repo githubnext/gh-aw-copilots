@@ -2,19 +2,258 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Mcp"
-"on":
-  workflow_dispatch: null
+name: "Test Codex Alias"
+on:
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited]
+  pull_request:
+    types: [opened, edited, reopened]
+  pull_request_review_comment:
+    types: [created, edited]
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}"
 
-run-name: "Test Claude Mcp"
+run-name: "Test Codex Alias"
 
 jobs:
+  task:
+    if: ((contains(github.event.issue.body, '@test-codex-alias')) || (contains(github.event.comment.body, '@test-codex-alias'))) || (contains(github.event.pull_request.body, '@test-codex-alias'))
+    runs-on: ubuntu-latest
+    outputs:
+      text: ${{ steps.compute-text.outputs.text }}
+    steps:
+      - name: Check team membership for alias workflow
+        id: check-team-member
+        if: contains(github.event.issue.body, '@test-codex-alias') || contains(github.event.comment.body, '@test-codex-alias') || contains(github.event.pull_request.body, '@test-codex-alias')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            async function main() {
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              try {
+                console.log(`Checking if user '${actor}' is admin or maintainer of ${owner}/${repo}`);
+                const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: owner,
+                  repo: repo,
+                  username: actor
+                });
+                const permission = repoPermission.data.permission;
+                console.log(`Repository permission level: ${permission}`);
+                if (permission === 'admin' || permission === 'maintain') {
+                  console.log(`User has ${permission} access to repository`);
+                  core.setOutput('is_team_member', 'true');
+                  return;
+                }
+              } catch (repoError) {
+                const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
+                console.log(`Repository permission check failed: ${errorMessage}`);
+              }
+              core.setOutput('is_team_member', 'false');
+            }
+            await main();
+      - name: Validate team membership
+        if: steps.check-team-member.outputs.is_team_member == 'false'
+        run: |
+          echo "❌ Access denied: Only team members can trigger alias workflows"
+          echo "User ${{ github.actor }} is not a team member"
+          exit 1
+      - name: Compute current body text
+        id: compute-text
+        uses: actions/github-script@v7
+        with:
+          script: |
+            /**
+             * Sanitizes content for safe output in GitHub Actions
+             * @param {string} content - The content to sanitize
+             * @returns {string} The sanitized content
+             */
+            function sanitizeContent(content) {
+              if (!content || typeof content !== 'string') {
+                return '';
+              }
+              // Read allowed domains from environment variable
+              const allowedDomainsEnv = process.env.GITHUB_AW_ALLOWED_DOMAINS;
+              const defaultAllowedDomains = [
+                'github.com',
+                'github.io',
+                'githubusercontent.com',
+                'githubassets.com',
+                'github.dev',
+                'codespaces.new'
+              ];
+              const allowedDomains = allowedDomainsEnv
+                ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+                : defaultAllowedDomains;
+              let sanitized = content;
+              // Neutralize @mentions to prevent unintended notifications
+              sanitized = neutralizeMentions(sanitized);
+              // Remove control characters (except newlines and tabs)
+              sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+              // XML character escaping
+              sanitized = sanitized
+                .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+              // URI filtering - replace non-https protocols with "(redacted)"
+              // Step 1: Temporarily mark HTTPS URLs to protect them
+              sanitized = sanitizeUrlProtocols(sanitized);
+              // Domain filtering for HTTPS URIs
+              // Match https:// URIs and check if domain is in allowlist
+              sanitized = sanitizeUrlDomains(sanitized);
+              // Limit total length to prevent DoS (0.5MB max)
+              const maxLength = 524288;
+              if (sanitized.length > maxLength) {
+                sanitized = sanitized.substring(0, maxLength) + '\n[Content truncated due to length]';
+              }
+              // Limit number of lines to prevent log flooding (65k max)
+              const lines = sanitized.split('\n');
+              const maxLines = 65000;
+              if (lines.length > maxLines) {
+                sanitized = lines.slice(0, maxLines).join('\n') + '\n[Content truncated due to line count]';
+              }
+              // Remove ANSI escape sequences
+              sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+              // Neutralize common bot trigger phrases
+              sanitized = neutralizeBotTriggers(sanitized);
+              // Trim excessive whitespace
+              return sanitized.trim();
+              /**
+               * Remove unknown domains
+               * @param {string} s - The string to process
+               * @returns {string} The string with unknown domains redacted
+               */
+              function sanitizeUrlDomains(s) {
+                s = s.replace(/\bhttps:\/\/([^\/\s\])}'"<>&\x00-\x1f]+)/gi, (match, domain) => {
+                  // Extract the hostname part (before first slash, colon, or other delimiter)
+                  const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
+                  // Check if this domain or any parent domain is in the allowlist
+                  const isAllowed = allowedDomains.some(allowedDomain => {
+                    const normalizedAllowed = allowedDomain.toLowerCase();
+                    return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
+                  });
+                  return isAllowed ? match : '(redacted)';
+                });
+                return s;
+              }
+              /**
+               * Remove unknown protocols except https
+               * @param {string} s - The string to process
+               * @returns {string} The string with non-https protocols redacted
+               */
+              function sanitizeUrlProtocols(s) {
+                // Match both protocol:// and protocol: patterns
+                // This covers URLs like https://example.com, javascript:alert(), mailto:user@domain.com, etc.
+                return s.replace(/\b(\w+):(?:\/\/)?[^\s\])}'"<>&\x00-\x1f]+/gi, (match, protocol) => {
+                  // Allow https (case insensitive), redact everything else
+                  return protocol.toLowerCase() === 'https' ? match : '(redacted)';
+                });
+              }
+              /**
+               * Neutralizes @mentions by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized mentions
+               */
+              function neutralizeMentions(s) {
+                // Replace @name or @org/team outside code with `@name`
+                return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                  (_m, p1, p2) => `${p1}\`@${p2}\``);
+              }
+              /**
+               * Neutralizes bot trigger phrases by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized bot triggers
+               */
+              function neutralizeBotTriggers(s) {
+                // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
+                return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+                  (match, action, ref) => `\`${action} #${ref}\``);
+              }
+            }
+            async function main() {
+              let text = '';
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: owner,
+                repo: repo,
+                username: actor
+              });
+              const permission = repoPermission.data.permission;
+              console.log(`Repository permission level: ${permission}`);
+              if (permission !== 'admin' && permission !== 'maintain') {
+                core.setOutput('text', '');
+                return;
+              }
+              // Determine current body text based on event context
+              switch (context.eventName) {
+                case 'issues':
+                  // For issues: title + body
+                  if (context.payload.issue) {
+                    const title = context.payload.issue.title || '';
+                    const body = context.payload.issue.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request':
+                  // For pull requests: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request_target':
+                  // For pull request target events: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'issue_comment':
+                  // For issue comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review_comment':
+                  // For PR review comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review':
+                  // For PR reviews: review body
+                  if (context.payload.review) {
+                    text = context.payload.review.body || '';
+                  }
+                  break;
+                default:
+                  // Default: empty text
+                  text = '';
+                  break;
+              }
+              // Sanitize the text before output
+              const sanitizedText = sanitizeContent(text);
+              // Display sanitized text in logs
+              console.log(`text: ${sanitizedText}`);
+              // Set the sanitized text as output
+              core.setOutput('text', sanitizedText);
+            }
+            await main();
+
   add_reaction:
+    needs: task
     if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
     permissions:
@@ -28,6 +267,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_REACTION: eyes
+          GITHUB_AW_ALIAS: test-codex-alias
         with:
           script: |
             async function main() {
@@ -184,7 +424,8 @@ jobs:
             }
             await main();
 
-  test-claude-mcp:
+  test-codex-alias:
+    needs: task
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -244,20 +485,6 @@ jobs:
                 "env": {
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
                 }
-              },
-              "time": {
-                "command": "docker",
-                "args": [
-                  "run",
-                  "--rm",
-                  "-i",
-                  "-e",
-                  "LOCAL_TIMEZONE",
-                  "mcp/time"
-                ],
-                "env": {
-                  "LOCAL_TIMEZONE": "${LOCAL_TIMEZONE}"
-                }
               }
             }
           }
@@ -268,24 +495,14 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          **First, get the current time using the get_current_time tool to timestamp your analysis.**
-          
-          Create an issue with title "Hello from Claude" and a comment in the body saying what the current time is and if you were successful in using the MCP tool
-          
-          ### AI Attribution
-          
-          Include this footer in your issue description:
-          
-          ```markdown
-          > AI-generated content by [${{ github.workflow }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) may contain mistakes.
-          ```
+          Add a reply comment to issue #${{ github.event.issue.number }} answering the question "${{ needs.task.outputs.text }}" given the context of the repo, starting with saying you're Codex. If there is no alias write out a haiku about the repo.
           
           
           ---
           
-          ## Issue Creation
+          ## Adding a Comment to an Issue or Pull Request
           
-          To create an issue on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", where the first line of the file is the title , and the rest of the file is the body, in markdown.
+          To add a comment to an issue or pull request on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write the issue comment you want to make to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", in markdown.
           
           EOF
       - name: Print prompt to step summary
@@ -306,7 +523,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Mcp",
+              workflow_name: "Test Codex Alias",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -391,8 +608,7 @@ jobs:
           # - mcp__github__search_pull_requests
           # - mcp__github__search_repositories
           # - mcp__github__search_users
-          # - mcp__time__get_current_time
-          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users,mcp__time__get_current_time"
+          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_env: |
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -407,13 +623,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-mcp.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-codex-alias.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-mcp.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-codex-alias.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-mcp.log
+          touch /tmp/test-codex-alias.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -598,7 +814,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-mcp.log
+          AGENT_LOG_FILE: /tmp/test-codex-alias.log
         with:
           script: |
             function main() {
@@ -873,8 +1089,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-mcp.log
-          path: /tmp/test-claude-mcp.log
+          name: test-codex-alias.log
+          path: /tmp/test-codex-alias.log
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
@@ -939,22 +1155,24 @@ jobs:
           path: /tmp/aw.patch
           if-no-files-found: ignore
 
-  create_issue:
-    needs: test-claude-mcp
+  create_issue_comment:
+    needs: test-codex-alias
+    if: github.event.issue.number || github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
+      pull-requests: write
     timeout-minutes: 10
     outputs:
-      issue_number: ${{ steps.create_issue.outputs.issue_number }}
-      issue_url: ${{ steps.create_issue.outputs.issue_url }}
+      comment_id: ${{ steps.create_comment.outputs.comment_id }}
+      comment_url: ${{ steps.create_comment.outputs.comment_url }}
     steps:
-      - name: Create Output Issue
-        id: create_issue
+      - name: Add Issue Comment
+        id: create_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-mcp.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-alias.outputs.output }}
         with:
           script: |
             async function main() {
@@ -969,91 +1187,62 @@ jobs:
                 return;
               }
               console.log('Agent output content length:', outputContent.length);
-              // Check if we're in an issue context (triggered by an issue event)
-              const parentIssueNumber = context.payload?.issue?.number;
-              // Parse labels from environment variable (comma-separated string)
-              const labelsEnv = process.env.GITHUB_AW_ISSUE_LABELS;
-              const labels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
-              // Parse the output to extract title and body
-              const lines = outputContent.split('\n');
-              let title = '';
-              let bodyLines = [];
-              let foundTitle = false;
-              for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                // Skip empty lines until we find the title
-                if (!foundTitle && line === '') {
-                  continue;
+              // Check if we're in an issue or pull request context
+              const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
+              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
+              if (!isIssueContext && !isPRContext) {
+                console.log('Not running in issue or pull request context, skipping comment creation');
+                return;
+              }
+              // Determine the issue/PR number and comment endpoint
+              let issueNumber;
+              let commentEndpoint;
+              if (isIssueContext) {
+                if (context.payload.issue) {
+                  issueNumber = context.payload.issue.number;
+                  commentEndpoint = 'issues';
+                } else {
+                  console.log('Issue context detected but no issue found in payload');
+                  return;
                 }
-                // First non-empty line becomes the title
-                if (!foundTitle && line !== '') {
-                  // Remove markdown heading syntax if present
-                  title = line.replace(/^#+\s*/, '').trim();
-                  foundTitle = true;
-                  continue;
-                }
-                // Everything else goes into the body
-                if (foundTitle) {
-                  bodyLines.push(lines[i]); // Keep original formatting
+              } else if (isPRContext) {
+                if (context.payload.pull_request) {
+                  issueNumber = context.payload.pull_request.number;
+                  commentEndpoint = 'issues'; // PR comments use the issues API endpoint
+                } else {
+                  console.log('Pull request context detected but no pull request found in payload');
+                  return;
                 }
               }
-              // If no title was found, use a default
-              if (!title) {
-                title = 'Agent Output';
+              if (!issueNumber) {
+                console.log('Could not determine issue or pull request number');
+                return;
               }
-              // Apply title prefix if provided via environment variable
-              const titlePrefix = process.env.GITHUB_AW_ISSUE_TITLE_PREFIX;
-              if (titlePrefix && !title.startsWith(titlePrefix)) {
-                title = titlePrefix + title;
-              }
-              if (parentIssueNumber) {
-                console.log('Detected issue context, parent issue #' + parentIssueNumber);
-                // Add reference to parent issue in the child issue body
-                bodyLines.push(`Related to #${parentIssueNumber}`);
-              }
+              let body = outputContent.trim();
               // Add AI disclaimer with run id, run htmlurl
-              // Add AI disclaimer with workflow run information
               const runId = context.runId;
               const runUrl = context.payload.repository 
                 ? `${context.payload.repository.html_url}/actions/runs/${runId}`
                 : `https://github.com/actions/runs/${runId}`;  
-              bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
-              // Prepare the body content
-              const body = bodyLines.join('\n').trim();
-              console.log('Creating issue with title:', title);
-              console.log('Labels:', labels);
-              console.log('Body length:', body.length);
-              // Create the issue using GitHub API
-              const { data: issue } = await github.rest.issues.create({
+              body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
+              console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
+              console.log('Comment content length:', body.length);
+              // Create the comment using GitHub API
+              const { data: comment } = await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title: title,
-                body: body,
-                labels: labels
+                issue_number: issueNumber,
+                body: body
               });
-              console.log('Created issue #' + issue.number + ': ' + issue.html_url);
-              // If we have a parent issue, add a comment to it referencing the new child issue
-              if (parentIssueNumber) {
-                try {
-                  await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: parentIssueNumber,
-                    body: `Created related issue: #${issue.number}`
-                  });
-                  console.log('Added comment to parent issue #' + parentIssueNumber);
-                } catch (error) {
-                  console.log('Warning: Could not add comment to parent issue:', error instanceof Error ? error.message : String(error));
-                }
-              }
+              console.log('Created comment #' + comment.id + ': ' + comment.html_url);
               // Set output for other jobs to use
-              core.setOutput('issue_number', issue.number);
-              core.setOutput('issue_url', issue.html_url);
-              // write issue to summary
+              core.setOutput('comment_id', comment.id);
+              core.setOutput('comment_url', comment.html_url);
+              // write comment id, url to the github_step_summary
               await core.summary.addRaw(`
-            ## GitHub Issue
-            - Issue ID: ${issue.number}
-            - Issue URL: ${issue.html_url}
+            ## GitHub Comment
+            - Comment ID: ${comment.id}
+            - Comment URL: ${comment.html_url}
             `).write();
             }
             await main();
