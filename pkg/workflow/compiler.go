@@ -2275,7 +2275,7 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 		} else if data.SafeOutputs.CreateIssue != nil {
 			yaml.WriteString("          ## Issue Creation\n")
 			yaml.WriteString("          \n")
-			yaml.WriteString("          To create an issue on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\", where the first line of the file is the title , and the rest of the file is the body , in markdown.\n")
+			yaml.WriteString("          To create an issue on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\", where the first line of the file is the title , and the rest of the file is the body, in markdown.\n")
 			yaml.WriteString("          \n")
 		} else if data.SafeOutputs.CreatePullRequest != nil {
 			yaml.WriteString("          ## Pull Request Creation\n")

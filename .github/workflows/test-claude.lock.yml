@@ -535,7 +535,7 @@ jobs:
           
           ## Pull Request Creation
           
-          To create a pull request on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body of the pull request description to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", where the first line of the file is the title , and the rest of the file is the body , in markdown.
+          To create a pull request on GitHub, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead, write to the title and issue body of the pull request description to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}", where the first line of the file is the title , and the rest of the file is the body, in markdown.
           Instead:
           1. Make any file changes directly in the working directory, making the changes and additions you want.
           2. Leave the changes uncommitted and unstaged. If you've committed your changes earlier then uncommit them.          3. Leave the changes uncommitted and unstaged. If you've committed your changes earlier then reverse that and leave then unstaged.          4. Carefully check there are no extra unstaged files lying around - log files, emphemeral test files etc. If there are remove them.          5. Write a PR title and description to ${{ env.GITHUB_AW_SAFE_OUTPUTS }}, where the first line of the file is the title of the pull request, and the rest of the file is the body of the pull request, in markdown.          
