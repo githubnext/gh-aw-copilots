@@ -4601,7 +4601,9 @@ This workflow should get default permissions applied automatically.
 		"pull-requests: read",
 		"discussions: read",
 		"deployments: read",
-		"models: read",
+		"actions: read",
+		"checks: read",
+		"statuses: read",
 	}
 
 	for _, expectedPerm := range expectedDefaultPermissions {
@@ -4666,7 +4668,6 @@ This workflow should get default permissions applied automatically.
 		"pull-requests": "read",
 		"discussions":   "read",
 		"deployments":   "read",
-		"models":        "read",
 	}
 
 	for key, expectedValue := range expectedPermissionsMap {
@@ -4798,7 +4799,9 @@ This workflow has custom permissions that should override defaults.
 		"pull-requests: read",
 		"discussions: read",
 		"deployments: read",
-		"models: read",
+		"actions: read",
+		"checks: read",
+		"statuses: read",
 	}
 
 	for _, defaultPerm := range defaultOnlyPermissions {

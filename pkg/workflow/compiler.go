@@ -980,7 +980,9 @@ func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
   pull-requests: read
   discussions: read
   deployments: read
-  models: read`
+  actions: read
+  checks: read
+  statuses: read`
 	}
 
 	// Generate concurrency configuration using the dedicated concurrency module

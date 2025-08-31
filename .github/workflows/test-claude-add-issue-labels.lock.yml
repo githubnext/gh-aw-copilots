@@ -127,7 +127,9 @@ jobs:
       pull-requests: read
       discussions: read
       deployments: read
-      models: read
+      actions: read
+      checks: read
+      statuses: read
     outputs:
       output: ${{ steps.collect_output.outputs.output }}
     steps:
