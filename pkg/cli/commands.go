@@ -1858,7 +1858,7 @@ func copyIncludeDependenciesWithForce(dependencies []IncludeDependency, githubWo
 	return nil
 }
 
-// InstallPackage installs agent workflows from a GitHub repository
+// InstallPackage installs agentic workflows from a GitHub repository
 func InstallPackage(repoSpec string, local bool, verbose bool) error {
 	if verbose {
 		fmt.Printf("Installing package: %s\n", repoSpec)
@@ -2021,15 +2021,15 @@ func ListPackages(local bool, verbose bool) error {
 				shortSHA = shortSHA[:8]
 			}
 			if count == 1 {
-				fmt.Printf("%s@%s (%d agent)\n", pkg.Name, shortSHA, count)
+				fmt.Printf("%s@%s (%d agentic workflow)\n", pkg.Name, shortSHA, count)
 			} else {
-				fmt.Printf("%s@%s (%d agents)\n", pkg.Name, shortSHA, count)
+				fmt.Printf("%s@%s (%d agentic workflows)\n", pkg.Name, shortSHA, count)
 			}
 		} else {
 			if count == 1 {
-				fmt.Printf("%s (%d agent)\n", pkg.Name, count)
+				fmt.Printf("%s (%d agentic workflow)\n", pkg.Name, count)
 			} else {
-				fmt.Printf("%s (%d agents)\n", pkg.Name, count)
+				fmt.Printf("%s (%d agentic workflows)\n", pkg.Name, count)
 			}
 		}
 

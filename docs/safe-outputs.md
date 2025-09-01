@@ -35,7 +35,7 @@ safe-outputs:
 safe-outputs:
   create-issue:                      # Singular form
     title-prefix: "[ai] "            # Optional: prefix for issue titles
-    labels: [automation, agent]      # Optional: labels to attach to issues
+    labels: [automation, agentic]    # Optional: labels to attach to issues
 ```
 
 The agentic part of your workflow should describe the issue(s) it wants created.
@@ -49,7 +49,7 @@ Analyze the latest commit and provide insights.
 Create new issues with your findings. For each issue, provide a title starting with "AI Code Analysis" and detailed description of the analysis findings.
 ```
 
-The workflow will have additional prompting describing that, to create issues, the agent should write the issue details to a file.
+The compiled workflow will have additional prompting describing that, to create issues, it should write the issue details to a file.
 
 ### Issue Comment Creation (`add-issue-comment:` / `add-issue-comments:`)
 
@@ -79,7 +79,7 @@ Analyze the issue or pull request and provide feedback.
 Create issue comments on the triggering issue or PR with your analysis findings. Each comment should provide specific insights about different aspects of the issue.
 ```
 
-The workflow will have additional prompting describing that, to create comments, the agent should write the comment content to a special file.
+The compiled workflow will have additional prompting describing that, to create comments, it should write the comment content to a special file.
 
 ### Pull Request Creation (`create-pull-request:`)
 
@@ -95,7 +95,7 @@ safe-outputs:
 safe-outputs:
   create-pull-request:               # Creates exactly one pull request
     title-prefix: "[ai] "            # Optional: prefix for PR titles
-    labels: [automation, ai-agent]   # Optional: labels to attach to PRs
+    labels: [automation, agentic]    # Optional: labels to attach to PRs
     draft: true                      # Optional: create as draft PR (defaults to true)
 ```
 
@@ -118,7 +118,7 @@ Analyze the latest commit and suggest improvements.
 
 ### Label Addition (`add-issue-labels:`)
 
-Adding `add-issue-labels:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the agent's analysis.
+Adding `add-issue-labels:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the coding agent's analysis.
 
 ```yaml
 safe-outputs:
@@ -148,7 +148,7 @@ The agentic part of your workflow will have implicit additional prompting saying
 
 **Safety Features:**
 
-- Empty lines in agent output are ignored
+- Empty lines in coding agent output are ignored
 - Lines starting with `-` are rejected (no removal operations allowed)
 - Duplicate labels are automatically removed
 - If `allowed` is provided, all requested labels must be in the `allowed` list or the job fails with a clear error message. If `allowed` is not provided then any labels are allowed (including creating new labels).
@@ -157,7 +157,7 @@ The agentic part of your workflow will have implicit additional prompting saying
 
 ## Security and Sanitization
 
-All agent output is automatically sanitized for security before being processed:
+All coding agent output is automatically sanitized for security before being processed:
 
 - **XML Character Escaping**: Special characters (`<`, `>`, `&`, `"`, `'`) are escaped to prevent injection attacks
 - **URI Protocol Filtering**: Only HTTPS URIs are allowed; other protocols (HTTP, FTP, file://, javascript:, etc.) are replaced with "(redacted)"
@@ -176,7 +176,7 @@ All agent output is automatically sanitized for security before being processed:
 
 ```yaml
 safe-outputs:
-  allowed-domains:                    # Optional: domains allowed in agent output URIs
+  allowed-domains:                    # Optional: domains allowed in coding agent output URIs
     - github.com                      # Default GitHub domains are always included
     - api.github.com                  # Additional trusted domains can be specified
     - trusted-domain.com              # URIs from unlisted domains are replaced with "(redacted)"

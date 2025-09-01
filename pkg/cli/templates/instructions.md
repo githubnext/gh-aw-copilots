@@ -65,7 +65,7 @@ The YAML frontmatter supports these fields:
   - Object format for extended configuration:
     ```yaml
     engine:
-      id: claude                        # Required: agent CLI identifier (claude, codex)
+      id: claude                        # Required: coding agent identifier (claude, codex)
       version: beta                     # Optional: version of the action
       model: claude-3-5-sonnet-20241022 # Optional: LLM model to use
       max-turns: 5                      # Optional: maximum chat iterations per run
@@ -76,27 +76,27 @@ The YAML frontmatter supports these fields:
             - "*.trusted-domain.com"
     ```
   
-- **`tools:`** - Tool configuration for AI agent
+- **`tools:`** - Tool configuration for coding agent
   - `github:` - GitHub API tools
   - `claude:` - Claude-specific tools  
   - Custom tool names for MCP servers
 
 - **`safe-outputs:`** - Safe output processing configuration
-  - `create-issue:` - Automatic GitHub issue creation from agent output
+  - `create-issue:` - Safe GitHub issue creation
     ```yaml
     safe-outputs:
       create-issue:
         title-prefix: "[ai] "           # Optional: prefix for issue titles  
-        labels: [automation, ai-agent]  # Optional: labels to attach to issues
+        labels: [automation, agentic]    # Optional: labels to attach to issues
     ```
-    **Important**: When using `safe-outputs.create-issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
-  - `add_issue_comment:` - Automatic comment creation on issues/PRs from agent output
+    When using `safe-outputs.create-issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
+  - `add_issue_comment:` - Safe comment creation on issues/PRs
     ```yaml
     safe-outputs:
       add_issue_comment: {}
     ```
-    **Important**: When using `safe-outputs.add-issue-comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
-  - `create-pull-request:` - Automatic pull request creation from agent output with git patches
+    When using `safe-outputs.add-issue-comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
+  - `create-pull-request:` - Safe pull request creation with git patches
     ```yaml
     safe-outputs:
       create-pull-request:
@@ -104,7 +104,7 @@ The YAML frontmatter supports these fields:
         labels: [automation, ai-agent]  # Optional: labels to attach to PRs
         draft: true                     # Optional: create as draft PR (defaults to true)
     ```
-    **Important**: When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. The agent must create git patches in `/tmp/aw.patch`.
+    When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. 
   
 - **`alias:`** - Alternative workflow name (string)
 - **`cache:`** - Cache configuration for workflow dependencies (object or array)
@@ -152,7 +152,7 @@ Cache steps are automatically added to the workflow job and the cache configurat
 
 ### Automatic GitHub Issue Creation
 
-Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from AI agent output:
+Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from coding agent output:
 
 ```yaml
 ---
@@ -176,7 +176,7 @@ Create an issue with your final analysis.
 **Key Benefits:**
 - **Permission Separation**: The main job doesn't need `issues: write` permission
 - **Automatic Processing**: AI output is automatically parsed and converted to GitHub issues
-- **Job Dependencies**: Issue creation only happens after the AI agent completes successfully
+- **Job Dependencies**: Issue creation only happens after the coding agent completes successfully
 - **Output Variables**: The created issue number and URL are available to downstream jobs
 
 ## Trigger Patterns
@@ -388,7 +388,7 @@ tools:
     allowed: [get_repository, list_commits]
 ---
 
-Additional instructions for the AI agent.
+Additional instructions for the coding agent.
 ```
 
 ## Permission Patterns
@@ -423,7 +423,7 @@ safe-outputs:
 
 ### Automatic GitHub Issue Creation
 
-Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from AI agent output:
+Use the `safe-outputs.create-issue` configuration to automatically create GitHub issues from coding agent output:
 
 ```yaml
 ---
@@ -447,12 +447,12 @@ Create an issue with your final analysis.
 **Key Benefits:**
 - **Permission Separation**: The main job doesn't need `issues: write` permission
 - **Automatic Processing**: AI output is automatically parsed and converted to GitHub issues
-- **Job Dependencies**: Issue creation only happens after the AI agent completes successfully
+- **Job Dependencies**: Issue creation only happens after the coding agent completes successfully
 - **Output Variables**: The created issue number and URL are available to downstream jobs
 
 ### Automatic Pull Request Creation
 
-Use the `safe-outputs.pull-request` configuration to automatically create pull requests from AI agent output:
+Use the `safe-outputs.pull-request` configuration to automatically create pull requests from coding agent output:
 
 ```yaml
 ---
@@ -481,7 +481,7 @@ Create a pull request with your changes.
 
 ### Automatic Comment Creation
 
-Use the `safe-outputs.add-issue-comment` configuration to automatically create an issue or pull request comment from AI agent output:
+Use the `safe-outputs.add-issue-comment` configuration to automatically create an issue or pull request comment from coding agent output:
 
 ```yaml
 ---

@@ -108,7 +108,7 @@ Learn more in [Tools Configuration](tools.md) and [MCPs](mcps.md).
 3. **Test iteratively** — Use `gh aw compile --watch` and `gh aw run` during development
 4. **Monitor costs** — Use `gh aw logs` to track AI usage and optimize
 5. **Review outputs** — Always verify AI-generated content before merging
-6. **Use safe outputs** — Leverage [Safe Output Processing](safe-outputs.md) to automatically create issues, comments, and PRs from agent output
+6. **Use safe outputs** — Leverage [Safe Output Processing](safe-outputs.md) to automatically create issues, comments, and PRs from agentic workflow output
 
 ### Common Patterns
 

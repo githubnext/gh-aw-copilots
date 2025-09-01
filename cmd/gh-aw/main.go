@@ -247,7 +247,7 @@ Examples:
 
 var installCmd = &cobra.Command{
 	Use:   "install <org/repo>[@version]",
-	Short: "Install agent workflows from a GitHub repository",
+	Short: "Install agentic workflows from a GitHub repository",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repoSpec := args[0]
@@ -264,7 +264,7 @@ var installCmd = &cobra.Command{
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall <org/repo>",
-	Short: "Uninstall agent workflows package",
+	Short: "Uninstall agentic workflows package",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repoSpec := args[0]
