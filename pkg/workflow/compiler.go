@@ -976,15 +976,16 @@ func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
 	if data.Permissions == "" {
 		data.Permissions = `permissions:
   actions: read
+  attestations: read
   checks: read
   contents: read
   deployments: read
   discussions: read
   issues: read
+  models: read
   packages: read
   pages: read
   pull-requests: read
-  repository-projects: read
   security-events: read
   statuses: read`
 	}
