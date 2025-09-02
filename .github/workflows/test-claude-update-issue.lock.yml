@@ -2,19 +2,192 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Create Issue"
-on:
-  workflow_dispatch: null
+name: "Test Claude Update Issue"
+"on":
+  issues:
+    types:
+    - opened
+    - reopened
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
 
-run-name: "Test Claude Create Issue"
+run-name: "Test Claude Update Issue"
 
 jobs:
-  test-claude-create-issue:
+  add_reaction:
+    if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.react.outputs.reaction-id }}
+    steps:
+      - name: Add eyes reaction to the triggering item
+        id: react
+        uses: actions/github-script@v7
+        env:
+          GITHUB_AW_REACTION: eyes
+        with:
+          script: |
+            async function main() {
+              // Read inputs from environment variables  
+              const reaction = process.env.GITHUB_AW_REACTION || 'eyes';
+              const alias = process.env.GITHUB_AW_ALIAS; // Only present for alias workflows
+              const runId = context.runId;
+              const runUrl = context.payload.repository 
+                ? `${context.payload.repository.html_url}/actions/runs/${runId}`
+                : `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+              console.log('Reaction type:', reaction);
+              console.log('Alias name:', alias || 'none');
+              console.log('Run ID:', runId);
+              console.log('Run URL:', runUrl);
+              // Validate reaction type
+              const validReactions = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
+              if (!validReactions.includes(reaction)) {
+                core.setFailed(`Invalid reaction type: ${reaction}. Valid reactions are: ${validReactions.join(', ')}`);
+                return;
+              }
+              // Determine the API endpoint based on the event type
+              let reactionEndpoint;
+              let commentUpdateEndpoint;
+              let shouldEditComment = false;
+              const eventName = context.eventName;
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              try {
+                switch (eventName) {
+                  case 'issues':
+                    const issueNumber = context.payload?.issue?.number;
+                    if (!issueNumber) {
+                      core.setFailed('Issue number not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${issueNumber}/reactions`;
+                    // Don't edit issue bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case 'issue_comment':
+                    const commentId = context.payload?.comment?.id;
+                    if (!commentId) {
+                      core.setFailed('Comment ID not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  case 'pull_request':
+                    const prNumber = context.payload?.pull_request?.number;
+                    if (!prNumber) {
+                      core.setFailed('Pull request number not found in event payload');
+                      return;
+                    }
+                    // PRs are "issues" for the reactions endpoint
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${prNumber}/reactions`;
+                    // Don't edit PR bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case 'pull_request_review_comment':
+                    const reviewCommentId = context.payload?.comment?.id;
+                    if (!reviewCommentId) {
+                      core.setFailed('Review comment ID not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  default:
+                    core.setFailed(`Unsupported event type: ${eventName}`);
+                    return;
+                }
+                console.log('Reaction API endpoint:', reactionEndpoint);
+                // Add reaction first
+                await addReaction(reactionEndpoint, reaction);
+                // Then edit comment if applicable and if it's a comment event
+                if (shouldEditComment && commentUpdateEndpoint) {
+                  console.log('Comment update endpoint:', commentUpdateEndpoint);
+                  await editCommentWithWorkflowLink(commentUpdateEndpoint, runUrl);
+                } else {
+                  if (!alias && commentUpdateEndpoint) {
+                    console.log('Skipping comment edit - only available for alias workflows');
+                  } else {
+                    console.log('Skipping comment edit for event type:', eventName);
+                  }
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('Failed to process reaction and comment edit:', errorMessage);
+                core.setFailed(`Failed to process reaction and comment edit: ${errorMessage}`);
+              }
+            }
+            /**
+             * Add a reaction to a GitHub issue, PR, or comment
+             * @param {string} endpoint - The GitHub API endpoint to add the reaction to
+             * @param {string} reaction - The reaction type to add
+             */
+            async function addReaction(endpoint, reaction) {
+              const response = await github.request('POST ' + endpoint, {
+                content: reaction,
+                headers: {
+                  'Accept': 'application/vnd.github+json'
+                }
+              });
+              const reactionId = response.data?.id;
+              if (reactionId) {
+                console.log(`Successfully added reaction: ${reaction} (id: ${reactionId})`);
+                core.setOutput('reaction-id', reactionId.toString());
+              } else {
+                console.log(`Successfully added reaction: ${reaction}`);
+                core.setOutput('reaction-id', '');
+              }
+            }
+            /**
+             * Edit a comment to add a workflow run link
+             * @param {string} endpoint - The GitHub API endpoint to update the comment
+             * @param {string} runUrl - The URL of the workflow run
+             */
+            async function editCommentWithWorkflowLink(endpoint, runUrl) {
+              try {
+                // First, get the current comment content
+                const getResponse = await github.request('GET ' + endpoint, {
+                  headers: {
+                    'Accept': 'application/vnd.github+json'
+                  }
+                });
+                const originalBody = getResponse.data.body || '';
+                const workflowLinkText = `\n\n---\n*🤖 [Workflow run](${runUrl}) triggered by this comment*`;
+                // Check if we've already added a workflow link to avoid duplicates
+                if (originalBody.includes('*🤖 [Workflow run](')) {
+                  console.log('Comment already contains a workflow run link, skipping edit');
+                  return;
+                }
+                const updatedBody = originalBody + workflowLinkText;
+                // Update the comment
+                const updateResponse = await github.request('PATCH ' + endpoint, {
+                  body: updatedBody,
+                  headers: {
+                    'Accept': 'application/vnd.github+json'
+                  }
+                });
+                console.log(`Successfully updated comment with workflow link`);
+                console.log(`Comment ID: ${updateResponse.data.id}`);
+              } catch (error) {
+                // Don't fail the entire job if comment editing fails - just log it
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn('Failed to edit comment with workflow link:', errorMessage);
+                console.warn('This is not critical - the reaction was still added successfully');
+              }
+            }
+            await main();
+
+  test-claude-update-issue:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -76,14 +249,16 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          Create an issue with title "Hello from Claude" and body "World"
+          If the title of the issue #${{ github.event.issue.number }} is exactly "[claude-test] Update Issue Test" then:
           
-          Add a haiku about GitHub Actions and AI to the issue body.
+          1. Change the status to "closed"
+          2. Update the title to "[UPDATED] Update Issue Test - Processed by Claude"
+          3. Add a line to the end of the body saying "This issue was automatically updated by the Claude agentic workflow."
           
           
           ---
           
-          ## Creating an Issue
+          ## Updating Issues
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -91,14 +266,14 @@ jobs:
           
           ### Available Output Types:
           
-          **Creating an Issue**
+          **Updating an Issue**
           ```json
-          {"type": "create-issue", "title": "Issue title", "body": "Issue body in markdown", "labels": ["optional", "labels"]}
+          {"type": "update-issue", "status": "open" // or "closed", "title": "New issue title", "body": "Updated issue body in markdown"}
           ```
           
           **Example JSONL file content:**
           ```
-          {"type": "create-issue", "title": "Bug Report", "body": "Found an issue with..."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -126,7 +301,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Create Issue",
+              workflow_name: "Test Claude Update Issue",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -226,13 +401,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-create-issue.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-update-issue.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-create-issue.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-update-issue.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-create-issue.log
+          touch /tmp/test-claude-update-issue.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -254,7 +429,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"create-issue\":true}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"update-issue\":true}"
         with:
           script: |
             async function main() {
@@ -605,7 +780,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-create-issue.log
+          AGENT_LOG_FILE: /tmp/test-claude-update-issue.log
         with:
           script: |
             function main() {
@@ -880,8 +1055,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-create-issue.log
-          path: /tmp/test-claude-create-issue.log
+          name: test-claude-update-issue.log
+          path: /tmp/test-claude-update-issue.log
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
@@ -946,24 +1121,26 @@ jobs:
           path: /tmp/aw.patch
           if-no-files-found: ignore
 
-  create_issue:
-    needs: test-claude-create-issue
+  update_issue:
+    needs: test-claude-update-issue
+    if: github.event.issue.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
     timeout-minutes: 10
     outputs:
-      issue_number: ${{ steps.create_issue.outputs.issue_number }}
-      issue_url: ${{ steps.create_issue.outputs.issue_url }}
+      issue_number: ${{ steps.update_issue.outputs.issue_number }}
+      issue_url: ${{ steps.update_issue.outputs.issue_url }}
     steps:
-      - name: Create Output Issue
-        id: create_issue
+      - name: Update Issue
+        id: update_issue
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-create-issue.outputs.output }}
-          GITHUB_AW_ISSUE_TITLE_PREFIX: "[claude-test] "
-          GITHUB_AW_ISSUE_LABELS: "claude,automation,haiku"
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-update-issue.outputs.output }}
+          GITHUB_AW_UPDATE_STATUS: true
+          GITHUB_AW_UPDATE_TITLE: true
+          GITHUB_AW_UPDATE_BODY: true
         with:
           script: |
             async function main() {
@@ -990,101 +1167,137 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find all create-issue items
-              const createIssueItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'create-issue');
-              if (createIssueItems.length === 0) {
-                console.log('No create-issue items found in agent output');
+              // Find all update-issue items
+              const updateItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'update-issue');
+              if (updateItems.length === 0) {
+                console.log('No update-issue items found in agent output');
                 return;
               }
-              console.log(`Found ${createIssueItems.length} create-issue item(s)`);
-              // Check if we're in an issue context (triggered by an issue event)
-              const parentIssueNumber = context.payload?.issue?.number;
-              // Parse labels from environment variable (comma-separated string)
-              const labelsEnv = process.env.GITHUB_AW_ISSUE_LABELS;
-              let envLabels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
-              const createdIssues = [];
-              // Process each create-issue item
-              for (let i = 0; i < createIssueItems.length; i++) {
-                const createIssueItem = createIssueItems[i];
-                console.log(`Processing create-issue item ${i + 1}/${createIssueItems.length}:`, { title: createIssueItem.title, bodyLength: createIssueItem.body.length });
-                // Merge environment labels with item-specific labels
-                let labels = [...envLabels];
-                if (createIssueItem.labels && Array.isArray(createIssueItem.labels)) {
-                  labels = [...labels, ...createIssueItem.labels].filter(Boolean);
+              console.log(`Found ${updateItems.length} update-issue item(s)`);
+              // Get the configuration from environment variables
+              const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
+              const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === 'true';
+              const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === 'true';
+              const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === 'true';
+              console.log(`Update target configuration: ${updateTarget}`);
+              console.log(`Can update status: ${canUpdateStatus}, title: ${canUpdateTitle}, body: ${canUpdateBody}`);
+              // Check if we're in an issue context
+              const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
+              // Validate context based on target configuration
+              if (updateTarget === "triggering" && !isIssueContext) {
+                console.log('Target is "triggering" but not running in issue context, skipping issue update');
+                return;
+              }
+              const updatedIssues = [];
+              // Process each update item
+              for (let i = 0; i < updateItems.length; i++) {
+                const updateItem = updateItems[i];
+                console.log(`Processing update-issue item ${i + 1}/${updateItems.length}`);
+                // Determine the issue number for this update
+                let issueNumber;
+                if (updateTarget === "*") {
+                  // For target "*", we need an explicit issue number from the update item
+                  if (updateItem.issue_number) {
+                    issueNumber = parseInt(updateItem.issue_number, 10);
+                    if (isNaN(issueNumber) || issueNumber <= 0) {
+                      console.log(`Invalid issue number specified: ${updateItem.issue_number}`);
+                      continue;
+                    }
+                  } else {
+                    console.log('Target is "*" but no issue_number specified in update item');
+                    continue;
+                  }
+                } else if (updateTarget && updateTarget !== "triggering") {
+                  // Explicit issue number specified in target
+                  issueNumber = parseInt(updateTarget, 10);
+                  if (isNaN(issueNumber) || issueNumber <= 0) {
+                    console.log(`Invalid issue number in target configuration: ${updateTarget}`);
+                    continue;
+                  }
+                } else {
+                  // Default behavior: use triggering issue
+                  if (isIssueContext) {
+                    if (context.payload.issue) {
+                      issueNumber = context.payload.issue.number;
+                    } else {
+                      console.log('Issue context detected but no issue found in payload');
+                      continue;
+                    }
+                  } else {
+                    console.log('Could not determine issue number');
+                    continue;
+                  }
                 }
-                // Extract title and body from the JSON item
-                let title = createIssueItem.title ? createIssueItem.title.trim() : '';
-                let bodyLines = createIssueItem.body.split('\n');
-                // If no title was found, use the body content as title (or a default)
-                if (!title) {
-                  title = createIssueItem.body || 'Agent Output';
+                if (!issueNumber) {
+                  console.log('Could not determine issue number');
+                  continue;
                 }
-                // Apply title prefix if provided via environment variable
-                const titlePrefix = process.env.GITHUB_AW_ISSUE_TITLE_PREFIX;
-                if (titlePrefix && !title.startsWith(titlePrefix)) {
-                  title = titlePrefix + title;
+                console.log(`Updating issue #${issueNumber}`);
+                // Build the update object based on allowed fields and provided values
+                const updateData = {};
+                let hasUpdates = false;
+                if (canUpdateStatus && updateItem.status !== undefined) {
+                  // Validate status value
+                  if (updateItem.status === 'open' || updateItem.status === 'closed') {
+                    updateData.state = updateItem.status;
+                    hasUpdates = true;
+                    console.log(`Will update status to: ${updateItem.status}`);
+                  } else {
+                    console.log(`Invalid status value: ${updateItem.status}. Must be 'open' or 'closed'`);
+                  }
                 }
-                if (parentIssueNumber) {
-                  console.log('Detected issue context, parent issue #' + parentIssueNumber);
-                  // Add reference to parent issue in the child issue body
-                  bodyLines.push(`Related to #${parentIssueNumber}`);
+                if (canUpdateTitle && updateItem.title !== undefined) {
+                  if (typeof updateItem.title === 'string' && updateItem.title.trim().length > 0) {
+                    updateData.title = updateItem.title.trim();
+                    hasUpdates = true;
+                    console.log(`Will update title to: ${updateItem.title.trim()}`);
+                  } else {
+                    console.log('Invalid title value: must be a non-empty string');
+                  }
                 }
-                // Add AI disclaimer with run id, run htmlurl
-                // Add AI disclaimer with workflow run information
-                const runId = context.runId;
-                const runUrl = context.payload.repository 
-                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                  : `https://github.com/actions/runs/${runId}`;  
-                bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
-                // Prepare the body content
-                const body = bodyLines.join('\n').trim();
-                console.log('Creating issue with title:', title);
-                console.log('Labels:', labels);
-                console.log('Body length:', body.length);
+                if (canUpdateBody && updateItem.body !== undefined) {
+                  if (typeof updateItem.body === 'string') {
+                    updateData.body = updateItem.body;
+                    hasUpdates = true;
+                    console.log(`Will update body (length: ${updateItem.body.length})`);
+                  } else {
+                    console.log('Invalid body value: must be a string');
+                  }
+                }
+                if (!hasUpdates) {
+                  console.log('No valid updates to apply for this item');
+                  continue;
+                }
                 try {
-                  // Create the issue using GitHub API
-                  const { data: issue } = await github.rest.issues.create({
+                  // Update the issue using GitHub API
+                  const { data: issue } = await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    title: title,
-                    body: body,
-                    labels: labels
+                    issue_number: issueNumber,
+                    ...updateData
                   });
-                  console.log('Created issue #' + issue.number + ': ' + issue.html_url);
-                  createdIssues.push(issue);
-                  // If we have a parent issue, add a comment to it referencing the new child issue
-                  if (parentIssueNumber) {
-                    try {
-                      await github.rest.issues.createComment({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: parentIssueNumber,
-                        body: `Created related issue: #${issue.number}`
-                      });
-                      console.log('Added comment to parent issue #' + parentIssueNumber);
-                    } catch (error) {
-                      console.log('Warning: Could not add comment to parent issue:', error instanceof Error ? error.message : String(error));
-                    }
-                  }
-                  // Set output for the last created issue (for backward compatibility)
-                  if (i === createIssueItems.length - 1) {
+                  console.log('Updated issue #' + issue.number + ': ' + issue.html_url);
+                  updatedIssues.push(issue);
+                  // Set output for the last updated issue (for backward compatibility)
+                  if (i === updateItems.length - 1) {
                     core.setOutput('issue_number', issue.number);
                     core.setOutput('issue_url', issue.html_url);
                   }
                 } catch (error) {
-                  console.error(`✗ Failed to create issue "${title}":`, error instanceof Error ? error.message : String(error));
+                  console.error(`✗ Failed to update issue #${issueNumber}:`, error instanceof Error ? error.message : String(error));
                   throw error;
                 }
               }
-              // Write summary for all created issues
-              if (createdIssues.length > 0) {
-                let summaryContent = '\n\n## GitHub Issues\n';
-                for (const issue of createdIssues) {
+              // Write summary for all updated issues
+              if (updatedIssues.length > 0) {
+                let summaryContent = '\n\n## Updated Issues\n';
+                for (const issue of updatedIssues) {
                   summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully created ${createdIssues.length} issue(s)`);
+              console.log(`Successfully updated ${updatedIssues.length} issue(s)`);
+              return updatedIssues;
             }
             await main();
 
