@@ -469,7 +469,7 @@ func TestComputeAllowedTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := compiler.computeAllowedTools(tt.tools)
+			result := compiler.computeAllowedTools(tt.tools, nil)
 
 			// Since map iteration order is not guaranteed, we need to check if
 			// the expected tools are present (for simple cases)
@@ -1088,7 +1088,7 @@ func TestApplyDefaultGitHubMCPTools_DefaultClaudeTools(t *testing.T) {
 				tools[k] = v
 			}
 
-			result := compiler.applyDefaultGitHubMCPTools(tools)
+			result := compiler.applyDefaultGitHubMCPAndClaudeTools(tools)
 
 			// Check that all expected top-level tools are present
 			for _, expectedTool := range tt.expectedTopLevelTools {
@@ -1190,6 +1190,8 @@ func TestDefaultClaudeToolsList(t *testing.T) {
 		"Task",
 		"Glob",
 		"Grep",
+		"ExitPlanMode",
+		"TodoWrite",
 		"LS",
 		"Read",
 		"NotebookRead",
@@ -1204,7 +1206,7 @@ func TestDefaultClaudeToolsList(t *testing.T) {
 		},
 	}
 
-	result := compiler.applyDefaultGitHubMCPTools(tools)
+	result := compiler.applyDefaultGitHubMCPAndClaudeTools(tools)
 
 	// Verify the claude section was created
 	claudeSection, hasClaudeSection := result["claude"]
@@ -1264,7 +1266,7 @@ func TestDefaultClaudeToolsIntegrationWithComputeAllowedTools(t *testing.T) {
 	}
 
 	// Apply default tools first
-	toolsWithDefaults := compiler.applyDefaultGitHubMCPTools(tools)
+	toolsWithDefaults := compiler.applyDefaultGitHubMCPAndClaudeTools(tools)
 
 	// Verify that the claude section was created with default tools (new format)
 	claudeSection, hasClaudeSection := toolsWithDefaults["claude"]
@@ -1297,7 +1299,7 @@ func TestDefaultClaudeToolsIntegrationWithComputeAllowedTools(t *testing.T) {
 	}
 
 	// Compute allowed tools
-	allowedTools := compiler.computeAllowedTools(toolsWithDefaults)
+	allowedTools := compiler.computeAllowedTools(toolsWithDefaults, nil)
 
 	// Verify that default Claude tools appear in the allowed tools string
 	for _, expectedTool := range expectedClaudeTools {
@@ -1420,7 +1422,7 @@ func TestComputeAllowedToolsWithCustomMCP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := compiler.computeAllowedTools(tt.tools)
+			result := compiler.computeAllowedTools(tt.tools, nil)
 
 			// Check that all expected tools are present
 			for _, expectedTool := range tt.expected {
@@ -1649,7 +1651,7 @@ func TestComputeAllowedToolsWithClaudeSection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := compiler.computeAllowedTools(tt.tools)
+			result := compiler.computeAllowedTools(tt.tools, nil)
 
 			// Split both expected and result into slices and check each tool is present
 			expectedTools := strings.Split(tt.expected, ",")
@@ -3283,20 +3285,21 @@ func TestTransformImageToDockerCommand(t *testing.T) {
 	}
 }
 
-// TestAIReactionWorkflow tests the ai-reaction functionality
+// TestAIReactionWorkflow tests the reaction functionality
 func TestAIReactionWorkflow(t *testing.T) {
 	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "ai-reaction-test")
+	tmpDir, err := os.MkdirTemp("", "reaction-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create a test markdown file with ai-reaction
+	// Create a test markdown file with reaction
 	testContent := `---
 on:
   issues:
     types: [opened]
+  reaction: eyes
 permissions:
   contents: read
   issues: write
@@ -3304,16 +3307,15 @@ permissions:
 tools:
   github:
     allowed: [get_issue]
-ai-reaction: eyes
 timeout_minutes: 5
 ---
 
 # AI Reaction Test
 
-Test workflow with ai-reaction.
+Test workflow with reaction.
 `
 
-	testFile := filepath.Join(tmpDir, "test-ai-reaction.md")
+	testFile := filepath.Join(tmpDir, "test-reaction.md")
 	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -3326,7 +3328,7 @@ Test workflow with ai-reaction.
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Verify ai-reaction field is parsed correctly
+	// Verify reaction field is parsed correctly
 	if workflowData.AIReaction != "eyes" {
 		t.Errorf("Expected AIReaction to be 'eyes', got '%s'", workflowData.AIReaction)
 	}
@@ -3357,16 +3359,16 @@ Test workflow with ai-reaction.
 	}
 }
 
-// TestAIReactionWorkflowWithoutReaction tests that workflows without explicit ai-reaction do not create reaction actions
+// TestAIReactionWorkflowWithoutReaction tests that workflows without explicit reaction do not create reaction actions
 func TestAIReactionWorkflowWithoutReaction(t *testing.T) {
 	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "no-ai-reaction-test")
+	tmpDir, err := os.MkdirTemp("", "no-reaction-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create a test markdown file without explicit ai-reaction (should not create reaction action)
+	// Create a test markdown file without explicit reaction (should not create reaction action)
 	testContent := `---
 on:
   issues:
@@ -3382,7 +3384,7 @@ timeout_minutes: 5
 
 # No Reaction Test
 
-Test workflow without explicit ai-reaction (should not create reaction action).
+Test workflow without explicit reaction (should not create reaction action).
 `
 
 	testFile := filepath.Join(tmpDir, "test-no-reaction.md")
@@ -3398,7 +3400,7 @@ Test workflow without explicit ai-reaction (should not create reaction action).
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Verify ai-reaction field is empty (not defaulted)
+	// Verify reaction field is empty (not defaulted)
 	if workflowData.AIReaction != "" {
 		t.Errorf("Expected AIReaction to be empty, got '%s'", workflowData.AIReaction)
 	}
@@ -3426,6 +3428,162 @@ Test workflow without explicit ai-reaction (should not create reaction action).
 	jobCount := strings.Count(yamlContent, "runs-on: ubuntu-latest")
 	if jobCount != 1 {
 		t.Errorf("Expected 1 jobs (main), found %d", jobCount)
+	}
+}
+
+// TestAIReactionWithCommentEditFunctionality tests that the enhanced reaction script includes comment editing
+func TestAIReactionWithCommentEditFunctionality(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "reaction-edit-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a test markdown file with reaction
+	testContent := `---
+on:
+  issue_comment:
+    types: [created]
+  reaction: eyes
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [get_issue]
+---
+
+# AI Reaction with Comment Edit Test
+
+Test workflow with reaction and comment editing.
+`
+
+	testFile := filepath.Join(tmpDir, "test-reaction-edit.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to parse workflow: %v", err)
+	}
+
+	// Verify reaction field is parsed correctly
+	if workflowData.AIReaction != "eyes" {
+		t.Errorf("Expected AIReaction to be 'eyes', got '%s'", workflowData.AIReaction)
+	}
+
+	// Generate YAML and verify it contains the enhanced reaction script
+	yamlContent, err := compiler.generateYAML(workflowData)
+	if err != nil {
+		t.Fatalf("Failed to generate YAML: %v", err)
+	}
+
+	// Check for enhanced reaction functionality in generated YAML
+	expectedStrings := []string{
+		"add_reaction:",
+		"GITHUB_AW_REACTION: eyes",
+		"uses: actions/github-script@v7",
+		"editCommentWithWorkflowLink", // This should be in the new script
+		"runUrl =",                    // This should be in the new script for workflow run URL
+		"Comment update endpoint",     // This should be logged in the new script
+		"GITHUB_AW_ALIAS",             // This should check for alias environment variable
+		"shouldEditComment = alias",   // This should conditionally edit based on alias
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(yamlContent, expected) {
+			t.Errorf("Generated YAML does not contain expected string: %s", expected)
+		}
+	}
+
+	// Verify that the script includes comment editing logic but doesn't fail for non-comment events
+	if !strings.Contains(yamlContent, "shouldEditComment") {
+		t.Error("Generated YAML should contain shouldEditComment logic")
+	}
+
+	// Verify the script handles different event types appropriately
+	if !strings.Contains(yamlContent, "issue_comment") {
+		t.Error("Generated YAML should reference issue_comment event handling")
+	}
+}
+
+// TestAliasReactionWithCommentEdit tests alias workflows with reaction and comment editing
+func TestAliasReactionWithCommentEdit(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "alias-reaction-edit-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a test markdown file with alias and reaction
+	testContent := `---
+on:
+  alias:
+    name: test-bot
+  reaction: eyes
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+tools:
+  github:
+    allowed: [get_issue]
+---
+
+# Alias Bot with Reaction Test
+
+Test alias workflow with reaction and comment editing.
+`
+
+	testFile := filepath.Join(tmpDir, "test-alias-bot.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to parse workflow: %v", err)
+	}
+
+	// Verify alias and reaction fields are parsed correctly
+	if workflowData.Alias != "test-bot" {
+		t.Errorf("Expected Alias to be 'test-bot', got '%s'", workflowData.Alias)
+	}
+	if workflowData.AIReaction != "eyes" {
+		t.Errorf("Expected AIReaction to be 'eyes', got '%s'", workflowData.AIReaction)
+	}
+
+	// Generate YAML and verify it contains both alias and reaction environment variables
+	yamlContent, err := compiler.generateYAML(workflowData)
+	if err != nil {
+		t.Fatalf("Failed to generate YAML: %v", err)
+	}
+
+	// Check for both environment variables in the generated YAML
+	expectedEnvVars := []string{
+		"GITHUB_AW_REACTION: eyes",
+		"GITHUB_AW_ALIAS: test-bot",
+	}
+
+	for _, expected := range expectedEnvVars {
+		if !strings.Contains(yamlContent, expected) {
+			t.Errorf("Generated YAML does not contain expected environment variable: %s", expected)
+		}
+	}
+
+	// Verify the script contains alias-aware comment editing logic
+	if !strings.Contains(yamlContent, "shouldEditComment = alias") {
+		t.Error("Generated YAML should contain alias-aware comment editing logic")
 	}
 }
 
@@ -4594,12 +4752,7 @@ This workflow should get default permissions applied automatically.
 
 	// Verify that default permissions are present in the generated workflow
 	expectedDefaultPermissions := []string{
-		"contents: read",
-		"issues: read",
-		"pull-requests: read",
-		"discussions: read",
-		"deployments: read",
-		"models: read",
+		"read-all",
 	}
 
 	for _, expectedPerm := range expectedDefaultPermissions {
@@ -4652,30 +4805,12 @@ This workflow should get default permissions applied automatically.
 	}
 
 	// Verify permissions is a map
-	permissionsMap, ok := permissions.(map[string]interface{})
+	permissionsValue, ok := permissions.(string)
 	if !ok {
-		t.Fatal("Permissions section is not a map")
+		t.Fatal("Permissions section is not a string")
 	}
-
-	// Verify each expected default permission exists and has correct value
-	expectedPermissionsMap := map[string]string{
-		"contents":      "read",
-		"issues":        "read",
-		"pull-requests": "read",
-		"discussions":   "read",
-		"deployments":   "read",
-		"models":        "read",
-	}
-
-	for key, expectedValue := range expectedPermissionsMap {
-		actualValue, exists := permissionsMap[key]
-		if !exists {
-			t.Errorf("Expected permission '%s' not found in permissions map", key)
-			continue
-		}
-		if actualValue != expectedValue {
-			t.Errorf("Expected permission '%s' to have value '%s', but got '%v'", key, expectedValue, actualValue)
-		}
+	if permissionsValue != "read-all" {
+		t.Fatal("Default permissions not read-all")
 	}
 }
 
@@ -4796,7 +4931,9 @@ This workflow has custom permissions that should override defaults.
 		"pull-requests: read",
 		"discussions: read",
 		"deployments: read",
-		"models: read",
+		"actions: read",
+		"checks: read",
+		"statuses: read",
 	}
 
 	for _, defaultPerm := range defaultOnlyPermissions {
@@ -4929,6 +5066,262 @@ engine: claude
 	}
 }
 
+func TestStopAfterCompiledAway(t *testing.T) {
+	// Test that stop-after is properly compiled away and doesn't appear in final YAML
+	tmpDir, err := os.MkdirTemp("", "stop-after-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name             string
+		frontmatter      string
+		shouldNotContain []string // Strings that should NOT appear in the lock file
+		shouldContain    []string // Strings that should appear in the lock file
+		description      string
+	}{
+		{
+			name: "stop-after with workflow_dispatch",
+			frontmatter: `---
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1-5"
+  stop-after: "+48h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +48h",
+				"stop-after: \"+48h\"",
+			},
+			shouldContain: []string{
+				"workflow_dispatch: null",
+				"- cron: 0 2 * * 1-5",
+			},
+			description: "stop-after should be compiled away when used with workflow_dispatch and schedule",
+		},
+		{
+			name: "stop-after with alias trigger",
+			frontmatter: `---
+on:
+  alias:
+    name: test-bot
+  workflow_dispatch:
+  stop-after: "2024-12-31T23:59:59Z"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: 2024-12-31T23:59:59Z",
+				"stop-after: \"2024-12-31T23:59:59Z\"",
+			},
+			shouldContain: []string{
+				"workflow_dispatch: null",
+				"issue_comment:",
+				"issues:",
+				"pull_request:",
+			},
+			description: "stop-after should be compiled away when used with alias triggers",
+		},
+		{
+			name: "stop-after with reaction",
+			frontmatter: `---
+on:
+  issues:
+    types: [opened]
+  reaction: eyes
+  stop-after: "+24h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +24h",
+				"stop-after: \"+24h\"",
+			},
+			shouldContain: []string{
+				"issues:",
+				"types:",
+				"- opened",
+			},
+			description: "stop-after should be compiled away when used with reaction",
+		},
+		{
+			name: "stop-after only with schedule",
+			frontmatter: `---
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  stop-after: "+72h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +72h",
+				"stop-after: \"+72h\"",
+			},
+			shouldContain: []string{
+				"schedule:",
+				"- cron: 0 9 * * 1",
+			},
+			description: "stop-after should be compiled away when used only with schedule",
+		},
+		{
+			name: "stop-after with both alias and reaction",
+			frontmatter: `---
+on:
+  alias:
+    name: test-bot
+  reaction: heart
+  workflow_dispatch:
+  stop-after: "+36h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +36h",
+				"stop-after: \"+36h\"",
+			},
+			shouldContain: []string{
+				"workflow_dispatch: null",
+				"issue_comment:",
+				"issues:",
+				"pull_request:",
+			},
+			description: "stop-after should be compiled away when used with both alias and reaction",
+		},
+		{
+			name: "stop-after with reaction and schedule",
+			frontmatter: `---
+on:
+  issues:
+    types: [opened, edited]
+  reaction: rocket
+  schedule:
+    - cron: "0 8 * * *"
+  stop-after: "+12h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +12h",
+				"stop-after: \"+12h\"",
+			},
+			shouldContain: []string{
+				"issues:",
+				"types:",
+				"- opened",
+				"- edited",
+				"schedule:",
+				"- cron: 0 8 * * *",
+			},
+			description: "stop-after should be compiled away when used with reaction and schedule",
+		},
+		{
+			name: "stop-after with alias and schedule",
+			frontmatter: `---
+on:
+  alias:
+    name: scheduler-bot
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+  stop-after: "+96h"
+tools:
+  github:
+    allowed: [list_issues]
+engine: claude
+---`,
+			shouldNotContain: []string{
+				"stop-after:",
+				"stop-after: +96h",
+				"stop-after: \"+96h\"",
+			},
+			shouldContain: []string{
+				"workflow_dispatch: null",
+				"schedule:",
+				"- cron: 0 12 * * *",
+				"issue_comment:",
+				"issues:",
+				"pull_request:",
+			},
+			description: "stop-after should be compiled away when used with alias and schedule",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Stop-After Compilation
+
+This workflow tests that stop-after is properly compiled away.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Unexpected error compiling workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+
+			lockContent := string(content)
+
+			// Check that strings that should NOT appear are indeed absent
+			for _, shouldNotContain := range tt.shouldNotContain {
+				if strings.Contains(lockContent, shouldNotContain) {
+					t.Errorf("%s: Lock file should NOT contain '%s' but it did.\nLock file content:\n%s", tt.description, shouldNotContain, lockContent)
+				}
+			}
+
+			// Check that expected strings are present
+			for _, shouldContain := range tt.shouldContain {
+				if !strings.Contains(lockContent, shouldContain) {
+					t.Errorf("%s: Expected lock file to contain '%s' but it didn't.\nLock file content:\n%s", tt.description, shouldContain, lockContent)
+				}
+			}
+
+			// Verify the lock file is valid YAML
+			var yamlData map[string]any
+			if err := yaml.Unmarshal(content, &yamlData); err != nil {
+				t.Errorf("%s: Generated YAML is invalid: %v\nContent:\n%s", tt.description, err, lockContent)
+			}
+		})
+	}
+}
+
 func TestCustomStepsEdgeCases(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "steps-edge-cases-test")
 	if err != nil {
@@ -5010,6 +5403,136 @@ engine: claude
 					if !strings.Contains(lockContent, "- name: Checkout repository") {
 						t.Error("Expected default checkout step when no custom steps defined")
 					}
+				}
+			}
+		})
+	}
+}
+
+func TestComputeAllowedToolsWithSafeOutputs(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name        string
+		tools       map[string]any
+		safeOutputs *SafeOutputsConfig
+		expected    string
+	}{
+		{
+			name: "SafeOutputs with no tools - should add Write permission",
+			tools: map[string]any{
+				"claude": map[string]any{
+					"allowed": map[string]any{
+						"Read": nil,
+					},
+				},
+			},
+			safeOutputs: &SafeOutputsConfig{
+				CreateIssues: &CreateIssuesConfig{Max: 1},
+			},
+			expected: "Read,Write",
+		},
+		{
+			name: "SafeOutputs with general Write permission - should not add specific Write",
+			tools: map[string]any{
+				"claude": map[string]any{
+					"allowed": map[string]any{
+						"Read":  nil,
+						"Write": nil,
+					},
+				},
+			},
+			safeOutputs: &SafeOutputsConfig{
+				CreateIssues: &CreateIssuesConfig{Max: 1},
+			},
+			expected: "Read,Write",
+		},
+		{
+			name: "No SafeOutputs - should not add Write permission",
+			tools: map[string]any{
+				"claude": map[string]any{
+					"allowed": map[string]any{
+						"Read": nil,
+					},
+				},
+			},
+			safeOutputs: nil,
+			expected:    "Read",
+		},
+		{
+			name: "SafeOutputs with multiple output types",
+			tools: map[string]any{
+				"claude": map[string]any{
+					"allowed": map[string]any{
+						"Bash": nil,
+					},
+				},
+			},
+			safeOutputs: &SafeOutputsConfig{
+				CreateIssues:       &CreateIssuesConfig{Max: 1},
+				AddIssueComments:   &AddIssueCommentsConfig{Max: 1},
+				CreatePullRequests: &CreatePullRequestsConfig{Max: 1},
+			},
+			expected: "Bash,Write",
+		},
+		{
+			name: "SafeOutputs with MCP tools",
+			tools: map[string]any{
+				"claude": map[string]any{
+					"allowed": map[string]any{
+						"Read": nil,
+					},
+				},
+				"github": map[string]any{
+					"allowed": []any{"create_issue", "create_pull_request"},
+				},
+			},
+			safeOutputs: &SafeOutputsConfig{
+				CreateIssues: &CreateIssuesConfig{Max: 1},
+			},
+			expected: "Read,Write,mcp__github__create_issue,mcp__github__create_pull_request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compiler.computeAllowedTools(tt.tools, tt.safeOutputs)
+
+			// Split both expected and result into slices and check each tool is present
+			expectedTools := strings.Split(tt.expected, ",")
+			resultTools := strings.Split(result, ",")
+
+			// Check that all expected tools are present
+			for _, expectedTool := range expectedTools {
+				if expectedTool == "" {
+					continue // Skip empty strings
+				}
+				found := false
+				for _, actualTool := range resultTools {
+					if actualTool == expectedTool {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected tool '%s' not found in result '%s'", expectedTool, result)
+				}
+			}
+
+			// Check that no unexpected tools are present
+			for _, actual := range resultTools {
+				if actual == "" {
+					continue // Skip empty strings
+				}
+				found := false
+				for _, expected := range expectedTools {
+					if expected == actual {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Unexpected tool '%s' found in result '%s'", actual, result)
 				}
 			}
 		})

@@ -31,8 +31,26 @@ func NewClaudeEngine() *ClaudeEngine {
 }
 
 func (e *ClaudeEngine) GetInstallationSteps(engineConfig *EngineConfig) []GitHubActionStep {
-	// Claude Code doesn't require installation as it uses claude-base-action
-	return []GitHubActionStep{}
+	var steps []GitHubActionStep
+
+	// Check if network permissions are configured
+	if ShouldEnforceNetworkPermissions(engineConfig) {
+		// Generate network hook generator and settings generator
+		hookGenerator := &NetworkHookGenerator{}
+		settingsGenerator := &ClaudeSettingsGenerator{}
+
+		allowedDomains := GetAllowedDomains(engineConfig)
+
+		// Add hook generation step
+		hookStep := hookGenerator.GenerateNetworkHookWorkflowStep(allowedDomains)
+		steps = append(steps, hookStep)
+
+		// Add settings generation step
+		settingsStep := settingsGenerator.GenerateSettingsWorkflowStep()
+		steps = append(steps, settingsStep)
+	}
+
+	return steps
 }
 
 // GetDeclaredOutputFiles returns the output files that Claude may produce
@@ -40,11 +58,17 @@ func (e *ClaudeEngine) GetDeclaredOutputFiles() []string {
 	return []string{"output.txt"}
 }
 
-func (e *ClaudeEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig) ExecutionConfig {
+func (e *ClaudeEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig, hasOutput bool) ExecutionConfig {
 	// Determine the action version to use
 	actionVersion := DefaultClaudeActionVersion // Default version
 	if engineConfig != nil && engineConfig.Version != "" {
 		actionVersion = engineConfig.Version
+	}
+
+	// Build claude_env based on hasOutput parameter
+	claudeEnv := "|\n            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
+	if hasOutput {
+		claudeEnv += "\n            GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}"
 	}
 
 	config := ExecutionConfig{
@@ -54,19 +78,21 @@ func (e *ClaudeEngine) GetExecutionConfig(workflowName string, logFile string, e
 			"prompt_file":       "/tmp/aw-prompts/prompt.txt",
 			"anthropic_api_key": "${{ secrets.ANTHROPIC_API_KEY }}",
 			"mcp_config":        "/tmp/mcp-config/mcp-servers.json",
-			"claude_env":        "|\n            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n            GITHUB_AW_OUTPUT: ${{ env.GITHUB_AW_OUTPUT }}",
+			"claude_env":        claudeEnv,
 			"allowed_tools":     "", // Will be filled in during generation
 			"timeout_minutes":   "", // Will be filled in during generation
 			"max_turns":         "", // Will be filled in during generation
-		},
-		Environment: map[string]string{
-			"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}",
 		},
 	}
 
 	// Add model configuration if specified
 	if engineConfig != nil && engineConfig.Model != "" {
 		config.Inputs["model"] = engineConfig.Model
+	}
+
+	// Add settings parameter if network permissions are configured
+	if ShouldEnforceNetworkPermissions(engineConfig) {
+		config.Inputs["settings"] = ".claude/settings.json"
 	}
 
 	return config
@@ -132,7 +158,7 @@ func (e *ClaudeEngine) renderGitHubClaudeMCPConfig(yaml *strings.Builder, github
 
 // renderClaudeMCPConfig generates custom MCP server configuration for a single tool in Claude workflow mcp-servers.json
 func (e *ClaudeEngine) renderClaudeMCPConfig(yaml *strings.Builder, toolName string, toolConfig map[string]any, isLast bool) error {
-	yaml.WriteString(fmt.Sprintf("              \"%s\": {\n", toolName))
+	fmt.Fprintf(yaml, "              \"%s\": {\n", toolName)
 
 	// Use the shared MCP config renderer with JSON format
 	renderer := MCPConfigRenderer{
@@ -323,4 +349,9 @@ func (e *ClaudeEngine) parseClaudeJSONLog(logContent string, verbose bool) LogMe
 	}
 
 	return metrics
+}
+
+// GetLogParserScript returns the JavaScript script name for parsing Claude logs
+func (e *ClaudeEngine) GetLogParserScript() string {
+	return "parse_claude_log"
 }

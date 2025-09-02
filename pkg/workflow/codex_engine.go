@@ -46,7 +46,7 @@ func (e *CodexEngine) GetInstallationSteps(engineConfig *EngineConfig) []GitHubA
 	}
 }
 
-func (e *CodexEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig) ExecutionConfig {
+func (e *CodexEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig, hasOutput bool) ExecutionConfig {
 	// Use model from engineConfig if available, otherwise default to o4-mini
 	model := "o4-mini"
 	if engineConfig != nil && engineConfig.Model != "" {
@@ -64,13 +64,20 @@ codex exec \
   -c model=%s \
   --full-auto "$INSTRUCTION" 2>&1 | tee %s`, model, logFile)
 
+	env := map[string]string{
+		"OPENAI_API_KEY":      "${{ secrets.OPENAI_API_KEY }}",
+		"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
+	}
+
+	// Add GITHUB_AW_SAFE_OUTPUTS if output is needed
+	if hasOutput {
+		env["GITHUB_AW_SAFE_OUTPUTS"] = "${{ env.GITHUB_AW_SAFE_OUTPUTS }}"
+	}
+
 	return ExecutionConfig{
-		StepName: "Run Codex",
-		Command:  command,
-		Environment: map[string]string{
-			"OPENAI_API_KEY":      "${{ secrets.OPENAI_API_KEY }}",
-			"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
-		},
+		StepName:    "Run Codex",
+		Command:     command,
+		Environment: env,
 	}
 }
 
@@ -170,7 +177,7 @@ func (e *CodexEngine) renderGitHubCodexMCPConfig(yaml *strings.Builder, githubTo
 // renderCodexMCPConfig generates custom MCP server configuration for a single tool in codex workflow config.toml
 func (e *CodexEngine) renderCodexMCPConfig(yaml *strings.Builder, toolName string, toolConfig map[string]any) error {
 	yaml.WriteString("          \n")
-	yaml.WriteString(fmt.Sprintf("          [mcp_servers.%s]\n", toolName))
+	fmt.Fprintf(yaml, "          [mcp_servers.%s]\n", toolName)
 
 	// Use the shared MCP config renderer with TOML format
 	renderer := MCPConfigRenderer{
@@ -184,4 +191,9 @@ func (e *CodexEngine) renderCodexMCPConfig(yaml *strings.Builder, toolName strin
 	}
 
 	return nil
+}
+
+// GetLogParserScript returns the JavaScript script name for parsing Codex logs
+func (e *CodexEngine) GetLogParserScript() string {
+	return "parse_codex_log"
 }

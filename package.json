@@ -17,5 +17,8 @@
     "test:js": "vitest run",
     "test:js-watch": "vitest",
     "test:js-coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "vite": "^4.5.14"
   }
 }

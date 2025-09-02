@@ -40,13 +40,16 @@ type AgenticEngine interface {
 	GetInstallationSteps(engineConfig *EngineConfig) []GitHubActionStep
 
 	// GetExecutionConfig returns the configuration for executing this engine
-	GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig) ExecutionConfig
+	GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig, hasOutput bool) ExecutionConfig
 
 	// RenderMCPConfig renders the MCP configuration for this engine to the given YAML builder
 	RenderMCPConfig(yaml *strings.Builder, tools map[string]any, mcpTools []string)
 
 	// ParseLogMetrics extracts metrics from engine-specific log content
 	ParseLogMetrics(logContent string, verbose bool) LogMetrics
+
+	// GetLogParserScript returns the name of the JavaScript script to parse logs for this engine
+	GetLogParserScript() string
 }
 
 // ExecutionConfig contains the configuration for executing an agentic engine

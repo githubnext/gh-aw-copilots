@@ -18,13 +18,10 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 - `steps`: Custom steps for the job
 
 **Properties specific to GitHub Agentic Workflows:**
-- `engine`: AI engine configuration (claude/codex)
+- `engine`: AI engine configuration (claude/codex) with optional max-turns setting and network permissions
 - `tools`: Available tools and MCP servers for the AI engine  
-- `stop-time`: Deadline when workflow should stop running (absolute or relative time)
-- `max-turns`: Maximum number of chat iterations per run
-- `ai-reaction`: Emoji reaction to add/remove on triggering GitHub item
 - `cache`: Cache configuration for workflow dependencies
-- `output`: [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
+- `safe-outputs`: [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
 
 ## Trigger Events (`on:`)
 
@@ -35,6 +32,65 @@ on:
   issues:
     types: [opened]
 ```
+
+### Stop After Configuration (`stop-after:`)
+
+You can add a `stop-after:` option within the `on:` section as a cost-control measure to automatically disable workflow triggering after a deadline:
+
+```yaml
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  stop-after: "+25h"  # 25 hours from compilation time
+```
+
+**Relative time delta (calculated from compilation time):**
+```yaml
+on:
+  issues:
+    types: [opened]
+  stop-after: "+25h"      # 25 hours from now
+```
+
+**Supported absolute date formats:**
+- Standard: `YYYY-MM-DD HH:MM:SS`, `YYYY-MM-DD`
+- US format: `MM/DD/YYYY HH:MM:SS`, `MM/DD/YYYY`  
+- European: `DD/MM/YYYY HH:MM:SS`, `DD/MM/YYYY`
+- Readable: `January 2, 2006`, `2 January 2006`, `Jan 2, 2006`
+- Ordinals: `1st June 2025`, `June 1st 2025`, `23rd December 2025`
+- ISO 8601: `2006-01-02T15:04:05Z`
+
+**Supported delta units:**
+- `d` - days
+- `h` - hours
+- `m` - minutes
+
+Note that if you specify a relative time, it is calculated at the time of workflow compilation, not when the workflow runs. If you re-compile your workflow, e.g. after a change, the effective stop time will be reset.
+
+### Visual Feedback (`reaction:`)
+
+You can add a `reaction:` option within the `on:` section to enable emoji reactions on the triggering GitHub item (issue, PR, comment, discussion) to provide visual feedback about the workflow status:
+
+```yaml
+on:
+  issues:
+    types: [opened]
+  reaction: "eyes"
+```
+
+**Available reactions:**
+- `+1` (👍)
+- `-1` (👎)
+- `laugh` (😄)
+- `confused` (😕)
+- `heart` (❤️)
+- `hooray` (🎉)
+- `rocket` (🚀)
+- `eyes` (👀)
+
+**Enhanced functionality**: When using the `reaction:` feature with alias workflows, the system will also automatically edit the triggering comment to include a link to the workflow run. This provides users with immediate feedback and easy access to view the workflow execution. For non-alias workflows, only the reaction is added without comment editing.
+
+**Note**: This feature uses inline JavaScript code with `actions/github-script@v7` to add reactions and edit comments, so no additional action files are created in the repository.
 
 **Default behavior** (if no `on:` specified):
 ```yaml
@@ -106,47 +162,37 @@ engine:
   id: claude                        # Required: engine identifier
   version: beta                     # Optional: version of the action
   model: claude-3-5-sonnet-20241022 # Optional: specific LLM model
+  max-turns: 5                      # Optional: maximum chat iterations per run
+  permissions:                      # Optional: engine-level permissions (only Claude is supported)
+    network:                        # Network access control
+      allowed:                      # List of allowed domains
+        - "api.example.com"
+        - "*.trusted.com"
 ```
 
 **Fields:**
 - **`id`** (required): Engine identifier (`claude`, `codex`)
 - **`version`** (optional): Action version (`beta`, `stable`)
 - **`model`** (optional): Specific LLM model to use
+- **`max-turns`** (optional): Maximum number of chat iterations per run (cost-control option)
+- **`permissions`** (optional): Engine-level permissions
+  - **`network`** (optional): Network access control
+    - **`allowed`** (optional): List of allowed domains for WebFetch and WebSearch
 
 **Model Defaults:**
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)
 - **Codex**: Defaults to `o4-mini` when no model is specified
 
-## Stop Time (`stop-time:`)
+## AI Engine (`engine:`)
 
-This is a cost-control option to automatically disable workflow triggering after a deadline:
+**Max-turns Cost Control:**
 
-**Relative time delta (calculated from compilation time):**
-```yaml
-stop-time: "+25h"      # 25 hours from now
-```
-
-**Supported absolute date formats:**
-- Standard: `YYYY-MM-DD HH:MM:SS`, `YYYY-MM-DD`
-- US format: `MM/DD/YYYY HH:MM:SS`, `MM/DD/YYYY`  
-- European: `DD/MM/YYYY HH:MM:SS`, `DD/MM/YYYY`
-- Readable: `January 2, 2006`, `2 January 2006`, `Jan 2, 2006`
-- Ordinals: `1st June 2025`, `June 1st 2025`, `23rd December 2025`
-- ISO 8601: `2006-01-02T15:04:05Z`
-
-**Supported delta units:**
-- `d` - days
-- `h` - hours
-- `m` - minutes
-
-Note that if you specify a relative time, it is calculated at the time of workflow compilation, not when the workflow runs. If you re-compile your workflow, e.g. after a change, the effective stop time will be reset.
-
-## Maximum Turns (`max-turns:`)
-
-This is a cost-control option to limit the number of chat iterations within a single agentic run:
+The `max-turns` option is now configured within the engine configuration to limit the number of chat iterations within a single agentic run:
 
 ```yaml
-max-turns: 5
+engine:
+  id: claude
+  max-turns: 5
 ```
 
 **Behavior:**
@@ -155,29 +201,91 @@ max-turns: 5
 3. Helps prevent runaway chat loops and control costs
 4. Only applies to engines that support turn limiting (currently Claude)
 
-## Visual Feedback (`ai-reaction:`)
+## Engine Network Permissions
 
-Adding this option enables emoji reactions on the triggering GitHub item (issue, PR, comment, discussion) to provide visual feedback about the workflow status.
+> This is only supported by the claude engine today.
+
+Control network access for AI engines using the `permissions` field in the `engine` block:
 
 ```yaml
-ai-reaction: "eyes"
+engine:
+  id: claude
+  permissions:
+    network:
+      allowed:
+        - "api.example.com"      # Exact domain match
+        - "*.trusted.com"        # Wildcard matches any subdomain (including nested subdomains)
 ```
 
-**Available reactions:**
-- `+1` (👍)
-- `-1` (👎)
-- `laugh` (😄)
-- `confused` (😕)
-- `heart` (❤️)
-- `hooray` (🎉)
-- `rocket` (🚀)
-- `eyes` (👀)
+### Security Model
 
-**Note**: This feature uses inline JavaScript code with `actions/github-script@v7` to add reactions, so no additional action files are created in the repository.
+- **Deny by Default**: When network permissions are specified, only listed domains are accessible
+- **Engine vs Tools**: Engine permissions control the AI engine itself, separate from MCP tool permissions
+- **Hook Enforcement**: Uses Claude Code's hook system for runtime network access control
+- **Domain Validation**: Supports exact matches and wildcard patterns (`*` matches any characters including dots, allowing nested subdomains)
 
-## Output Configuration (`output:`)
+### Examples
 
-See [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
+```yaml
+# Allow specific APIs only
+engine:
+  id: claude
+  permissions:
+    network:
+      allowed:
+        - "api.github.com"
+        - "httpbin.org"
+
+# Allow all subdomains of a trusted domain
+# Note: "*.github.com" matches api.github.com, subdomain.github.com, and even nested.api.github.com
+engine:
+  id: claude
+  permissions:
+    network:
+      allowed:
+        - "*.company-internal.com"
+        - "public-api.service.com"
+
+# Deny all network access (empty list)
+engine:
+  id: claude
+  permissions:
+    network:
+      allowed: []
+```
+
+### Permission Modes
+
+1. **No network permissions**: Unrestricted access (backwards compatible)
+   ```yaml
+   engine:
+     id: claude
+     # No permissions block - full network access
+   ```
+
+2. **Empty allowed list**: Complete network access denial
+   ```yaml
+   engine:
+     id: claude
+     permissions:
+       network:
+         allowed: []  # Deny all network access
+   ```
+
+3. **Specific domains**: Granular access control to listed domains only
+   ```yaml
+   engine:
+     id: claude
+     permissions:
+       network:
+         allowed:
+           - "trusted-api.com"
+           - "*.safe-domain.org"
+   ```
+
+## Safe Outputs Configuration (`safe-outputs:`)
+
+See [Safe Outputs Processing](safe-outputs.md) for automatic issue creation, comment posting and other safe outputs.
 
 ## Run Configuration (`run-name:`, `runs-on:`, `timeout_minutes:`)
 

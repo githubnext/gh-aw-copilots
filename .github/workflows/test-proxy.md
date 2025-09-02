@@ -4,8 +4,8 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  issues: write # needed to write the output report to an issue
+safe-outputs:
+  add-issue-comment:
 
 tools:
   fetch:
@@ -23,13 +23,10 @@ tools:
     allowed:
       - "create_issue"
       - "create_comment"
-      - "get_issue"
 
 engine: claude
 runs-on: ubuntu-latest
 ---
-
-# Test Network Permissions
 
 ## Task Description
 
@@ -44,10 +41,14 @@ Test the MCP network permissions feature to validate that domain restrictions ar
 - Verify that all blocked requests fail at the network level (proxy enforcement)
 - Confirm that only example.com is accessible through the Squid proxy
 
-Create a GitHub issue with the test results, documenting:
-- Which domains were successfully accessed vs blocked
-- Error messages received for blocked domains  
-- Confirmation that network isolation is working correctly
-- Any security observations or recommendations
+## Reporting Instructions
 
-The test should demonstrate that MCP containers are properly isolated and can only access explicitly allowed domains through the network proxy.
+If there are any failures, security issues, or unexpected behaviors:
+
+- Write a detailed report documenting:
+  - Which domains were successfully accessed vs blocked
+  - Error messages received for blocked domains  
+  - Any security observations or recommendations
+  - Specific failure details that need attention
+
+Post the test results as an issue comment on PR #${{ github.event.pull_request.number }}.

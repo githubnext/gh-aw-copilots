@@ -165,6 +165,62 @@ func TestRunWorkflowOnGitHub(t *testing.T) {
 	}
 }
 
+func TestRunWorkflowsOnGitHub(t *testing.T) {
+	// Test with empty workflow list
+	err := RunWorkflowsOnGitHub([]string{}, 0, false)
+	if err == nil {
+		t.Error("RunWorkflowsOnGitHub should return error for empty workflow list")
+	}
+
+	// Test with workflow list containing empty name
+	err = RunWorkflowsOnGitHub([]string{"valid-workflow", ""}, 0, false)
+	if err == nil {
+		t.Error("RunWorkflowsOnGitHub should return error for workflow list containing empty name")
+	}
+
+	// Test with nonexistent workflows (this will fail but gracefully)
+	err = RunWorkflowsOnGitHub([]string{"nonexistent-workflow1", "nonexistent-workflow2"}, 0, false)
+	if err == nil {
+		t.Error("RunWorkflowsOnGitHub should return error for non-existent workflows")
+	}
+
+	// Test with negative repeat seconds (should work as 0)
+	err = RunWorkflowsOnGitHub([]string{"nonexistent-workflow"}, -1, false)
+	if err == nil {
+		t.Error("RunWorkflowsOnGitHub should return error for non-existent workflow regardless of repeat value")
+	}
+}
+
+func TestGetLatestWorkflowRunWithTimestamp(t *testing.T) {
+	// Test with non-existent workflow - should handle gracefully
+	url, createdAt, err := getLatestWorkflowRunWithTimestamp("nonexistent-workflow.lock.yml", false)
+	if err == nil {
+		t.Error("getLatestWorkflowRunWithTimestamp should return error for non-existent workflow")
+	}
+	if url != "" {
+		t.Error("getLatestWorkflowRunWithTimestamp should return empty URL for non-existent workflow")
+	}
+	if !createdAt.IsZero() {
+		t.Error("getLatestWorkflowRunWithTimestamp should return zero time for non-existent workflow")
+	}
+}
+
+// func TestGetLatestWorkflowRunURLWithRetry(t *testing.T) {
+// 	// Test with non-existent workflow - should handle gracefully and return error after retries
+// 	url, err := getLatestWorkflowRunURLWithRetry("nonexistent-workflow.lock.yml", false)
+// 	if err == nil {
+// 		t.Error("getLatestWorkflowRunURLWithRetry should return error for non-existent workflow")
+// 	}
+// 	if url != "" {
+// 		t.Error("getLatestWorkflowRunURLWithRetry should return empty URL for non-existent workflow")
+// 	}
+
+// 	// The error message should indicate multiple attempts were made
+// 	if !strings.Contains(err.Error(), "attempts") {
+// 		t.Errorf("Error message should mention retry attempts, got: %v", err)
+// 	}
+// }
+
 func TestAllCommandsExist(t *testing.T) {
 	defer os.RemoveAll(".github")
 
@@ -185,6 +241,7 @@ func TestAllCommandsExist(t *testing.T) {
 		{func() error { return EnableWorkflows("test") }, false, "EnableWorkflows"},                                                        // Should handle missing directory gracefully
 		{func() error { return DisableWorkflows("test") }, false, "DisableWorkflows"},                                                      // Should handle missing directory gracefully
 		{func() error { return RunWorkflowOnGitHub("", false) }, true, "RunWorkflowOnGitHub"},                                              // Should error with empty workflow name
+		{func() error { return RunWorkflowsOnGitHub([]string{}, 0, false) }, true, "RunWorkflowsOnGitHub"},                                 // Should error with empty workflow list
 	}
 
 	for _, test := range tests {
@@ -486,9 +543,7 @@ func TestNewWorkflow(t *testing.T) {
 						"# Trigger - when should this workflow run?",
 						"on:",
 						"permissions:",
-						"tools:",
-						"github:",
-						"allowed:",
+						"safe-outputs:",
 						"# " + test.workflowName,
 						"workflow_dispatch:",
 					}
@@ -693,6 +748,30 @@ More content here.
 			expectError:       false,
 			description:       "Include of nonexistent file should still add dependency but not recurse",
 		},
+		{
+			name:              "optional_include_existing",
+			content:           "# Optional Include Existing\n@include? shared/common.md\nMore content.",
+			workflowPath:      workflowsDir + "/optional-existing.md",
+			expectedDepsCount: 1,
+			expectError:       false,
+			description:       "Optional include of existing file should work like regular include",
+		},
+		{
+			name:              "optional_include_missing",
+			content:           "# Optional Include Missing\n@include? shared/optional.md\nMore content.",
+			workflowPath:      workflowsDir + "/optional-missing.md",
+			expectedDepsCount: 1,
+			expectError:       false,
+			description:       "Optional include of missing file should still add dependency",
+		},
+		{
+			name:              "mixed_includes",
+			content:           "# Mixed\n@include shared/common.md\n@include? shared/optional.md\n@include shared/recursive.md",
+			workflowPath:      workflowsDir + "/mixed.md",
+			expectedDepsCount: 4, // common.md + optional.md + recursive.md + recursive.md->common.md
+			expectError:       false,
+			description:       "Mixed regular and optional includes should collect all dependencies",
+		},
 	}
 
 	for _, tt := range tests {
@@ -722,6 +801,31 @@ More content here.
 				}
 				if dep.TargetPath == "" {
 					t.Errorf("Dependency %d has empty TargetPath", i)
+				}
+			}
+
+			// Verify optional flag for specific test cases
+			if tt.name == "optional_include_existing" || tt.name == "optional_include_missing" {
+				if len(deps) > 0 && !deps[0].IsOptional {
+					t.Errorf("Optional include dependency should have IsOptional=true")
+				}
+			}
+			if tt.name == "mixed_includes" {
+				optionalFound := false
+				regularFound := false
+				for _, dep := range deps {
+					if strings.Contains(dep.TargetPath, "optional") && dep.IsOptional {
+						optionalFound = true
+					}
+					if (strings.Contains(dep.TargetPath, "common") || strings.Contains(dep.TargetPath, "recursive")) && !dep.IsOptional {
+						regularFound = true
+					}
+				}
+				if !optionalFound {
+					t.Errorf("Mixed includes should have at least one optional dependency")
+				}
+				if !regularFound {
+					t.Errorf("Mixed includes should have at least one regular dependency")
 				}
 			}
 		})
@@ -1332,7 +1436,8 @@ func TestCalculateTimeRemaining(t *testing.T) {
 	// Test with future time - this will test the logic but the exact result depends on current time
 	t.Run("future time formatting", func(t *testing.T) {
 		// Create a time 2 hours and 30 minutes in the future
-		futureTime := time.Now().Add(2*time.Hour + 30*time.Minute)
+		// Add a small buffer to account for execution time
+		futureTime := time.Now().Add(2*time.Hour + 30*time.Minute + 1*time.Second)
 		stopTimeStr := futureTime.Format("2006-01-02 15:04:05")
 
 		result := calculateTimeRemaining(stopTimeStr)

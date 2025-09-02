@@ -35,7 +35,7 @@ func TestCreateIssueSubissueFeature(t *testing.T) {
 	}
 }
 
-// TestCreateIssueWorkflowCompilation tests that workflows with output.issue still compile correctly
+// TestCreateIssueWorkflowCompilation tests that workflows with safe-outputs.create-issue still compile correctly
 func TestCreateIssueWorkflowCompilationWithSubissue(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "subissue-test")
@@ -52,8 +52,8 @@ on:
 permissions:
   contents: read
 engine: claude
-output:
-  issue:
+safe-outputs:
+  create-issue:
     title-prefix: "[test] "
     labels: [automation, test]
 ---
@@ -61,7 +61,7 @@ output:
 # Test Workflow
 
 This is a test workflow that should create an issue with subissue functionality.
-Write output to ${{ env.GITHUB_AW_OUTPUT }}.`
+Write output to ${{ env.GITHUB_AW_SAFE_OUTPUTS }}.`
 
 	testFile := filepath.Join(tmpDir, "test-subissue.md")
 	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
@@ -71,7 +71,7 @@ Write output to ${{ env.GITHUB_AW_OUTPUT }}.`
 	compiler := NewCompiler(false, "", "test")
 	err = compiler.CompileWorkflow(testFile)
 	if err != nil {
-		t.Fatalf("Failed to compile workflow with output.issue: %v", err)
+		t.Fatalf("Failed to compile workflow with output.create-issue: %v", err)
 	}
 
 	// Read the generated lock file to verify content

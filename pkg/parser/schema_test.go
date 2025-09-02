@@ -16,7 +16,12 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 		{
 			name: "valid frontmatter with all allowed keys",
 			frontmatter: map[string]any{
-				"on":              "push",
+				"on": map[string]any{
+					"push": map[string]any{
+						"branches": []string{"main"},
+					},
+					"stop-after": "2024-12-31",
+				},
 				"permissions":     "read",
 				"run-name":        "Test Run",
 				"runs-on":         "ubuntu-latest",
@@ -27,7 +32,6 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 				"steps":           []string{"step1"},
 				"engine":          "claude",
 				"tools":           map[string]any{"github": "test"},
-				"stop-time":       "2024-12-31",
 				"alias":           "test-workflow",
 			},
 			wantErr: false,
@@ -417,10 +421,10 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			errContains: "additional properties 'invalid_prop' not allowed",
 		},
 		{
-			name: "invalid output configuration with additional properties",
+			name: "invalid safe-outputs configuration with additional properties",
 			frontmatter: map[string]any{
-				"output": map[string]any{
-					"issue": map[string]any{
+				"safe-outputs": map[string]any{
+					"create-issue": map[string]any{
 						"title-prefix": "[ai] ",
 						"invalid_prop": "value",
 					},
@@ -469,6 +473,56 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			},
 			wantErr:     true,
 			errContains: "additional properties 'invalid_prop' not allowed",
+		},
+		{
+			name: "valid claude engine with network permissions",
+			frontmatter: map[string]any{
+				"on": "push",
+				"engine": map[string]any{
+					"id": "claude",
+					"permissions": map[string]any{
+						"network": map[string]any{
+							"allowed": []string{"example.com", "*.trusted.com"},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid codex engine with permissions",
+			frontmatter: map[string]any{
+				"on": "push",
+				"engine": map[string]any{
+					"id": "codex",
+					"permissions": map[string]any{
+						"network": map[string]any{
+							"allowed": []string{"example.com"},
+						},
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "engine permissions are not supported for codex engine",
+		},
+		{
+			name: "valid codex engine without permissions",
+			frontmatter: map[string]any{
+				"on": "push",
+				"engine": map[string]any{
+					"id":    "codex",
+					"model": "gpt-4o",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid codex string engine (no permissions possible)",
+			frontmatter: map[string]any{
+				"on":     "push",
+				"engine": "codex",
+			},
+			wantErr: false,
 		},
 	}
 

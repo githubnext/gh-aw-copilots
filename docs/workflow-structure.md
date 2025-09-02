@@ -69,23 +69,17 @@ Each workflow consists of:
 ---
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, reopened]
+  reaction: "eyes"
 
 permissions:
   issues: write
   contents: read
 
-engine: claude
-
 tools:
   github:
-    allowed: [get_issue, add_issue_comment, list_issue_comments]
-
-cache:
-  key: node-modules-${{ hashFiles('package-lock.json') }}
-  path: node_modules
-
-ai-reaction: "eyes"
+    allowed:
+    - add_issue_comment
 ---
 
 # Issue Auto-Responder

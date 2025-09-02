@@ -60,19 +60,20 @@ var listCmd = &cobra.Command{
 }
 
 var addCmd = &cobra.Command{
-	Use:   "add <workflow>",
-	Short: "Add a workflow from the components to .github/workflows",
-	Long: `Add a workflow from the components to .github/workflows.
+	Use:   "add <workflow>...",
+	Short: "Add one or more workflows from the components to .github/workflows",
+	Long: `Add one or more workflows from the components to .github/workflows.
 
 Examples:
   ` + constants.CLIExtensionPrefix + ` add weekly-research
+  ` + constants.CLIExtensionPrefix + ` add ci-doctor daily-perf-improver
   ` + constants.CLIExtensionPrefix + ` add weekly-research -n my-custom-name
   ` + constants.CLIExtensionPrefix + ` add weekly-research -r githubnext/agentics
   ` + constants.CLIExtensionPrefix + ` add weekly-research --pr
-  ` + constants.CLIExtensionPrefix + ` add weekly-research --force
+  ` + constants.CLIExtensionPrefix + ` add weekly-research daily-plan --force
 
 The -r flag allows you to install and use workflows from a specific repository.
-The -n flag allows you to specify a custom name for the workflow file.
+The -n flag allows you to specify a custom name for the workflow file (only applies to the first workflow when adding multiple).
 The --pr flag automatically creates a pull request with the workflow changes.
 The --force flag overwrites existing workflow files.
 It's a shortcut for:
@@ -80,7 +81,7 @@ It's a shortcut for:
   ` + constants.CLIExtensionPrefix + ` add weekly-research`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		workflow := args[0]
+		workflows := args
 		numberFlag, _ := cmd.Flags().GetInt("number")
 		engineOverride, _ := cmd.Flags().GetString("engine")
 		repoFlag, _ := cmd.Flags().GetString("repo")
@@ -93,12 +94,12 @@ It's a shortcut for:
 		}
 
 		if prFlag {
-			if err := cli.AddWorkflowWithRepoAndPR(workflow, numberFlag, verbose, engineOverride, repoFlag, nameFlag, forceFlag); err != nil {
+			if err := cli.AddWorkflows(workflows, numberFlag, verbose, engineOverride, repoFlag, nameFlag, forceFlag, true); err != nil {
 				fmt.Fprintln(os.Stderr, console.FormatErrorMessage(err.Error()))
 				os.Exit(1)
 			}
 		} else {
-			if err := cli.AddWorkflowWithRepo(workflow, numberFlag, verbose, engineOverride, repoFlag, nameFlag, forceFlag); err != nil {
+			if err := cli.AddWorkflows(workflows, numberFlag, verbose, engineOverride, repoFlag, nameFlag, forceFlag, false); err != nil {
 				fmt.Fprintln(os.Stderr, console.FormatErrorMessage(err.Error()))
 				os.Exit(1)
 			}
@@ -217,22 +218,27 @@ var compileCmd = &cobra.Command{
 }
 
 var runCmd = &cobra.Command{
-	Use:   "run <workflow-id-or-name>",
-	Short: "Run an agentic workflow on GitHub Actions",
-	Long: `Run an agentic workflow on GitHub Actions using the workflow_dispatch trigger.
+	Use:   "run <workflow-id-or-name>...",
+	Short: "Run one or more agentic workflows on GitHub Actions",
+	Long: `Run one or more agentic workflows on GitHub Actions using the workflow_dispatch trigger.
 
-This command accepts either a workflow ID or an agentic workflow name.
-The workflow must have been added as an action and compiled.
+This command accepts one or more workflow IDs or agentic workflow names.
+The workflows must have been added as actions and compiled.
 
 This command only works with workflows that have workflow_dispatch triggers.
-It executes 'gh workflow run <workflow-lock-file>' to trigger the workflow on GitHub Actions.`,
-	Args: cobra.ExactArgs(1),
+It executes 'gh workflow run <workflow-lock-file>' to trigger each workflow on GitHub Actions.
+
+Examples:
+  gh aw run weekly-research
+  gh aw run weekly-research daily-plan
+  gh aw run weekly-research --repeat 3600  # Run every hour`,
+	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		workflowIdOrName := args[0]
-		if err := cli.RunWorkflowOnGitHub(workflowIdOrName, verbose); err != nil {
+		repeatSeconds, _ := cmd.Flags().GetInt("repeat")
+		if err := cli.RunWorkflowsOnGitHub(args, repeatSeconds, verbose); err != nil {
 			fmt.Fprintln(os.Stderr, console.FormatError(console.CompilerError{
 				Type:    "error",
-				Message: fmt.Sprintf("running workflow on GitHub Actions: %v", err),
+				Message: fmt.Sprintf("running workflows on GitHub Actions: %v", err),
 			}))
 			os.Exit(1)
 		}
@@ -241,7 +247,7 @@ It executes 'gh workflow run <workflow-lock-file>' to trigger the workflow on Gi
 
 var installCmd = &cobra.Command{
 	Use:   "install <org/repo>[@version]",
-	Short: "Install agent workflows from a GitHub repository",
+	Short: "Install agentic workflows from a GitHub repository",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repoSpec := args[0]
@@ -258,7 +264,7 @@ var installCmd = &cobra.Command{
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall <org/repo>",
-	Short: "Uninstall agent workflows package",
+	Short: "Uninstall agentic workflows package",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		repoSpec := args[0]
@@ -337,6 +343,9 @@ func init() {
 
 	// Add flags to remove command
 	removeCmd.Flags().Bool("keep-orphans", false, "Skip removal of orphaned include files that are no longer referenced by any workflow")
+
+	// Add flags to run command
+	runCmd.Flags().Int("repeat", 0, "Repeat running workflows every SECONDS (0 = run once)")
 
 	// Add all commands to root
 	rootCmd.AddCommand(listCmd)

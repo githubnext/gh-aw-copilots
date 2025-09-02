@@ -1,5 +1,5 @@
 async function main() {
-  // Read the agent output content from environment variable
+  // Read the validated output content from environment variable
   const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT;
   if (!outputContent) {
     console.log('No GITHUB_AW_AGENT_OUTPUT environment variable found');
@@ -13,20 +13,45 @@ async function main() {
 
   console.log('Agent output content length:', outputContent.length);
 
-  // Read the allowed labels from environment variable (mandatory)
+  // Parse the validated output JSON
+  let validatedOutput;
+  try {
+    validatedOutput = JSON.parse(outputContent);
+  } catch (error) {
+    console.log('Error parsing agent output JSON:', error instanceof Error ? error.message : String(error));
+    return;
+  }
+
+  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+    console.log('No valid items found in agent output');
+    return;
+  }
+
+  // Find the add-issue-labels item
+  const labelsItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'add-issue-labels');
+  if (!labelsItem) {
+    console.log('No add-issue-labels item found in agent output');
+    return;
+  }
+
+  console.log('Found add-issue-labels item:', { labelsCount: labelsItem.labels.length });
+
+  // Read the allowed labels from environment variable (optional)
   const allowedLabelsEnv = process.env.GITHUB_AW_LABELS_ALLOWED;
-  if (!allowedLabelsEnv) {
-    core.setFailed('GITHUB_AW_LABELS_ALLOWED environment variable is required but missing');
-    return;
+  let allowedLabels = null;
+  
+  if (allowedLabelsEnv && allowedLabelsEnv.trim() !== '') {
+    allowedLabels = allowedLabelsEnv.split(',').map(label => label.trim()).filter(label => label);
+    if (allowedLabels.length === 0) {
+      allowedLabels = null; // Treat empty list as no restrictions
+    }
   }
 
-  const allowedLabels = allowedLabelsEnv.split(',').map(label => label.trim()).filter(label => label);
-  if (allowedLabels.length === 0) {
-    core.setFailed('Allowed labels list is empty. At least one allowed label must be specified');
-    return;
+  if (allowedLabels) {
+    console.log('Allowed labels:', allowedLabels);
+  } else {
+    console.log('No label restrictions - any labels are allowed');
   }
-
-  console.log('Allowed labels:', allowedLabels);
 
   // Read the max-count limit from environment variable (default: 3)
   const maxCountEnv = process.env.GITHUB_AW_LABELS_MAX_COUNT;
@@ -74,31 +99,26 @@ async function main() {
     return;
   }
 
-  // Parse labels from agent output (one per line, ignore empty lines)
-  const lines = outputContent.split('\n');
-  const requestedLabels = [];
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    // Skip empty lines
-    if (trimmedLine === '') {
-      continue;
-    }
-
-    // Reject lines that start with '-' (removal indication)
-    if (trimmedLine.startsWith('-')) {
-      core.setFailed(`Label removal is not permitted. Found line starting with '-': ${trimmedLine}`);
-      return;
-    }
-
-    requestedLabels.push(trimmedLine);
-  }
-
+  // Extract labels from the JSON item
+  const requestedLabels = labelsItem.labels || [];
   console.log('Requested labels:', requestedLabels);
 
-  // Validate that all requested labels are in the allowed list
-  const validLabels = requestedLabels.filter(label => allowedLabels.includes(label));
+  // Check for label removal attempts (labels starting with '-')
+  for (const label of requestedLabels) {
+    if (label.startsWith('-')) {
+      core.setFailed(`Label removal is not permitted. Found line starting with '-': ${label}`);
+      return;
+    }
+  }
+
+  // Validate that all requested labels are in the allowed list (if restrictions are set)
+  let validLabels;
+  if (allowedLabels) {
+    validLabels = requestedLabels.filter(/** @param {string} label */ label => allowedLabels.includes(label));
+  } else {
+    // No restrictions, all requested labels are valid
+    validLabels = requestedLabels;
+  }
 
   // Remove duplicates from requested labels
   let uniqueLabels = [...new Set(validLabels)];
