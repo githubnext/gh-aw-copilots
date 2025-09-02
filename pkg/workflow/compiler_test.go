@@ -613,11 +613,11 @@ func TestCommandSection(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
 
 	tests := []struct {
-		name          string
-		frontmatter   string
-		filename      string
-		expectedOn    string
-		expectedIf    string
+		name            string
+		frontmatter     string
+		filename        string
+		expectedOn      string
+		expectedIf      string
 		expectedCommand string
 	}{
 		{
@@ -630,8 +630,8 @@ tools:
   github:
     allowed: [list_issues]
 ---`,
-			filename:      "test-bot.md",
-			expectedOn:    "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
+			filename:        "test-bot.md",
+			expectedOn:      "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
 			expectedIf:      "if: ((contains(github.event.issue.body, '/test-bot')) || (contains(github.event.comment.body, '/test-bot'))) || (contains(github.event.pull_request.body, '/test-bot'))",
 			expectedCommand: "test-bot",
 		},
@@ -645,8 +645,8 @@ tools:
   github:
     allowed: [list_issues]
 ---`,
-			filename:      "test-new-format.md",
-			expectedOn:    "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
+			filename:        "test-new-format.md",
+			expectedOn:      "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
 			expectedIf:      "if: ((contains(github.event.issue.body, '/new-bot')) || (contains(github.event.comment.body, '/new-bot'))) || (contains(github.event.pull_request.body, '/new-bot'))",
 			expectedCommand: "new-bot",
 		},
@@ -659,8 +659,8 @@ tools:
   github:
     allowed: [list_issues]
 ---`,
-			filename:      "default-name-bot.md",
-			expectedOn:    "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
+			filename:        "default-name-bot.md",
+			expectedOn:      "on:\n  issues:\n    types: [opened, edited, reopened]\n  issue_comment:\n    types: [created, edited]\n  pull_request:\n    types: [opened, edited, reopened]",
 			expectedIf:      "if: ((contains(github.event.issue.body, '/default-name-bot')) || (contains(github.event.comment.body, '/default-name-bot'))) || (contains(github.event.pull_request.body, '/default-name-bot'))",
 			expectedCommand: "default-name-bot",
 		},
@@ -3493,8 +3493,6 @@ Test workflow with reaction and comment editing.
 		"editCommentWithWorkflowLink", // This should be in the new script
 		"runUrl =",                    // This should be in the new script for workflow run URL
 		"Comment update endpoint",     // This should be logged in the new script
-		"GITHUB_AW_ALIAS",             // This should check for alias environment variable
-		"shouldEditComment = alias",   // This should conditionally edit based on alias
 	}
 
 	for _, expected := range expectedStrings {
@@ -3573,7 +3571,7 @@ Test command workflow with reaction and comment editing.
 	// Check for both environment variables in the generated YAML
 	expectedEnvVars := []string{
 		"GITHUB_AW_REACTION: eyes",
-		"GITHUB_AW_ALIAS: test-bot",
+		"GITHUB_AW_COMMAND: test-bot",
 	}
 
 	for _, expected := range expectedEnvVars {
@@ -5109,10 +5107,10 @@ engine: claude
 			description: "stop-after should be compiled away when used with workflow_dispatch and schedule",
 		},
 		{
-			name: "stop-after with alias trigger",
+			name: "stop-after with command trigger",
 			frontmatter: `---
 on:
-  alias:
+  command:
     name: test-bot
   workflow_dispatch:
   stop-after: "2024-12-31T23:59:59Z"
@@ -5183,10 +5181,10 @@ engine: claude
 			description: "stop-after should be compiled away when used only with schedule",
 		},
 		{
-			name: "stop-after with both alias and reaction",
+			name: "stop-after with both command and reaction",
 			frontmatter: `---
 on:
-  alias:
+  command:
     name: test-bot
   reaction: heart
   workflow_dispatch:
@@ -5240,10 +5238,10 @@ engine: claude
 			description: "stop-after should be compiled away when used with reaction and schedule",
 		},
 		{
-			name: "stop-after with alias and schedule",
+			name: "stop-after with command and schedule",
 			frontmatter: `---
 on:
-  alias:
+  command:
     name: scheduler-bot
   schedule:
     - cron: "0 12 * * *"

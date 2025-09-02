@@ -114,30 +114,30 @@ func NewCompilerWithCustomOutput(verbose bool, engineOverride string, customOutp
 
 // WorkflowData holds all the data needed to generate a GitHub Actions workflow
 type WorkflowData struct {
-	Name             string
-	On               string
-	Permissions      string
-	Concurrency      string
-	RunName          string
-	Env              string
-	If               string
-	TimeoutMinutes   string
-	CustomSteps      string
-	PostSteps        string // steps to run after AI execution
-	RunsOn           string
-	Tools            map[string]any
-	MarkdownContent  string
-	AllowedTools     string
-	AI               string        // "claude" or "codex" (for backwards compatibility)
-	EngineConfig     *EngineConfig // Extended engine configuration
-	StopTime         string
+	Name               string
+	On                 string
+	Permissions        string
+	Concurrency        string
+	RunName            string
+	Env                string
+	If                 string
+	TimeoutMinutes     string
+	CustomSteps        string
+	PostSteps          string // steps to run after AI execution
+	RunsOn             string
+	Tools              map[string]any
+	MarkdownContent    string
+	AllowedTools       string
+	AI                 string        // "claude" or "codex" (for backwards compatibility)
+	EngineConfig       *EngineConfig // Extended engine configuration
+	StopTime           string
 	Command            string             // for /command trigger support
 	CommandOtherEvents map[string]any     // for merging command with other events
-	AIReaction       string             // AI reaction type like "eyes", "heart", etc.
-	Jobs             map[string]any     // custom job configurations with dependencies
-	Cache            string             // cache configuration
-	NeedsTextOutput  bool               // whether the workflow uses ${{ needs.task.outputs.text }}
-	SafeOutputs      *SafeOutputsConfig // output configuration for automatic output routes
+	AIReaction         string             // AI reaction type like "eyes", "heart", etc.
+	Jobs               map[string]any     // custom job configurations with dependencies
+	Cache              string             // cache configuration
+	NeedsTextOutput    bool               // whether the workflow uses ${{ needs.task.outputs.text }}
+	SafeOutputs        *SafeOutputsConfig // output configuration for automatic output routes
 }
 
 // SafeOutputsConfig holds configuration for automatic output routes
@@ -1637,7 +1637,7 @@ func (c *Compiler) buildTaskJob(data *WorkflowData) (*Job, error) {
 		steps = append(steps, "      - name: Validate team membership\n")
 		steps = append(steps, fmt.Sprintf("        if: %s\n", validationConditionStr))
 		steps = append(steps, "        run: |\n")
-		steps = append(steps, "          echo \"❌ Access denied: Only team members can trigger alias workflows\"\n")
+		steps = append(steps, "          echo \"❌ Access denied: Only team members can trigger command workflows\"\n")
 		steps = append(steps, "          echo \"User ${{ github.actor }} is not a team member\"\n")
 		steps = append(steps, "          exit 1\n")
 	}
