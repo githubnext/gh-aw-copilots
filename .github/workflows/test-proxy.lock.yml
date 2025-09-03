@@ -730,6 +730,30 @@ jobs:
       - name: Clean up engine output files
         run: |
           rm -f output.txt
+      - name: Extract squid access logs
+        if: always()
+        run: |
+          mkdir -p /tmp/access-logs
+          echo 'Extracting access.log from squid-proxy-fetch container'
+          if docker ps -a --format '{{.Names}}' | grep -q '^squid-proxy-fetch$'; then
+            docker cp squid-proxy-fetch:/var/log/squid/access.log /tmp/access-logs/access-fetch.log 2>/dev/null || echo 'No access.log found for fetch'
+          else
+            echo 'Container squid-proxy-fetch not found'
+          fi
+          if ls /tmp/access-logs/access-*.log 1> /dev/null 2>&1; then
+            cat /tmp/access-logs/access-*.log > /tmp/access.log
+            echo "Combined $(ls /tmp/access-logs/access-*.log | wc -l) access log files"
+          else
+            echo "No access log files found"
+            touch /tmp/access.log
+          fi
+      - name: Upload squid access logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: access.log
+          path: /tmp/access.log
+          if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()
         uses: actions/github-script@v7

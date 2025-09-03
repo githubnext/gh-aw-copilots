@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -44,16 +47,46 @@ type WorkflowRun struct {
 // This is now an alias to the shared type in workflow package
 type LogMetrics = workflow.LogMetrics
 
+// ProcessedRun represents a workflow run with its associated analysis
+type ProcessedRun struct {
+	Run            WorkflowRun
+	AccessAnalysis *DomainAnalysis
+}
+
+// AccessLogEntry represents a parsed squid access log entry
+type AccessLogEntry struct {
+	Timestamp string
+	Duration  string
+	ClientIP  string
+	Status    string
+	Size      string
+	Method    string
+	URL       string
+	User      string
+	Hierarchy string
+	Type      string
+}
+
+// DomainAnalysis represents analysis of domains from access logs
+type DomainAnalysis struct {
+	AllowedDomains []string
+	DeniedDomains  []string
+	TotalRequests  int
+	AllowedCount   int
+	DeniedCount    int
+}
+
 // ErrNoArtifacts indicates that a workflow run has no artifacts
 var ErrNoArtifacts = errors.New("no artifacts found for this run")
 
 // DownloadResult represents the result of downloading artifacts for a single run
 type DownloadResult struct {
-	Run      WorkflowRun
-	Metrics  LogMetrics
-	Error    error
-	Skipped  bool
-	LogsPath string
+	Run            WorkflowRun
+	Metrics        LogMetrics
+	AccessAnalysis *DomainAnalysis
+	Error          error
+	Skipped        bool
+	LogsPath       string
 }
 
 // Constants for the iterative algorithm
@@ -199,7 +232,7 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 		fmt.Println(console.FormatInfoMessage("Fetching workflow runs from GitHub Actions..."))
 	}
 
-	var processedRuns []WorkflowRun
+	var processedRuns []ProcessedRun
 	var beforeDate string
 	iteration := 0
 
@@ -315,12 +348,19 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 			run.EstimatedCost = result.Metrics.EstimatedCost
 			run.LogsPath = result.LogsPath
 
+			// Store access analysis for later display (we'll access it via the result)
+			// No need to modify the WorkflowRun struct for this
+
 			// Always use GitHub API timestamps for duration calculation
 			if !run.StartedAt.IsZero() && !run.UpdatedAt.IsZero() {
 				run.Duration = run.UpdatedAt.Sub(run.StartedAt)
 			}
 
-			processedRuns = append(processedRuns, run)
+			processedRun := ProcessedRun{
+				Run:            run,
+				AccessAnalysis: result.AccessAnalysis,
+			}
+			processedRuns = append(processedRuns, processedRun)
 			batchProcessed++
 		}
 
@@ -354,7 +394,14 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 	}
 
 	// Display overview table
-	displayLogsOverview(processedRuns, outputDir)
+	workflowRuns := make([]WorkflowRun, len(processedRuns))
+	for i, pr := range processedRuns {
+		workflowRuns[i] = pr.Run
+	}
+	displayLogsOverview(workflowRuns, outputDir)
+
+	// Display access log analysis
+	displayAccessLogAnalysis(processedRuns, verbose)
 
 	// Display logs location prominently
 	absOutputDir, _ := filepath.Abs(outputDir)
@@ -417,6 +464,15 @@ func downloadRunArtifactsConcurrent(runs []WorkflowRun, outputDir string, verbos
 					metrics = LogMetrics{}
 				}
 				result.Metrics = metrics
+
+				// Analyze access logs if available
+				accessAnalysis, accessErr := analyzeAccessLogs(runOutputDir, verbose)
+				if accessErr != nil {
+					if verbose {
+						fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to analyze access logs for run %d: %v", run.DatabaseID, accessErr)))
+					}
+				}
+				result.AccessAnalysis = accessAnalysis
 			}
 
 			return result
@@ -840,6 +896,104 @@ func displayLogsOverview(runs []WorkflowRun, outputDir string) {
 	fmt.Print(console.RenderTable(tableConfig))
 }
 
+// displayAccessLogAnalysis displays analysis of access logs from all runs
+func displayAccessLogAnalysis(processedRuns []ProcessedRun, verbose bool) {
+	if len(processedRuns) == 0 {
+		return
+	}
+
+	// Collect all access analyses
+	var analyses []*DomainAnalysis
+	runsWithAccess := 0
+	for _, pr := range processedRuns {
+		if pr.AccessAnalysis != nil {
+			analyses = append(analyses, pr.AccessAnalysis)
+			runsWithAccess++
+		}
+	}
+
+	if len(analyses) == 0 {
+		fmt.Println(console.FormatInfoMessage("No access logs found in downloaded runs"))
+		return
+	}
+
+	fmt.Println(console.FormatListHeader("Network Access Analysis"))
+	fmt.Println(console.FormatListHeader("======================"))
+
+	// Aggregate statistics
+	totalRequests := 0
+	totalAllowed := 0
+	totalDenied := 0
+	allAllowedDomains := make(map[string]bool)
+	allDeniedDomains := make(map[string]bool)
+
+	for _, analysis := range analyses {
+		totalRequests += analysis.TotalRequests
+		totalAllowed += analysis.AllowedCount
+		totalDenied += analysis.DeniedCount
+
+		for _, domain := range analysis.AllowedDomains {
+			allAllowedDomains[domain] = true
+		}
+		for _, domain := range analysis.DeniedDomains {
+			allDeniedDomains[domain] = true
+		}
+	}
+
+	// Display summary
+	fmt.Println(console.FormatCountMessage(fmt.Sprintf("Found access logs in %d of %d runs", runsWithAccess, len(processedRuns))))
+	fmt.Println(console.FormatCountMessage(fmt.Sprintf("Total network requests: %d", totalRequests)))
+	fmt.Println(console.FormatCountMessage(fmt.Sprintf("Allowed requests: %d", totalAllowed)))
+	fmt.Println(console.FormatCountMessage(fmt.Sprintf("Denied requests: %d", totalDenied)))
+
+	if totalRequests > 0 {
+		allowedPercent := float64(totalAllowed) / float64(totalRequests) * 100
+		fmt.Println(console.FormatCountMessage(fmt.Sprintf("Success rate: %.1f%%", allowedPercent)))
+	}
+
+	fmt.Println()
+
+	// Display allowed domains
+	if len(allAllowedDomains) > 0 {
+		fmt.Println(console.FormatSuccessMessage(fmt.Sprintf("Allowed Domains (%d unique):", len(allAllowedDomains))))
+		allowedList := make([]string, 0, len(allAllowedDomains))
+		for domain := range allAllowedDomains {
+			allowedList = append(allowedList, domain)
+		}
+		sort.Strings(allowedList)
+		for _, domain := range allowedList {
+			fmt.Println(console.FormatListItem(domain))
+		}
+		fmt.Println()
+	}
+
+	// Display denied domains
+	if len(allDeniedDomains) > 0 {
+		fmt.Println(console.FormatErrorMessage(fmt.Sprintf("Denied Domains (%d unique):", len(allDeniedDomains))))
+		deniedList := make([]string, 0, len(allDeniedDomains))
+		for domain := range allDeniedDomains {
+			deniedList = append(deniedList, domain)
+		}
+		sort.Strings(deniedList)
+		for _, domain := range deniedList {
+			fmt.Println(console.FormatListItem(domain))
+		}
+		fmt.Println()
+	}
+
+	if verbose && len(analyses) > 1 {
+		// Show per-run breakdown
+		fmt.Println(console.FormatInfoMessage("Per-run breakdown:"))
+		for _, pr := range processedRuns {
+			if pr.AccessAnalysis != nil {
+				analysis := pr.AccessAnalysis
+				fmt.Printf("  Run %d: %d requests (%d allowed, %d denied)\n", 
+					pr.Run.DatabaseID, analysis.TotalRequests, analysis.AllowedCount, analysis.DeniedCount)
+			}
+		}
+	}
+}
+
 // formatDuration formats a duration in a human-readable way
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
@@ -997,6 +1151,148 @@ func getAgenticWorkflowNames(verbose bool) ([]string, error) {
 	}
 
 	return workflowNames, nil
+}
+
+// parseSquidAccessLog parses a squid access log file and extracts domain information
+func parseSquidAccessLog(logPath string, verbose bool) (*DomainAnalysis, error) {
+	file, err := os.Open(logPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open access log: %w", err)
+	}
+	defer file.Close()
+
+	analysis := &DomainAnalysis{
+		AllowedDomains: []string{},
+		DeniedDomains:  []string{},
+	}
+
+	allowedDomainsSet := make(map[string]bool)
+	deniedDomainsSet := make(map[string]bool)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		entry, err := parseSquidLogLine(line)
+		if err != nil {
+			if verbose {
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse log line: %v", err)))
+			}
+			continue
+		}
+
+		analysis.TotalRequests++
+
+		// Extract domain from URL
+		domain := extractDomainFromURL(entry.URL)
+		if domain == "" {
+			continue
+		}
+
+		// Determine if request was allowed or denied based on status code
+		// Squid typically returns:
+		// - 200, 206, 304: Allowed/successful
+		// - 403: Forbidden (denied by ACL)
+		// - 407: Proxy authentication required
+		// - 502, 503: Connection/upstream errors
+		statusCode := entry.Status
+		isAllowed := statusCode == "TCP_HIT/200" || statusCode == "TCP_MISS/200" || 
+			statusCode == "TCP_REFRESH_MODIFIED/200" || statusCode == "TCP_IMS_HIT/304" ||
+			strings.Contains(statusCode, "/200") || strings.Contains(statusCode, "/206") || 
+			strings.Contains(statusCode, "/304")
+
+		if isAllowed {
+			analysis.AllowedCount++
+			if !allowedDomainsSet[domain] {
+				allowedDomainsSet[domain] = true
+				analysis.AllowedDomains = append(analysis.AllowedDomains, domain)
+			}
+		} else {
+			analysis.DeniedCount++
+			if !deniedDomainsSet[domain] {
+				deniedDomainsSet[domain] = true
+				analysis.DeniedDomains = append(analysis.DeniedDomains, domain)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading access log: %w", err)
+	}
+
+	// Sort domains for consistent output
+	sort.Strings(analysis.AllowedDomains)
+	sort.Strings(analysis.DeniedDomains)
+
+	return analysis, nil
+}
+
+// parseSquidLogLine parses a single squid access log line
+// Squid log format: timestamp duration client status size method url user hierarchy type
+func parseSquidLogLine(line string) (*AccessLogEntry, error) {
+	fields := strings.Fields(line)
+	if len(fields) < 10 {
+		return nil, fmt.Errorf("invalid log line format: expected at least 10 fields, got %d", len(fields))
+	}
+
+	return &AccessLogEntry{
+		Timestamp: fields[0],
+		Duration:  fields[1],
+		ClientIP:  fields[2],
+		Status:    fields[3],
+		Size:      fields[4],
+		Method:    fields[5],
+		URL:       fields[6],
+		User:      fields[7],
+		Hierarchy: fields[8],
+		Type:      fields[9],
+	}, nil
+}
+
+// extractDomainFromURL extracts the domain from a URL
+func extractDomainFromURL(url string) string {
+	// Handle different URL formats
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		// Parse full URL
+		parsedURL, err := neturl.Parse(url)
+		if err != nil {
+			return ""
+		}
+		return parsedURL.Hostname()
+	}
+
+	// Handle CONNECT requests (domain:port format)
+	if strings.Contains(url, ":") {
+		parts := strings.Split(url, ":")
+		if len(parts) >= 2 {
+			return parts[0]
+		}
+	}
+
+	// Handle direct domain
+	return url
+}
+
+// analyzeAccessLogs analyzes access logs in a run directory
+func analyzeAccessLogs(runDir string, verbose bool) (*DomainAnalysis, error) {
+	accessLogPath := filepath.Join(runDir, "access.log")
+	
+	// Check if access.log exists
+	if _, err := os.Stat(accessLogPath); os.IsNotExist(err) {
+		if verbose {
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No access.log found in %s", runDir)))
+		}
+		return nil, nil
+	}
+
+	if verbose {
+		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Analyzing access.log from %s", runDir)))
+	}
+
+	return parseSquidAccessLog(accessLogPath, verbose)
 }
 
 // contains checks if a string slice contains a specific string
