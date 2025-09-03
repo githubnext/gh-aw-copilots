@@ -122,7 +122,6 @@ type WorkflowData struct {
 	Env              string
 	If               string
 	TimeoutMinutes   string
-	MaxTurns         string // Added to support top-level max-turns
 	CustomSteps      string
 	PostSteps        string // steps to run after AI execution
 	RunsOn           string
@@ -583,7 +582,6 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.Env = c.extractTopLevelYAMLSection(result.Frontmatter, "env")
 	workflowData.If = c.extractTopLevelYAMLSection(result.Frontmatter, "if")
 	workflowData.TimeoutMinutes = c.extractTopLevelYAMLSection(result.Frontmatter, "timeout_minutes")
-	workflowData.MaxTurns = c.extractTopLevelYAMLSection(result.Frontmatter, "max-turns")
 	workflowData.CustomSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "steps")
 	workflowData.PostSteps = c.extractTopLevelYAMLSection(result.Frontmatter, "post-steps")
 	workflowData.RunsOn = c.extractTopLevelYAMLSection(result.Frontmatter, "runs-on")
@@ -2866,9 +2864,8 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 					yaml.WriteString("          " + data.TimeoutMinutes + "\n")
 				}
 			} else if key == "max_turns" {
-				// Extract max-turns value from frontmatter if present
-				if maxTurnsValue, exists := data.Frontmatter["max-turns"]; exists {
-					fmt.Fprintf(yaml, "          max_turns: %v\n", maxTurnsValue)
+				if data.EngineConfig != nil && data.EngineConfig.MaxTurns != "" {
+					fmt.Fprintf(yaml, "          max_turns: %s\n", data.EngineConfig.MaxTurns)
 				}
 			} else if value != "" {
 				fmt.Fprintf(yaml, "          %s: %s\n", key, value)
@@ -3056,17 +3053,20 @@ func (c *Compiler) validateHTTPTransportSupport(tools map[string]any, engine Age
 
 // validateMaxTurnsSupport validates that max-turns is only used with engines that support this feature
 func (c *Compiler) validateMaxTurnsSupport(frontmatter map[string]any, engine AgenticEngine) error {
-	// Check if max-turns is specified at the top level
-	maxTurns, hasMaxTurns := frontmatter["max-turns"]
+	// Check if max-turns is specified in the engine config
+	engineSetting, engineConfig := c.extractEngineConfig(frontmatter)
+	_ = engineSetting // Suppress unused variable warning
 
-	if !hasMaxTurns || maxTurns == nil {
+	hasMaxTurns := engineConfig != nil && engineConfig.MaxTurns != ""
+
+	if !hasMaxTurns {
 		// No max-turns specified, no validation needed
 		return nil
 	}
 
 	// max-turns is specified, check if the engine supports it
 	if !engine.SupportsMaxTurns() {
-		return fmt.Errorf("engine '%s' does not support the max-turns feature", engine.GetID())
+		return fmt.Errorf("max-turns not supported: engine '%s' does not support the max-turns feature", engine.GetID())
 	}
 
 	// Engine supports max-turns - additional validation could be added here if needed
