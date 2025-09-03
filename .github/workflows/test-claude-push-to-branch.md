@@ -15,7 +15,7 @@ safe-outputs:
 Create a new file called "claude-test-file.md" with the following content:
 
 ```markdown
-# Claude Test File
+# Test Claude Push To Branch
 
 This file was created by the Claude agentic workflow to test the push-to-branch functionality.
 
@@ -52,4 +52,4 @@ if __name__ == "__main__":
 
 Create a commit message: "Add test files created by Claude agentic workflow"
 
-Push these changes to the branch for the pull request
+Push these changes to the branch for the pull request #${github.event.pull_request.number}
