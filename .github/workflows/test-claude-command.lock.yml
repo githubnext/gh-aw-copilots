@@ -2,22 +2,258 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Add Issue Comment"
-"on":
+name: "Test Claude Command"
+on:
   issues:
-    types:
-    - opened
-    - reopened
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited]
+  pull_request:
+    types: [opened, edited, reopened]
+  pull_request_review_comment:
+    types: [created, edited]
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}"
 
-run-name: "Test Claude Add Issue Comment"
+run-name: "Test Claude Command"
 
 jobs:
+  task:
+    if: ((contains(github.event.issue.body, '/test-claude-command')) || (contains(github.event.comment.body, '/test-claude-command'))) || (contains(github.event.pull_request.body, '/test-claude-command'))
+    runs-on: ubuntu-latest
+    outputs:
+      text: ${{ steps.compute-text.outputs.text }}
+    steps:
+      - name: Check team membership for command workflow
+        id: check-team-member
+        if: contains(github.event.issue.body, '/test-claude-command') || contains(github.event.comment.body, '/test-claude-command') || contains(github.event.pull_request.body, '/test-claude-command')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            async function main() {
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              try {
+                console.log(`Checking if user '${actor}' is admin or maintainer of ${owner}/${repo}`);
+                const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: owner,
+                  repo: repo,
+                  username: actor
+                });
+                const permission = repoPermission.data.permission;
+                console.log(`Repository permission level: ${permission}`);
+                if (permission === 'admin' || permission === 'maintain') {
+                  console.log(`User has ${permission} access to repository`);
+                  core.setOutput('is_team_member', 'true');
+                  return;
+                }
+              } catch (repoError) {
+                const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
+                console.log(`Repository permission check failed: ${errorMessage}`);
+              }
+              core.setOutput('is_team_member', 'false');
+            }
+            await main();
+      - name: Validate team membership
+        if: steps.check-team-member.outputs.is_team_member == 'false'
+        run: |
+          echo "❌ Access denied: Only team members can trigger command workflows"
+          echo "User ${{ github.actor }} is not a team member"
+          exit 1
+      - name: Compute current body text
+        id: compute-text
+        uses: actions/github-script@v7
+        with:
+          script: |
+            /**
+             * Sanitizes content for safe output in GitHub Actions
+             * @param {string} content - The content to sanitize
+             * @returns {string} The sanitized content
+             */
+            function sanitizeContent(content) {
+              if (!content || typeof content !== 'string') {
+                return '';
+              }
+              // Read allowed domains from environment variable
+              const allowedDomainsEnv = process.env.GITHUB_AW_ALLOWED_DOMAINS;
+              const defaultAllowedDomains = [
+                'github.com',
+                'github.io',
+                'githubusercontent.com',
+                'githubassets.com',
+                'github.dev',
+                'codespaces.new'
+              ];
+              const allowedDomains = allowedDomainsEnv
+                ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+                : defaultAllowedDomains;
+              let sanitized = content;
+              // Neutralize @mentions to prevent unintended notifications
+              sanitized = neutralizeMentions(sanitized);
+              // Remove control characters (except newlines and tabs)
+              sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+              // XML character escaping
+              sanitized = sanitized
+                .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+              // URI filtering - replace non-https protocols with "(redacted)"
+              // Step 1: Temporarily mark HTTPS URLs to protect them
+              sanitized = sanitizeUrlProtocols(sanitized);
+              // Domain filtering for HTTPS URIs
+              // Match https:// URIs and check if domain is in allowlist
+              sanitized = sanitizeUrlDomains(sanitized);
+              // Limit total length to prevent DoS (0.5MB max)
+              const maxLength = 524288;
+              if (sanitized.length > maxLength) {
+                sanitized = sanitized.substring(0, maxLength) + '\n[Content truncated due to length]';
+              }
+              // Limit number of lines to prevent log flooding (65k max)
+              const lines = sanitized.split('\n');
+              const maxLines = 65000;
+              if (lines.length > maxLines) {
+                sanitized = lines.slice(0, maxLines).join('\n') + '\n[Content truncated due to line count]';
+              }
+              // Remove ANSI escape sequences
+              sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+              // Neutralize common bot trigger phrases
+              sanitized = neutralizeBotTriggers(sanitized);
+              // Trim excessive whitespace
+              return sanitized.trim();
+              /**
+               * Remove unknown domains
+               * @param {string} s - The string to process
+               * @returns {string} The string with unknown domains redacted
+               */
+              function sanitizeUrlDomains(s) {
+                s = s.replace(/\bhttps:\/\/([^\/\s\])}'"<>&\x00-\x1f]+)/gi, (match, domain) => {
+                  // Extract the hostname part (before first slash, colon, or other delimiter)
+                  const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
+                  // Check if this domain or any parent domain is in the allowlist
+                  const isAllowed = allowedDomains.some(allowedDomain => {
+                    const normalizedAllowed = allowedDomain.toLowerCase();
+                    return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
+                  });
+                  return isAllowed ? match : '(redacted)';
+                });
+                return s;
+              }
+              /**
+               * Remove unknown protocols except https
+               * @param {string} s - The string to process
+               * @returns {string} The string with non-https protocols redacted
+               */
+              function sanitizeUrlProtocols(s) {
+                // Match both protocol:// and protocol: patterns
+                // This covers URLs like https://example.com, javascript:alert(), mailto:user@domain.com, etc.
+                return s.replace(/\b(\w+):(?:\/\/)?[^\s\])}'"<>&\x00-\x1f]+/gi, (match, protocol) => {
+                  // Allow https (case insensitive), redact everything else
+                  return protocol.toLowerCase() === 'https' ? match : '(redacted)';
+                });
+              }
+              /**
+               * Neutralizes @mentions by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized mentions
+               */
+              function neutralizeMentions(s) {
+                // Replace @name or @org/team outside code with `@name`
+                return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                  (_m, p1, p2) => `${p1}\`@${p2}\``);
+              }
+              /**
+               * Neutralizes bot trigger phrases by wrapping them in backticks
+               * @param {string} s - The string to process
+               * @returns {string} The string with neutralized bot triggers
+               */
+              function neutralizeBotTriggers(s) {
+                // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
+                return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+                  (match, action, ref) => `\`${action} #${ref}\``);
+              }
+            }
+            async function main() {
+              let text = '';
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: owner,
+                repo: repo,
+                username: actor
+              });
+              const permission = repoPermission.data.permission;
+              console.log(`Repository permission level: ${permission}`);
+              if (permission !== 'admin' && permission !== 'maintain') {
+                core.setOutput('text', '');
+                return;
+              }
+              // Determine current body text based on event context
+              switch (context.eventName) {
+                case 'issues':
+                  // For issues: title + body
+                  if (context.payload.issue) {
+                    const title = context.payload.issue.title || '';
+                    const body = context.payload.issue.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request':
+                  // For pull requests: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'pull_request_target':
+                  // For pull request target events: title + body
+                  if (context.payload.pull_request) {
+                    const title = context.payload.pull_request.title || '';
+                    const body = context.payload.pull_request.body || '';
+                    text = `${title}\n\n${body}`;
+                  }
+                  break;
+                case 'issue_comment':
+                  // For issue comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review_comment':
+                  // For PR review comments: comment body
+                  if (context.payload.comment) {
+                    text = context.payload.comment.body || '';
+                  }
+                  break;
+                case 'pull_request_review':
+                  // For PR reviews: review body
+                  if (context.payload.review) {
+                    text = context.payload.review.body || '';
+                  }
+                  break;
+                default:
+                  // Default: empty text
+                  text = '';
+                  break;
+              }
+              // Sanitize the text before output
+              const sanitizedText = sanitizeContent(text);
+              // Display sanitized text in logs
+              console.log(`text: ${sanitizedText}`);
+              // Set the sanitized text as output
+              core.setOutput('text', sanitizedText);
+            }
+            await main();
+
   add_reaction:
+    needs: task
     if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
     permissions:
@@ -31,6 +267,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_REACTION: eyes
+          GITHUB_AW_COMMAND: test-claude-command
         with:
           script: |
             async function main() {
@@ -187,7 +424,8 @@ jobs:
             }
             await main();
 
-  test-claude-add-issue-comment:
+  test-claude-command:
+    needs: task
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -249,7 +487,7 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} is "Hello from Claude" then add a comment on the issue "Reply from Claude".
+          Add a reply comment to issue #${{ github.event.issue.number }} answering the question "${{ needs.task.outputs.text }}" given the context of the repo, starting with saying you're Claude. If there is no command write out a haiku about the repo.
           
           
           ---
@@ -301,7 +539,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Add Issue Comment",
+              workflow_name: "Test Claude Command",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -401,13 +639,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-add-issue-comment.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-command.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-add-issue-comment.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-command.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-add-issue-comment.log
+          touch /tmp/test-claude-command.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -803,7 +1041,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-add-issue-comment.log
+          AGENT_LOG_FILE: /tmp/test-claude-command.log
         with:
           script: |
             function main() {
@@ -1078,13 +1316,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-add-issue-comment.log
-          path: /tmp/test-claude-add-issue-comment.log
+          name: test-claude-command.log
+          path: /tmp/test-claude-command.log
           if-no-files-found: warn
 
   create_issue_comment:
-    needs: test-claude-add-issue-comment
-    if: github.event.issue.number || github.event.pull_request.number
+    needs: test-claude-command
+    if: (contains(github.event.issue.body, '/test-claude-command') || contains(github.event.comment.body, '/test-claude-command') || contains(github.event.pull_request.body, '/test-claude-command')) && (github.event.issue.number || github.event.pull_request.number)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1099,7 +1337,7 @@ jobs:
         id: create_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-add-issue-comment.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-command.outputs.output }}
         with:
           script: |
             async function main() {

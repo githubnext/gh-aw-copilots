@@ -17,20 +17,20 @@
           "type": "object",
           "description": "Complex trigger configuration",
           "properties": {
-            "alias": {
-              "description": "Alias trigger configuration for @mentions",
+            "command": {
+              "description": "Command trigger configuration for /mentions",
               "oneOf": [
                 {
                   "type": "null",
-                  "description": "Null alias (defaults to filename)"
+                  "description": "Null command (defaults to filename)"
                 },
                 {
                   "type": "object",
-                  "description": "Alias configuration object",
+                  "description": "Command configuration object",
                   "properties": {
                     "name": {
                       "type": "string",
-                      "description": "Alias name (defaults to filename without .md extension)"
+                      "description": "Command name (defaults to filename without .md extension)"
                     }
                   },
                   "additionalProperties": false
@@ -852,9 +852,9 @@
         ]
       }
     },
-    "alias": {
+    "command": {
       "type": "string",
-      "description": "Alias name for the workflow"
+      "description": "Command name for the workflow"
     },
     "cache": {
       "description": "Cache configuration for workflow (uses actions/cache syntax)",
@@ -999,6 +999,12 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of issues to create (default: 1)",
+                  "minimum": 1,
+                  "maximum": 100
                 }
               },
               "additionalProperties": false
@@ -1009,69 +1015,28 @@
             }
           ]
         },
-        "create-issues": {
-          "oneOf": [
-            {
-              "type": "object",
-              "description": "Configuration for creating GitHub issues from agentic workflow output (plural form)",
-              "properties": {
-                "title-prefix": {
-                  "type": "string",
-                  "description": "Optional prefix for the issue title"
-                },
-                "labels": {
-                  "type": "array",
-                  "description": "Optional list of labels to attach to the issue",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "max": {
-                  "type": "integer",
-                  "description": "Maximum number of issues to create (default: 10)",
-                  "minimum": 1,
-                  "maximum": 100
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "type": "null",
-              "description": "Enable issue creation with default configuration (max: 10)"
-            }
-          ]
-        },
         "add-issue-comment": {
           "oneOf": [
             {
               "type": "object",
               "description": "Configuration for creating GitHub issue/PR comments from agentic workflow output",
-              "additionalProperties": false
-            },
-            {
-              "type": "null",
-              "description": "Enable issue comment creation with default configuration"
-            }
-          ]
-        },
-        "add-issue-comments": {
-          "oneOf": [
-            {
-              "type": "object",
-              "description": "Configuration for creating GitHub issue/PR comments from agentic workflow output (plural form)",
               "properties": {
                 "max": {
                   "type": "integer",
-                  "description": "Maximum number of comments to create (default: 10)",
+                  "description": "Maximum number of comments to create (default: 1)",
                   "minimum": 1,
                   "maximum": 100
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Target for comments: 'triggering' (default), '*' (any issue), or explicit issue number"
                 }
               },
               "additionalProperties": false
             },
             {
               "type": "null",
-              "description": "Enable issue comment creation with default configuration (max: 10)"
+              "description": "Enable issue comment creation with default configuration"
             }
           ]
         },
@@ -1105,7 +1070,7 @@
             }
           ]
         },
-        "add-issue-labels": {
+        "add-issue-label": {
           "oneOf": [
             {
               "type": "null",
@@ -1123,10 +1088,70 @@
                   },
                   "minItems": 1
                 },
-                "max-count": {
+                "max": {
                   "type": "integer",
                   "description": "Optional maximum number of labels to add (default: 3)",
                   "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "update-issue": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Configuration for updating GitHub issues from agentic workflow output",
+              "properties": {
+                "status": {
+                  "type": "null",
+                  "description": "Allow updating issue status (open/closed) - presence of key indicates field can be updated"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Target for updates: 'triggering' (default), '*' (any issue), or explicit issue number"
+                },
+                "title": {
+                  "type": "null",
+                  "description": "Allow updating issue title - presence of key indicates field can be updated"
+                },
+                "body": {
+                  "type": "null",
+                  "description": "Allow updating issue body - presence of key indicates field can be updated"
+                },
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of issues to update (default: 1)",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Enable issue updating with default configuration"
+            }
+          ]
+        },
+        "push-to-branch": {
+          "oneOf": [
+            {
+              "type": "null",
+              "description": "Use default configuration (branch: 'triggering')"
+            },
+            {
+              "type": "object",
+              "description": "Configuration for pushing changes to a specific branch from agentic workflow output",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "description": "The branch to push changes to (defaults to 'triggering')"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Target for push operations: 'triggering' (default), '*' (any pull request), or explicit pull request number"
                 }
               },
               "additionalProperties": false

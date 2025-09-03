@@ -205,6 +205,34 @@ describe('create_issue.cjs', () => {
     consoleSpy.mockRestore();
   });
 
+  it('should not duplicate title prefix when already present', async () => {
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
+      items: [{
+        type: 'create-issue', 
+        title: '[AUTO] Issue title already prefixed',
+        body: 'Issue body content'
+      }]
+    });
+    process.env.GITHUB_AW_ISSUE_TITLE_PREFIX = '[AUTO] ';
+    
+    const mockIssue = {
+      number: 203,
+      html_url: 'https://github.com/testowner/testrepo/issues/203'
+    };
+    
+    mockGithub.rest.issues.create.mockResolvedValue({ data: mockIssue });
+    
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    
+    // Execute the script
+    await eval(`(async () => { ${createIssueScript} })()`);
+    
+    const callArgs = mockGithub.rest.issues.create.mock.calls[0][0];
+    expect(callArgs.title).toBe('[AUTO] Issue title already prefixed'); // Should not be duplicated
+    
+    consoleSpy.mockRestore();
+  });
+
   it('should handle parent issue context and create comment', async () => {
     process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
       items: [{

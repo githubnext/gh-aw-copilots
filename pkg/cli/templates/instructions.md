@@ -41,7 +41,7 @@ The YAML frontmatter supports these fields:
 - **`on:`** - Workflow triggers (required)
   - String: `"push"`, `"issues"`, etc.
   - Object: Complex trigger configuration
-  - Special: `alias:` for @mention triggers
+  - Special: `command:` for /mention triggers
   - **`stop-after:`** - Can be included in the `on:` object to set a deadline for workflow execution. Supports absolute timestamps ("YYYY-MM-DD HH:MM:SS") or relative time deltas (+25h, +3d, +1d12h30m). Uses precise date calculations that account for varying month lengths.
   
 - **`permissions:`** - GitHub token permissions
@@ -88,12 +88,15 @@ The YAML frontmatter supports these fields:
       create-issue:
         title-prefix: "[ai] "           # Optional: prefix for issue titles  
         labels: [automation, agentic]    # Optional: labels to attach to issues
+        max: 5                          # Optional: maximum number of issues (default: 1)
     ```
     When using `safe-outputs.create-issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
-  - `add_issue_comment:` - Safe comment creation on issues/PRs
+  - `add-issue-comment:` - Safe comment creation on issues/PRs
     ```yaml
     safe-outputs:
-      add_issue_comment: {}
+      add-issue-comment:
+        max: 3                          # Optional: maximum number of comments (default: 1)
+        target: "*"                     # Optional: target for comments (default: "triggering")
     ```
     When using `safe-outputs.add-issue-comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
   - `create-pull-request:` - Safe pull request creation with git patches
@@ -104,7 +107,18 @@ The YAML frontmatter supports these fields:
         labels: [automation, ai-agent]  # Optional: labels to attach to PRs
         draft: true                     # Optional: create as draft PR (defaults to true)
     ```
-    When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. 
+    When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions.
+  - `update-issue:` - Safe issue updates 
+    ```yaml
+    safe-outputs:
+      update-issue:
+        status: true                    # Optional: allow updating issue status (open/closed)
+        target: "*"                     # Optional: target for updates (default: "triggering")
+        title: true                     # Optional: allow updating issue title
+        body: true                      # Optional: allow updating issue body
+        max: 3                          # Optional: maximum number of issues to update (default: 1)
+    ```
+    When using `safe-outputs.update-issue`, the main job does **not** need `issues: write` permission since issue updates are handled by a separate job with appropriate permissions. 
   
 - **`alias:`** - Alternative workflow name (string)
 - **`cache:`** - Cache configuration for workflow dependencies (object or array)
@@ -195,14 +209,14 @@ on:
   workflow_dispatch:    # Manual trigger
 ```
 
-### Alias Triggers (@mentions)
+### Command Triggers (/mentions)
 ```yaml
 on:
-  alias:
-    name: my-bot  # Responds to @my-bot in issues/comments
+  command:
+    name: my-bot  # Responds to /my-bot in issues/comments
 ```
 
-This automatically creates conditions to match `@my-bot` mentions in issue bodies and comments.
+This automatically creates conditions to match `/my-bot` mentions in issue bodies and comments.
 
 ### Semi-Active Agent Pattern
 ```yaml
@@ -494,6 +508,7 @@ permissions:
 engine: claude
 safe-outputs:
   add-issue-comment:
+    max: 3                # Optional: create multiple comments (default: 1)
 ---
 
 # Issue Analysis Agent
@@ -573,11 +588,11 @@ Research latest developments in ${{ github.repository }}:
 - Create summary issue
 ```
 
-### @mention Response Bot
+### /mention Response Bot
 ```markdown
 ---
 on:
-  alias:
+  command:
     name: helper-bot
 permissions:
   issues: write
@@ -588,7 +603,7 @@ tools:
 
 # Helper Bot
 
-Respond to @helper-bot mentions with helpful information.
+Respond to /helper-bot mentions with helpful information.
 ```
 
 ## Workflow Monitoring and Analysis

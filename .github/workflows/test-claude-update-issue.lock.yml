@@ -2,258 +2,22 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Codex Alias"
-on:
+name: "Test Claude Update Issue"
+"on":
   issues:
-    types: [opened, edited, reopened]
-  issue_comment:
-    types: [created, edited]
-  pull_request:
-    types: [opened, edited, reopened]
-  pull_request_review_comment:
-    types: [created, edited]
+    types:
+    - opened
+    - reopened
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
 
-run-name: "Test Codex Alias"
+run-name: "Test Claude Update Issue"
 
 jobs:
-  task:
-    if: ((contains(github.event.issue.body, '@test-codex-alias')) || (contains(github.event.comment.body, '@test-codex-alias'))) || (contains(github.event.pull_request.body, '@test-codex-alias'))
-    runs-on: ubuntu-latest
-    outputs:
-      text: ${{ steps.compute-text.outputs.text }}
-    steps:
-      - name: Check team membership for alias workflow
-        id: check-team-member
-        if: contains(github.event.issue.body, '@test-codex-alias') || contains(github.event.comment.body, '@test-codex-alias') || contains(github.event.pull_request.body, '@test-codex-alias')
-        uses: actions/github-script@v7
-        with:
-          script: |
-            async function main() {
-              const actor = context.actor;
-              const { owner, repo } = context.repo;
-              // Check if the actor has repository access (admin, maintain permissions)
-              try {
-                console.log(`Checking if user '${actor}' is admin or maintainer of ${owner}/${repo}`);
-                const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
-                  owner: owner,
-                  repo: repo,
-                  username: actor
-                });
-                const permission = repoPermission.data.permission;
-                console.log(`Repository permission level: ${permission}`);
-                if (permission === 'admin' || permission === 'maintain') {
-                  console.log(`User has ${permission} access to repository`);
-                  core.setOutput('is_team_member', 'true');
-                  return;
-                }
-              } catch (repoError) {
-                const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
-                console.log(`Repository permission check failed: ${errorMessage}`);
-              }
-              core.setOutput('is_team_member', 'false');
-            }
-            await main();
-      - name: Validate team membership
-        if: steps.check-team-member.outputs.is_team_member == 'false'
-        run: |
-          echo "❌ Access denied: Only team members can trigger alias workflows"
-          echo "User ${{ github.actor }} is not a team member"
-          exit 1
-      - name: Compute current body text
-        id: compute-text
-        uses: actions/github-script@v7
-        with:
-          script: |
-            /**
-             * Sanitizes content for safe output in GitHub Actions
-             * @param {string} content - The content to sanitize
-             * @returns {string} The sanitized content
-             */
-            function sanitizeContent(content) {
-              if (!content || typeof content !== 'string') {
-                return '';
-              }
-              // Read allowed domains from environment variable
-              const allowedDomainsEnv = process.env.GITHUB_AW_ALLOWED_DOMAINS;
-              const defaultAllowedDomains = [
-                'github.com',
-                'github.io',
-                'githubusercontent.com',
-                'githubassets.com',
-                'github.dev',
-                'codespaces.new'
-              ];
-              const allowedDomains = allowedDomainsEnv
-                ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
-                : defaultAllowedDomains;
-              let sanitized = content;
-              // Neutralize @mentions to prevent unintended notifications
-              sanitized = neutralizeMentions(sanitized);
-              // Remove control characters (except newlines and tabs)
-              sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-              // XML character escaping
-              sanitized = sanitized
-                .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&apos;');
-              // URI filtering - replace non-https protocols with "(redacted)"
-              // Step 1: Temporarily mark HTTPS URLs to protect them
-              sanitized = sanitizeUrlProtocols(sanitized);
-              // Domain filtering for HTTPS URIs
-              // Match https:// URIs and check if domain is in allowlist
-              sanitized = sanitizeUrlDomains(sanitized);
-              // Limit total length to prevent DoS (0.5MB max)
-              const maxLength = 524288;
-              if (sanitized.length > maxLength) {
-                sanitized = sanitized.substring(0, maxLength) + '\n[Content truncated due to length]';
-              }
-              // Limit number of lines to prevent log flooding (65k max)
-              const lines = sanitized.split('\n');
-              const maxLines = 65000;
-              if (lines.length > maxLines) {
-                sanitized = lines.slice(0, maxLines).join('\n') + '\n[Content truncated due to line count]';
-              }
-              // Remove ANSI escape sequences
-              sanitized = sanitized.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
-              // Neutralize common bot trigger phrases
-              sanitized = neutralizeBotTriggers(sanitized);
-              // Trim excessive whitespace
-              return sanitized.trim();
-              /**
-               * Remove unknown domains
-               * @param {string} s - The string to process
-               * @returns {string} The string with unknown domains redacted
-               */
-              function sanitizeUrlDomains(s) {
-                s = s.replace(/\bhttps:\/\/([^\/\s\])}'"<>&\x00-\x1f]+)/gi, (match, domain) => {
-                  // Extract the hostname part (before first slash, colon, or other delimiter)
-                  const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
-                  // Check if this domain or any parent domain is in the allowlist
-                  const isAllowed = allowedDomains.some(allowedDomain => {
-                    const normalizedAllowed = allowedDomain.toLowerCase();
-                    return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
-                  });
-                  return isAllowed ? match : '(redacted)';
-                });
-                return s;
-              }
-              /**
-               * Remove unknown protocols except https
-               * @param {string} s - The string to process
-               * @returns {string} The string with non-https protocols redacted
-               */
-              function sanitizeUrlProtocols(s) {
-                // Match both protocol:// and protocol: patterns
-                // This covers URLs like https://example.com, javascript:alert(), mailto:user@domain.com, etc.
-                return s.replace(/\b(\w+):(?:\/\/)?[^\s\])}'"<>&\x00-\x1f]+/gi, (match, protocol) => {
-                  // Allow https (case insensitive), redact everything else
-                  return protocol.toLowerCase() === 'https' ? match : '(redacted)';
-                });
-              }
-              /**
-               * Neutralizes @mentions by wrapping them in backticks
-               * @param {string} s - The string to process
-               * @returns {string} The string with neutralized mentions
-               */
-              function neutralizeMentions(s) {
-                // Replace @name or @org/team outside code with `@name`
-                return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
-                  (_m, p1, p2) => `${p1}\`@${p2}\``);
-              }
-              /**
-               * Neutralizes bot trigger phrases by wrapping them in backticks
-               * @param {string} s - The string to process
-               * @returns {string} The string with neutralized bot triggers
-               */
-              function neutralizeBotTriggers(s) {
-                // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
-                return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
-                  (match, action, ref) => `\`${action} #${ref}\``);
-              }
-            }
-            async function main() {
-              let text = '';
-              const actor = context.actor;
-              const { owner, repo } = context.repo;
-              // Check if the actor has repository access (admin, maintain permissions)
-              const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
-                owner: owner,
-                repo: repo,
-                username: actor
-              });
-              const permission = repoPermission.data.permission;
-              console.log(`Repository permission level: ${permission}`);
-              if (permission !== 'admin' && permission !== 'maintain') {
-                core.setOutput('text', '');
-                return;
-              }
-              // Determine current body text based on event context
-              switch (context.eventName) {
-                case 'issues':
-                  // For issues: title + body
-                  if (context.payload.issue) {
-                    const title = context.payload.issue.title || '';
-                    const body = context.payload.issue.body || '';
-                    text = `${title}\n\n${body}`;
-                  }
-                  break;
-                case 'pull_request':
-                  // For pull requests: title + body
-                  if (context.payload.pull_request) {
-                    const title = context.payload.pull_request.title || '';
-                    const body = context.payload.pull_request.body || '';
-                    text = `${title}\n\n${body}`;
-                  }
-                  break;
-                case 'pull_request_target':
-                  // For pull request target events: title + body
-                  if (context.payload.pull_request) {
-                    const title = context.payload.pull_request.title || '';
-                    const body = context.payload.pull_request.body || '';
-                    text = `${title}\n\n${body}`;
-                  }
-                  break;
-                case 'issue_comment':
-                  // For issue comments: comment body
-                  if (context.payload.comment) {
-                    text = context.payload.comment.body || '';
-                  }
-                  break;
-                case 'pull_request_review_comment':
-                  // For PR review comments: comment body
-                  if (context.payload.comment) {
-                    text = context.payload.comment.body || '';
-                  }
-                  break;
-                case 'pull_request_review':
-                  // For PR reviews: review body
-                  if (context.payload.review) {
-                    text = context.payload.review.body || '';
-                  }
-                  break;
-                default:
-                  // Default: empty text
-                  text = '';
-                  break;
-              }
-              // Sanitize the text before output
-              const sanitizedText = sanitizeContent(text);
-              // Display sanitized text in logs
-              console.log(`text: ${sanitizedText}`);
-              // Set the sanitized text as output
-              core.setOutput('text', sanitizedText);
-            }
-            await main();
-
   add_reaction:
-    needs: task
     if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
     permissions:
@@ -267,7 +31,6 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_REACTION: eyes
-          GITHUB_AW_ALIAS: test-codex-alias
         with:
           script: |
             async function main() {
@@ -424,8 +187,7 @@ jobs:
             }
             await main();
 
-  test-codex-alias:
-    needs: task
+  test-claude-update-issue:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -487,27 +249,34 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          Add a reply comment to issue #${{ github.event.issue.number }} answering the question "${{ needs.task.outputs.text }}" given the context of the repo, starting with saying you're Codex. If there is no alias write out a haiku about the repo.
+          If the title of the issue #${{ github.event.issue.number }} is exactly "[claude-test] Update Issue Test" then:
+          
+          1. Change the status to "closed"
+          2. Update the title to "[UPDATED] Update Issue Test - Processed by Claude"
+          3. Add a line to the end of the body saying "This issue was automatically updated by the Claude agentic workflow."
           
           
           ---
           
-          ## Adding a Comment to an Issue or Pull Request
+          ## Updating Issues
           
-          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
+          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
           **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.
           
           ### Available Output Types:
           
-          **Adding a Comment to an Issue or Pull Request**
+          **Updating an Issue**
+          
+          To udpate an issue:
           ```json
-          {"type": "add-issue-comment", "body": "Your comment content in markdown"}
+          {"type": "update-issue", "status": "open" // or "closed", "title": "New issue title", "body": "Updated issue body in markdown"}
           ```
+          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
-          {"type": "add-issue-comment", "body": "This is related to the issue above."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -535,7 +304,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Codex Alias",
+              workflow_name: "Test Claude Update Issue",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -635,13 +404,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-codex-alias.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-update-issue.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-codex-alias.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-update-issue.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-codex-alias.log
+          touch /tmp/test-claude-update-issue.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -663,7 +432,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"add-issue-comment\":true}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"update-issue\":true}"
         with:
           script: |
             async function main() {
@@ -787,13 +556,17 @@ jobs:
                 // Use default limits for plural-supported types
                 switch (itemType) {
                   case 'create-issue':
-                    return 10; // Allow multiple issues
+                    return 1; // Only one issue allowed
                   case 'add-issue-comment':
-                    return 10; // Allow multiple comments
+                    return 1; // Only one comment allowed
                   case 'create-pull-request':
                     return 1;  // Only one pull request allowed
-                  case 'add-issue-labels':
-                    return 1;  // Only one labels operation allowed
+                  case 'add-issue-label':
+                    return 5;  // Only one labels operation allowed
+                  case 'update-issue':
+                    return 1;  // Only one issue update allowed
+                  case 'push-to-branch':
+                    return 1;  // Only one push to branch allowed
                   default:
                     return 1;  // Default to single item for unknown types
                 }
@@ -893,22 +666,83 @@ jobs:
                       // Sanitize text content
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
+                      // Sanitize branch name if present
+                      if (item.branch && typeof item.branch === 'string') {
+                        item.branch = sanitizeContent(item.branch);
+                      }
                       // Sanitize labels if present
                       if (item.labels && Array.isArray(item.labels)) {
                         item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
                       }
                       break;
-                    case 'add-issue-labels':
+                    case 'add-issue-label':
                       if (!item.labels || !Array.isArray(item.labels)) {
-                        errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
+                        errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
                         continue;
                       }
                       if (item.labels.some(label => typeof label !== 'string')) {
-                        errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
+                        errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
                         continue;
                       }
                       // Sanitize label strings
                       item.labels = item.labels.map(label => sanitizeContent(label));
+                      break;
+                    case 'update-issue':
+                      // Check that at least one updateable field is provided
+                      const hasValidField = (item.status !== undefined) || 
+                                            (item.title !== undefined) || 
+                                            (item.body !== undefined);
+                      if (!hasValidField) {
+                        errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
+                        continue;
+                      }
+                      // Validate status if provided
+                      if (item.status !== undefined) {
+                        if (typeof item.status !== 'string' || (item.status !== 'open' && item.status !== 'closed')) {
+                          errors.push(`Line ${i + 1}: update-issue 'status' must be 'open' or 'closed'`);
+                          continue;
+                        }
+                      }
+                      // Validate title if provided
+                      if (item.title !== undefined) {
+                        if (typeof item.title !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'title' must be a string`);
+                          continue;
+                        }
+                        item.title = sanitizeContent(item.title);
+                      }
+                      // Validate body if provided
+                      if (item.body !== undefined) {
+                        if (typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'body' must be a string`);
+                          continue;
+                        }
+                        item.body = sanitizeContent(item.body);
+                      }
+                      // Validate issue_number if provided (for target "*")
+                      if (item.issue_number !== undefined) {
+                        if (typeof item.issue_number !== 'number' && typeof item.issue_number !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'issue_number' must be a number or string`);
+                          continue;
+                        }
+                      }
+                      break;
+                    case 'push-to-branch':
+                      // Validate message if provided (optional)
+                      if (item.message !== undefined) {
+                        if (typeof item.message !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'message' must be a string`);
+                          continue;
+                        }
+                        item.message = sanitizeContent(item.message);
+                      }
+                      // Validate pull_request_number if provided (for target "*")
+                      if (item.pull_request_number !== undefined) {
+                        if (typeof item.pull_request_number !== 'number' && typeof item.pull_request_number !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'pull_request_number' must be a number or string`);
+                          continue;
+                        }
+                      }
                       break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
@@ -972,7 +806,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-codex-alias.log
+          AGENT_LOG_FILE: /tmp/test-claude-update-issue.log
         with:
           script: |
             function main() {
@@ -1247,90 +1081,30 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-codex-alias.log
-          path: /tmp/test-codex-alias.log
+          name: test-claude-update-issue.log
+          path: /tmp/test-claude-update-issue.log
           if-no-files-found: warn
-      - name: Generate git patch
-        if: always()
-        run: |
-          # Check current git status
-          echo "Current git status:"
-          git status
-          # Get the initial commit SHA from the base branch of the pull request
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_review_comment" ]; then
-            INITIAL_SHA="$GITHUB_BASE_REF"
-          else
-            INITIAL_SHA="$GITHUB_SHA"
-          fi
-          echo "Base commit SHA: $INITIAL_SHA"
-          # Configure git user for GitHub Actions
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          # Stage any unstaged files
-          git add -A || true
-          # Check if there are staged files to commit
-          if ! git diff --cached --quiet; then
-            echo "Staged files found, committing them..."
-            git commit -m "[agent] staged files" || true
-            echo "Staged files committed"
-          else
-            echo "No staged files to commit"
-          fi
-          # Check updated git status
-          echo "Updated git status after committing staged files:"
-          git status
-          # Show compact diff information between initial commit and HEAD (committed changes only)
-          echo '## Git diff' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          git diff --name-only "$INITIAL_SHA"..HEAD >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          # Check if there are any committed changes since the initial commit
-          if git diff --quiet "$INITIAL_SHA" HEAD; then
-            echo "No committed changes detected since initial commit"
-            echo "Skipping patch generation - no committed changes to create patch from"
-          else
-            echo "Committed changes detected, generating patch..."
-            # Generate patch from initial commit to HEAD (committed changes only)
-            git format-patch "$INITIAL_SHA"..HEAD --stdout > /tmp/aw.patch || echo "Failed to generate patch" > /tmp/aw.patch
-            echo "Patch file created at /tmp/aw.patch"
-            ls -la /tmp/aw.patch
-            # Show the first 50 lines of the patch for review
-            echo '## Git Patch' >> $GITHUB_STEP_SUMMARY
-            echo '' >> $GITHUB_STEP_SUMMARY
-            echo '```diff' >> $GITHUB_STEP_SUMMARY
-            head -50 /tmp/aw.patch >> $GITHUB_STEP_SUMMARY || echo "Could not display patch contents" >> $GITHUB_STEP_SUMMARY
-            echo '...' >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo '' >> $GITHUB_STEP_SUMMARY
-          fi
-      - name: Upload git patch
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: aw.patch
-          path: /tmp/aw.patch
-          if-no-files-found: ignore
 
-  create_issue_comment:
-    needs: test-codex-alias
-    if: github.event.issue.number || github.event.pull_request.number
+  update_issue:
+    needs: test-claude-update-issue
+    if: github.event.issue.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-      pull-requests: write
     timeout-minutes: 10
     outputs:
-      comment_id: ${{ steps.create_comment.outputs.comment_id }}
-      comment_url: ${{ steps.create_comment.outputs.comment_url }}
+      issue_number: ${{ steps.update_issue.outputs.issue_number }}
+      issue_url: ${{ steps.update_issue.outputs.issue_url }}
     steps:
-      - name: Add Issue Comment
-        id: create_comment
+      - name: Update Issue
+        id: update_issue
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-alias.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-update-issue.outputs.output }}
+          GITHUB_AW_UPDATE_STATUS: true
+          GITHUB_AW_UPDATE_TITLE: true
+          GITHUB_AW_UPDATE_BODY: true
         with:
           script: |
             async function main() {
@@ -1357,89 +1131,137 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find all add-issue-comment items
-              const commentItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'add-issue-comment');
-              if (commentItems.length === 0) {
-                console.log('No add-issue-comment items found in agent output');
+              // Find all update-issue items
+              const updateItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'update-issue');
+              if (updateItems.length === 0) {
+                console.log('No update-issue items found in agent output');
                 return;
               }
-              console.log(`Found ${commentItems.length} add-issue-comment item(s)`);
-              // Check if we're in an issue or pull request context
+              console.log(`Found ${updateItems.length} update-issue item(s)`);
+              // Get the configuration from environment variables
+              const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
+              const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === 'true';
+              const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === 'true';
+              const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === 'true';
+              console.log(`Update target configuration: ${updateTarget}`);
+              console.log(`Can update status: ${canUpdateStatus}, title: ${canUpdateTitle}, body: ${canUpdateBody}`);
+              // Check if we're in an issue context
               const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
-              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
-              if (!isIssueContext && !isPRContext) {
-                console.log('Not running in issue or pull request context, skipping comment creation');
+              // Validate context based on target configuration
+              if (updateTarget === "triggering" && !isIssueContext) {
+                console.log('Target is "triggering" but not running in issue context, skipping issue update');
                 return;
               }
-              const createdComments = [];
-              // Process each comment item
-              for (let i = 0; i < commentItems.length; i++) {
-                const commentItem = commentItems[i];
-                console.log(`Processing add-issue-comment item ${i + 1}/${commentItems.length}:`, { bodyLength: commentItem.body.length });
-                // Determine the issue/PR number and comment endpoint for this comment
+              const updatedIssues = [];
+              // Process each update item
+              for (let i = 0; i < updateItems.length; i++) {
+                const updateItem = updateItems[i];
+                console.log(`Processing update-issue item ${i + 1}/${updateItems.length}`);
+                // Determine the issue number for this update
                 let issueNumber;
-                let commentEndpoint;
-                if (isIssueContext) {
-                  if (context.payload.issue) {
-                    issueNumber = context.payload.issue.number;
-                    commentEndpoint = 'issues';
+                if (updateTarget === "*") {
+                  // For target "*", we need an explicit issue number from the update item
+                  if (updateItem.issue_number) {
+                    issueNumber = parseInt(updateItem.issue_number, 10);
+                    if (isNaN(issueNumber) || issueNumber <= 0) {
+                      console.log(`Invalid issue number specified: ${updateItem.issue_number}`);
+                      continue;
+                    }
                   } else {
-                    console.log('Issue context detected but no issue found in payload');
+                    console.log('Target is "*" but no issue_number specified in update item');
                     continue;
                   }
-                } else if (isPRContext) {
-                  if (context.payload.pull_request) {
-                    issueNumber = context.payload.pull_request.number;
-                    commentEndpoint = 'issues'; // PR comments use the issues API endpoint
+                } else if (updateTarget && updateTarget !== "triggering") {
+                  // Explicit issue number specified in target
+                  issueNumber = parseInt(updateTarget, 10);
+                  if (isNaN(issueNumber) || issueNumber <= 0) {
+                    console.log(`Invalid issue number in target configuration: ${updateTarget}`);
+                    continue;
+                  }
+                } else {
+                  // Default behavior: use triggering issue
+                  if (isIssueContext) {
+                    if (context.payload.issue) {
+                      issueNumber = context.payload.issue.number;
+                    } else {
+                      console.log('Issue context detected but no issue found in payload');
+                      continue;
+                    }
                   } else {
-                    console.log('Pull request context detected but no pull request found in payload');
+                    console.log('Could not determine issue number');
                     continue;
                   }
                 }
                 if (!issueNumber) {
-                  console.log('Could not determine issue or pull request number');
+                  console.log('Could not determine issue number');
                   continue;
                 }
-                // Extract body from the JSON item
-                let body = commentItem.body.trim();
-                // Add AI disclaimer with run id, run htmlurl
-                const runId = context.runId;
-                const runUrl = context.payload.repository 
-                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                  : `https://github.com/actions/runs/${runId}`;  
-                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
-                console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
-                console.log('Comment content length:', body.length);
+                console.log(`Updating issue #${issueNumber}`);
+                // Build the update object based on allowed fields and provided values
+                const updateData = {};
+                let hasUpdates = false;
+                if (canUpdateStatus && updateItem.status !== undefined) {
+                  // Validate status value
+                  if (updateItem.status === 'open' || updateItem.status === 'closed') {
+                    updateData.state = updateItem.status;
+                    hasUpdates = true;
+                    console.log(`Will update status to: ${updateItem.status}`);
+                  } else {
+                    console.log(`Invalid status value: ${updateItem.status}. Must be 'open' or 'closed'`);
+                  }
+                }
+                if (canUpdateTitle && updateItem.title !== undefined) {
+                  if (typeof updateItem.title === 'string' && updateItem.title.trim().length > 0) {
+                    updateData.title = updateItem.title.trim();
+                    hasUpdates = true;
+                    console.log(`Will update title to: ${updateItem.title.trim()}`);
+                  } else {
+                    console.log('Invalid title value: must be a non-empty string');
+                  }
+                }
+                if (canUpdateBody && updateItem.body !== undefined) {
+                  if (typeof updateItem.body === 'string') {
+                    updateData.body = updateItem.body;
+                    hasUpdates = true;
+                    console.log(`Will update body (length: ${updateItem.body.length})`);
+                  } else {
+                    console.log('Invalid body value: must be a string');
+                  }
+                }
+                if (!hasUpdates) {
+                  console.log('No valid updates to apply for this item');
+                  continue;
+                }
                 try {
-                  // Create the comment using GitHub API
-                  const { data: comment } = await github.rest.issues.createComment({
+                  // Update the issue using GitHub API
+                  const { data: issue } = await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issueNumber,
-                    body: body
+                    ...updateData
                   });
-                  console.log('Created comment #' + comment.id + ': ' + comment.html_url);
-                  createdComments.push(comment);
-                  // Set output for the last created comment (for backward compatibility)
-                  if (i === commentItems.length - 1) {
-                    core.setOutput('comment_id', comment.id);
-                    core.setOutput('comment_url', comment.html_url);
+                  console.log('Updated issue #' + issue.number + ': ' + issue.html_url);
+                  updatedIssues.push(issue);
+                  // Set output for the last updated issue (for backward compatibility)
+                  if (i === updateItems.length - 1) {
+                    core.setOutput('issue_number', issue.number);
+                    core.setOutput('issue_url', issue.html_url);
                   }
                 } catch (error) {
-                  console.error(`✗ Failed to create comment:`, error instanceof Error ? error.message : String(error));
+                  console.error(`✗ Failed to update issue #${issueNumber}:`, error instanceof Error ? error.message : String(error));
                   throw error;
                 }
               }
-              // Write summary for all created comments
-              if (createdComments.length > 0) {
-                let summaryContent = '\n\n## GitHub Comments\n';
-                for (const comment of createdComments) {
-                  summaryContent += `- Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
+              // Write summary for all updated issues
+              if (updatedIssues.length > 0) {
+                let summaryContent = '\n\n## Updated Issues\n';
+                for (const issue of updatedIssues) {
+                  summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully created ${createdComments.length} comment(s)`);
-              return createdComments;
+              console.log(`Successfully updated ${updatedIssues.length} issue(s)`);
+              return updatedIssues;
             }
             await main();
 
