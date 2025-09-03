@@ -158,15 +158,15 @@ func extractDomainFromURL(url string) string {
 	return url
 }
 
-// analyzeAccessLogs analyzes access logs in a run directory, supporting both single and multiple log files
+// analyzeAccessLogs analyzes access logs in a run directory
 func analyzeAccessLogs(runDir string, verbose bool) (*DomainAnalysis, error) {
-	// Check for multiple separate access log files first (new format)
+	// Check for access log files in access.log directory
 	accessLogsDir := filepath.Join(runDir, "access.log")
 	if _, err := os.Stat(accessLogsDir); err == nil {
 		return analyzeMultipleAccessLogs(accessLogsDir, verbose)
 	}
 
-	// Fall back to single access.log file (legacy format)
+	// No access logs found
 	if verbose {
 		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No access logs found in %s", runDir)))
 	}

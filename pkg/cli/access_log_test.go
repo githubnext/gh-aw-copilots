@@ -141,41 +141,14 @@ func TestAnalyzeAccessLogsDirectory(t *testing.T) {
 		t.Errorf("Expected 1 total request, got %d", analysis.TotalRequests)
 	}
 
-	// Test case 2: Legacy single access.log file
+	// Test case 2: No access logs
 	run2Dir := filepath.Join(tempDir, "run2")
 	err = os.MkdirAll(run2Dir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create run2 directory: %v", err)
 	}
 
-	legacyLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html`
-	legacyLogPath := filepath.Join(run2Dir, "access.log")
-	err = os.WriteFile(legacyLogPath, []byte(legacyLogContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create legacy access.log: %v", err)
-	}
-
 	analysis, err = analyzeAccessLogs(run2Dir, false)
-	if err != nil {
-		t.Fatalf("Failed to analyze legacy access logs: %v", err)
-	}
-
-	if analysis == nil {
-		t.Fatal("Expected analysis result, got nil")
-	}
-
-	if analysis.TotalRequests != 1 {
-		t.Errorf("Expected 1 total request, got %d", analysis.TotalRequests)
-	}
-
-	// Test case 3: No access logs
-	run3Dir := filepath.Join(tempDir, "run3")
-	err = os.MkdirAll(run3Dir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create run3 directory: %v", err)
-	}
-
-	analysis, err = analyzeAccessLogs(run3Dir, false)
 	if err != nil {
 		t.Fatalf("Failed to analyze no access logs: %v", err)
 	}
