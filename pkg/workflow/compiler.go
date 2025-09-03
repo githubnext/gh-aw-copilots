@@ -1947,7 +1947,7 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 	}
 
 	// Build outputs for all engines (GITHUB_AW_SAFE_OUTPUTS functionality)
-	// Only include output if the workflow actually uses the output feature
+	// Only include output if the workflow actually uses the safe-outputs feature
 	var outputs map[string]string
 	if data.SafeOutputs != nil {
 		outputs = map[string]string{
@@ -2162,7 +2162,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 		}
 	}
 
-	// Generate output file setup step only if output feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
+	// Generate output file setup step only if safe-outputs feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
 	if data.SafeOutputs != nil {
 		c.generateOutputFileSetup(yaml, data)
 	}
@@ -2191,7 +2191,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	// add workflow_complete.txt
 	c.generateWorkflowComplete(yaml)
 
-	// Add output collection step only if output feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
+	// Add output collection step only if safe-outputs feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
 	if data.SafeOutputs != nil {
 		c.generateOutputCollectionStep(yaml, data)
 	}
@@ -2207,8 +2207,8 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	// upload agent logs
 	c.generateUploadAgentLogs(yaml, logFile, logFileFull)
 
-	// Add git patch generation step only if output feature is used
-	if data.SafeOutputs != nil {
+	// Add git patch generation step only if safe-outputs create-pull-request feature is used
+	if data.SafeOutputs != nil && data.SafeOutputs.CreatePullRequests != nil {
 		c.generateGitPatchStep(yaml)
 	}
 
@@ -2286,7 +2286,7 @@ func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
 func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine) {
 	yaml.WriteString("      - name: Create prompt\n")
 
-	// Only add GITHUB_AW_SAFE_OUTPUTS environment variable if output feature is used
+	// Only add GITHUB_AW_SAFE_OUTPUTS environment variable if safe-outputs feature is used
 	if data.SafeOutputs != nil {
 		yaml.WriteString("        env:\n")
 		yaml.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
@@ -2341,7 +2341,7 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 		}
 		yaml.WriteString("\n")
 		yaml.WriteString("          \n")
-		yaml.WriteString("          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.\n")
+		yaml.WriteString("          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.\n")
 		yaml.WriteString("          \n")
 		yaml.WriteString("          **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.\n")
 		yaml.WriteString("          \n")
@@ -2369,10 +2369,11 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			yaml.WriteString("          \n")
 			yaml.WriteString("          To create a pull request:\n")
 			yaml.WriteString("          1. Make any file changes directly in the working directory\n")
-			yaml.WriteString("          2. Leave the changes uncommitted and unstaged\n")
-			yaml.WriteString("          3. Write the PR specification:\n")
+			yaml.WriteString("          2. If you haven't done so already, create a local branch using an appropriate unique name\n")
+			yaml.WriteString("          3. Add and commit your files to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.\n")
+			yaml.WriteString("          4. Do not push your changes. That will be done later. Instead append the PR specification to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
 			yaml.WriteString("          ```json\n")
-			yaml.WriteString("          {\"type\": \"create-pull-request\", \"title\": \"PR title\", \"body\": \"PR body in markdown\", \"labels\": [\"optional\", \"labels\"]}\n")
+			yaml.WriteString("          {\"type\": \"create-pull-request\", \"branch\": \"branch-name\", \"title\": \"PR title\", \"body\": \"PR body in markdown\", \"labels\": [\"optional\", \"labels\"]}\n")
 			yaml.WriteString("          ```\n")
 			yaml.WriteString("          \n")
 		}
@@ -2931,7 +2932,7 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 				fmt.Fprintf(yaml, "          %s: %s\n", key, value)
 			}
 		}
-		// Add environment section to pass GITHUB_AW_SAFE_OUTPUTS to the action only if output feature is used
+		// Add environment section to pass GITHUB_AW_SAFE_OUTPUTS to the action only if safe-outputs feature is used
 		if data.SafeOutputs != nil {
 			yaml.WriteString("        env:\n")
 			yaml.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
