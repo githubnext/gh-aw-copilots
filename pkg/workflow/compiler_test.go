@@ -5537,3 +5537,88 @@ func TestComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 		})
 	}
 }
+
+func TestAccessLogUploadConditional(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name        string
+		tools       map[string]any
+		expectSteps bool
+	}{
+		{
+			name: "no tools - no access log steps",
+			tools: map[string]any{
+				"github": map[string]any{
+					"allowed": []any{"list_issues"},
+				},
+			},
+			expectSteps: false,
+		},
+		{
+			name: "tool with container but no network permissions - no access log steps",
+			tools: map[string]any{
+				"simple": map[string]any{
+					"mcp": map[string]any{
+						"type":      "stdio",
+						"container": "simple/tool",
+					},
+					"allowed": []any{"test"},
+				},
+			},
+			expectSteps: false,
+		},
+		{
+			name: "tool with container and network permissions - access log steps generated",
+			tools: map[string]any{
+				"fetch": map[string]any{
+					"mcp": map[string]any{
+						"type":      "stdio",
+						"container": "mcp/fetch",
+					},
+					"permissions": map[string]any{
+						"network": map[string]any{
+							"allowed": []any{"example.com"},
+						},
+					},
+					"allowed": []any{"fetch"},
+				},
+			},
+			expectSteps: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var yaml strings.Builder
+
+			// Test generateExtractAccessLogs
+			compiler.generateExtractAccessLogs(&yaml, tt.tools)
+			extractContent := yaml.String()
+
+			// Test generateUploadAccessLogs
+			yaml.Reset()
+			compiler.generateUploadAccessLogs(&yaml, tt.tools)
+			uploadContent := yaml.String()
+
+			hasExtractStep := strings.Contains(extractContent, "name: Extract squid access logs")
+			hasUploadStep := strings.Contains(uploadContent, "name: Upload squid access logs")
+
+			if tt.expectSteps {
+				if !hasExtractStep {
+					t.Errorf("Expected extract step to be generated but it wasn't")
+				}
+				if !hasUploadStep {
+					t.Errorf("Expected upload step to be generated but it wasn't")
+				}
+			} else {
+				if hasExtractStep {
+					t.Errorf("Expected no extract step but one was generated")
+				}
+				if hasUploadStep {
+					t.Errorf("Expected no upload step but one was generated")
+				}
+			}
+		})
+	}
+}

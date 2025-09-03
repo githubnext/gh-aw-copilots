@@ -2182,7 +2182,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 
 	// Extract and upload squid access logs (if any proxy tools were used)
 	c.generateExtractAccessLogs(yaml, data.Tools)
-	c.generateUploadAccessLogs(yaml)
+	c.generateUploadAccessLogs(yaml, data.Tools)
 
 	// parse agent logs for GITHUB_STEP_SUMMARY
 	c.generateLogParsing(yaml, engine, logFileFull)
@@ -2298,7 +2298,23 @@ func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[st
 	}
 }
 
-func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder) {
+func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[string]any) {
+	// Check if any tools require proxy setup
+	var proxyTools []string
+	for toolName, toolConfig := range tools {
+		if toolConfigMap, ok := toolConfig.(map[string]any); ok {
+			needsProxySetup, _ := needsProxy(toolConfigMap)
+			if needsProxySetup {
+				proxyTools = append(proxyTools, toolName)
+			}
+		}
+	}
+
+	// If no proxy tools, no access logs to upload
+	if len(proxyTools) == 0 {
+		return
+	}
+
 	yaml.WriteString("      - name: Upload squid access logs\n")
 	yaml.WriteString("        if: always()\n")
 	yaml.WriteString("        uses: actions/upload-artifact@v4\n")

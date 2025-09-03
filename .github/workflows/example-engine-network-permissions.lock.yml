@@ -314,13 +314,6 @@ jobs:
       - name: Clean up engine output files
         run: |
           rm -f output.txt
-      - name: Upload squid access logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: access.log
-          path: /tmp/access-logs/
-          if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()
         uses: actions/github-script@v7
