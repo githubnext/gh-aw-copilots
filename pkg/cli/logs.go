@@ -475,7 +475,7 @@ func listWorkflowRunsWithPagination(workflowName string, count int, startDate, e
 
 	// Add filters
 	if workflowName != "" {
-		args = append(args, "--workflow", fmt.Sprintf("%q", workflowName))
+		args = append(args, "--workflow", workflowName)
 	}
 	if count > 0 {
 		args = append(args, "--limit", strconv.Itoa(count))
