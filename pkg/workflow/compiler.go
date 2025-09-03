@@ -138,7 +138,7 @@ type WorkflowData struct {
 	Cache              string             // cache configuration
 	NeedsTextOutput    bool               // whether the workflow uses ${{ needs.task.outputs.text }}
 	SafeOutputs        *SafeOutputsConfig // output configuration for automatic output routes
-	Frontmatter      map[string]any // Raw frontmatter for accessing values during generation
+	Frontmatter        map[string]any     // Raw frontmatter for accessing values during generation
 }
 
 // SafeOutputsConfig holds configuration for automatic output routes
