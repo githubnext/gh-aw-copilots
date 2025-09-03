@@ -21,9 +21,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: claude
-  max-turns: 3
+engine: claude
+max-turns: 3
 tools:
   github:
     allowed: [get_issue]
@@ -61,9 +60,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: claude
-  max-turns: 10
+engine: claude
+max-turns: 10
 timeout_minutes: 15
 tools:
   github:
@@ -165,9 +163,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: claude
-  max-turns: 5
+engine: claude
+max-turns: 5
 ---
 
 # Valid Max Turns`,
@@ -180,13 +177,26 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: claude
-  max-turns: "invalid"
+engine: claude
+max-turns: "invalid"
 ---
 
 # Invalid Max Turns`,
 			expectError: true,
+		},
+		{
+			name: "zero max-turns",
+			content: `---
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+engine: claude
+max-turns: 0
+---
+
+# Zero Max Turns`,
+			expectError: true, // JSON schema validation now catches this with minimum: 1
 		},
 	}
 
