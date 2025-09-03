@@ -56,8 +56,8 @@ This workflow tests the create-pull-request-review-comment configuration parsing
 
 		// Check default values
 		config := workflowData.SafeOutputs.CreatePullRequestReviewComments
-		if config.Max != 1 {
-			t.Errorf("Expected default max to be 1, got %d", config.Max)
+		if config.Max != 10 {
+			t.Errorf("Expected default max to be 10, got %d", config.Max)
 		}
 
 		if config.Side != "RIGHT" {
@@ -142,8 +142,8 @@ This workflow tests null configuration.
 		}
 
 		config := workflowData.SafeOutputs.CreatePullRequestReviewComments
-		if config.Max != 1 {
-			t.Errorf("Expected default max to be 1 for null config, got %d", config.Max)
+		if config.Max != 10 {
+			t.Errorf("Expected default max to be 10 for null config, got %d", config.Max)
 		}
 
 		if config.Side != "RIGHT" {
@@ -238,37 +238,32 @@ This workflow tests job generation for PR review comments.
 		workflowContent := string(content)
 
 		// Verify the PR review comment job is generated
-		if !containsStringPR(workflowContent, "create_pr_review_comment:") {
+		if !strings.Contains(workflowContent, "create_pr_review_comment:") {
 			t.Error("Expected create_pr_review_comment job to be generated")
 		}
 
 		// Verify job condition is correct for PR context
-		if !containsStringPR(workflowContent, "if: github.event.pull_request.number") {
+		if !strings.Contains(workflowContent, "if: github.event.pull_request.number") {
 			t.Error("Expected job condition to check for pull request context")
 		}
 
 		// Verify correct permissions are set
-		if !containsStringPR(workflowContent, "pull-requests: write") {
+		if !strings.Contains(workflowContent, "pull-requests: write") {
 			t.Error("Expected pull-requests: write permission to be set")
 		}
 
 		// Verify environment variables are passed
-		if !containsStringPR(workflowContent, "GITHUB_AW_AGENT_OUTPUT:") {
+		if !strings.Contains(workflowContent, "GITHUB_AW_AGENT_OUTPUT:") {
 			t.Error("Expected GITHUB_AW_AGENT_OUTPUT environment variable to be passed")
 		}
 
-		if !containsStringPR(workflowContent, `GITHUB_AW_PR_REVIEW_COMMENT_SIDE: "LEFT"`) {
+		if !strings.Contains(workflowContent, `GITHUB_AW_PR_REVIEW_COMMENT_SIDE: "LEFT"`) {
 			t.Error("Expected GITHUB_AW_PR_REVIEW_COMMENT_SIDE environment variable to be set to LEFT")
 		}
 
 		// Verify the JavaScript script is embedded
-		if !containsStringPR(workflowContent, "create-pull-request-review-comment") {
+		if !strings.Contains(workflowContent, "create-pull-request-review-comment") {
 			t.Error("Expected PR review comment script to be embedded")
 		}
 	})
-}
-
-// Helper function to check if a string contains a substring
-func containsStringPR(s, substr string) bool {
-	return strings.Contains(s, substr)
 }

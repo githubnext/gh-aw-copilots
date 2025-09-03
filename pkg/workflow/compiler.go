@@ -142,14 +142,14 @@ type WorkflowData struct {
 
 // SafeOutputsConfig holds configuration for automatic output routes
 type SafeOutputsConfig struct {
-	CreateIssues                      *CreateIssuesConfig                      `yaml:"create-issue,omitempty"`
-	AddIssueComments                  *AddIssueCommentsConfig                  `yaml:"add-issue-comment,omitempty"`
-	CreatePullRequests                *CreatePullRequestsConfig                `yaml:"create-pull-request,omitempty"`
-	CreatePullRequestReviewComments   *CreatePullRequestReviewCommentsConfig   `yaml:"create-pull-request-review-comment,omitempty"`
-	AddIssueLabels                    *AddIssueLabelsConfig                    `yaml:"add-issue-label,omitempty"`
-	UpdateIssues                      *UpdateIssuesConfig                      `yaml:"update-issue,omitempty"`
-	PushToBranch                      *PushToBranchConfig                      `yaml:"push-to-branch,omitempty"`
-	AllowedDomains                    []string                                 `yaml:"allowed-domains,omitempty"`
+	CreateIssues                    *CreateIssuesConfig                    `yaml:"create-issue,omitempty"`
+	AddIssueComments                *AddIssueCommentsConfig                `yaml:"add-issue-comment,omitempty"`
+	CreatePullRequests              *CreatePullRequestsConfig              `yaml:"create-pull-request,omitempty"`
+	CreatePullRequestReviewComments *CreatePullRequestReviewCommentsConfig `yaml:"create-pull-request-review-comment,omitempty"`
+	AddIssueLabels                  *AddIssueLabelsConfig                  `yaml:"add-issue-label,omitempty"`
+	UpdateIssues                    *UpdateIssuesConfig                    `yaml:"update-issue,omitempty"`
+	PushToBranch                    *PushToBranchConfig                    `yaml:"push-to-branch,omitempty"`
+	AllowedDomains                  []string                               `yaml:"allowed-domains,omitempty"`
 }
 
 // CreateIssuesConfig holds configuration for creating GitHub issues from agent output
@@ -3077,7 +3077,7 @@ func (c *Compiler) parsePullRequestReviewCommentsConfig(outputMap map[string]any
 	}
 
 	configData := outputMap["create-pull-request-review-comment"]
-	prReviewCommentsConfig := &CreatePullRequestReviewCommentsConfig{Max: 1, Side: "RIGHT"} // Default max is 1, side is RIGHT
+	prReviewCommentsConfig := &CreatePullRequestReviewCommentsConfig{Max: 10, Side: "RIGHT"} // Default max is 10, side is RIGHT
 
 	if configMap, ok := configData.(map[string]any); ok {
 		// Parse max
