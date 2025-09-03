@@ -262,4 +262,277 @@ describe('collect_ndjson_output.cjs', () => {
     expect(parsedOutput.items).toHaveLength(2);
     expect(parsedOutput.errors).toHaveLength(0);
   });
+
+  describe('JSON repair functionality', () => {
+    it('should repair JSON with unescaped quotes in string values', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "create-issue", "title": "Issue with "quotes" inside", "body": "Test body"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].title).toContain('quotes');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with missing quotes around object keys', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{type: "create-issue", title: "Test Issue", body: "Test body"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with trailing commas', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body",}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with single quotes', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{'type': 'create-issue', 'title': 'Test Issue', 'body': 'Test body'}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with missing closing braces', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with missing opening braces', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `"type": "create-issue", "title": "Test Issue", "body": "Test body"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with newlines in string values', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      // Real JSONL would have actual \n in the string, not real newlines
+      const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Line 1\\nLine 2\\nLine 3"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].body).toContain('Line 1');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with tabs and special characters', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "create-issue", "title": "Test	Issue", "body": "Test\tbody"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should repair JSON with array syntax issues', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "add-issue-labels", "labels": ["bug", "enhancement",}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"add-issue-labels": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].labels).toEqual(['bug', 'enhancement']);
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should handle complex repair scenarios with multiple issues', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      // Make this a more realistic test case for JSON repair without real newlines breaking JSONL
+      const ndjsonContent = `{type: 'create-issue', title: 'Issue with "quotes" and trailing,', body: 'Multi\\nline\\ntext',`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('create-issue');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+
+    it('should handle JSON broken across multiple lines (real multiline scenario)', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      // This simulates what happens when LLMs output JSON with actual newlines
+      // The parser should treat this as one broken JSON item, not multiple lines
+      // For now, we'll test that it fails gracefully and reports an error
+      const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Line 1
+Line 2
+Line 3"}
+{"type": "add-issue-comment", "body": "This is a valid line"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      // The first broken JSON should produce errors, but the last valid line should work
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].type).toBe('add-issue-comment');
+      expect(parsedOutput.errors.length).toBeGreaterThan(0);
+      expect(parsedOutput.errors.some(error => error.includes('JSON parsing failed'))).toBe(true);
+    });
+
+    it('should still report error if repair fails completely', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{completely broken json with no hope: of repair [[[}}}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(0);
+      expect(parsedOutput.errors).toHaveLength(1);
+      expect(parsedOutput.errors[0]).toContain('JSON parsing failed');
+    });
+
+    it('should preserve valid JSON without modification', async () => {
+      const testFile = '/tmp/test-ndjson-output.txt';
+      const ndjsonContent = `{"type": "create-issue", "title": "Perfect JSON", "body": "This should not be modified"}`;
+      
+      fs.writeFileSync(testFile, ndjsonContent);
+      process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+      process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+      
+      await eval(`(async () => { ${collectScript} })()`);
+      
+      const setOutputCalls = mockCore.setOutput.mock.calls;
+      const outputCall = setOutputCalls.find(call => call[0] === 'output');
+      expect(outputCall).toBeDefined();
+      
+      const parsedOutput = JSON.parse(outputCall[1]);
+      expect(parsedOutput.items).toHaveLength(1);
+      expect(parsedOutput.items[0].title).toBe('Perfect JSON');
+      expect(parsedOutput.items[0].body).toBe('This should not be modified');
+      expect(parsedOutput.errors).toHaveLength(0);
+    });
+  });
 });
