@@ -568,7 +568,7 @@ func AddWorkflowWithTracking(workflow string, number int, verbose bool, engineOv
 }
 
 // CompileWorkflows compiles markdown files into GitHub Actions workflow files
-func CompileWorkflows(markdownFile string, verbose bool, engineOverride string, validate bool, watch bool, writeInstructions bool) error {
+func CompileWorkflows(markdownFiles []string, verbose bool, engineOverride string, validate bool, watch bool, writeInstructions bool) error {
 	// Create compiler with verbose flag and AI engine override
 	compiler := workflow.NewCompiler(verbose, engineOverride, GetVersion())
 
@@ -577,21 +577,43 @@ func CompileWorkflows(markdownFile string, verbose bool, engineOverride string, 
 
 	if watch {
 		// Watch mode: watch for file changes and recompile automatically
+		// For watch mode, we only support a single file for now
+		var markdownFile string
+		if len(markdownFiles) > 0 {
+			if len(markdownFiles) > 1 {
+				fmt.Println(console.FormatWarningMessage("Watch mode only supports a single file, using the first one"))
+			}
+			// Resolve the workflow file to get the full path
+			resolvedFile, err := resolveWorkflowFile(markdownFiles[0], verbose)
+			if err != nil {
+				return fmt.Errorf("failed to resolve workflow '%s': %w", markdownFiles[0], err)
+			}
+			markdownFile = resolvedFile
+		}
 		return watchAndCompileWorkflows(markdownFile, compiler, verbose)
 	}
 
-	if markdownFile != "" {
-		// Resolve workflow ID or file path to actual file path
-		resolvedFile, err := resolveWorkflowFile(markdownFile, verbose)
-		if err != nil {
-			return fmt.Errorf("failed to resolve workflow: %w", err)
+	if len(markdownFiles) > 0 {
+		// Compile specific workflow files
+		var compiledCount int
+		for _, markdownFile := range markdownFiles {
+			// Resolve workflow ID or file path to actual file path
+			resolvedFile, err := resolveWorkflowFile(markdownFile, verbose)
+			if err != nil {
+				return fmt.Errorf("failed to resolve workflow '%s': %w", markdownFile, err)
+			}
+
+			if verbose {
+				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Compiling %s", resolvedFile)))
+			}
+			if err := compiler.CompileWorkflow(resolvedFile); err != nil {
+				return fmt.Errorf("failed to compile workflow '%s': %w", markdownFile, err)
+			}
+			compiledCount++
 		}
 
 		if verbose {
-			fmt.Printf("Compiling %s\n", resolvedFile)
-		}
-		if err := compiler.CompileWorkflow(resolvedFile); err != nil {
-			return err
+			fmt.Println(console.FormatSuccessMessage(fmt.Sprintf("Successfully compiled %d workflow file(s)", compiledCount)))
 		}
 
 		// Ensure .gitattributes marks .lock.yml files as generated
@@ -3028,7 +3050,12 @@ func resolveWorkflowFile(fileOrWorkflowName string, verbose bool) (string, error
 		if verbose {
 			fmt.Printf("Found workflow file at path: %s\n", fileOrWorkflowName)
 		}
-		return fileOrWorkflowName, nil
+		// Return absolute path
+		absPath, err := filepath.Abs(fileOrWorkflowName)
+		if err != nil {
+			return fileOrWorkflowName, nil // fallback to original path
+		}
+		return absPath, nil
 	}
 
 	// If it's not a direct file path, try to resolve it as a workflow name
@@ -3081,8 +3108,12 @@ func resolveWorkflowFile(fileOrWorkflowName string, verbose bool) (string, error
 
 		return tmpFile.Name(), nil
 	} else {
-		// It's a local file, return the source path
-		return sourceInfo.SourcePath, nil
+		// It's a local file, make sure we return an absolute path
+		absPath, err := filepath.Abs(sourceInfo.SourcePath)
+		if err != nil {
+			return sourceInfo.SourcePath, nil // fallback to original path
+		}
+		return absPath, nil
 	}
 }
 
@@ -3685,14 +3716,12 @@ permissions:
 
 # Outputs - what APIs and tools can the AI use?
 safe-outputs:
-  create-issue:          # Creates exactly one issue
-  # create-issues:       # Creates multiple issues (default max: 10)
-  #   max: 5             # Optional: specify maximum number
+  create-issue:          # Creates issues (default max: 1)
+    max: 5               # Optional: specify maximum number
   # create-pull-request: # Creates exactly one pull request
-  # add-issue-comment:   # Adds exactly one comment
-  # add-issue-comments:  # Adds multiple comments (default max: 10)
+  # add-issue-comment:   # Adds comments (default max: 1)
   #   max: 2             # Optional: specify maximum number
-  # add-issue-labels:
+  # add-issue-label:
 
 ---
 

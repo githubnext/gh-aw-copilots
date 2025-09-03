@@ -142,10 +142,12 @@ type WorkflowData struct {
 
 // SafeOutputsConfig holds configuration for automatic output routes
 type SafeOutputsConfig struct {
-	CreateIssues       *CreateIssuesConfig       `yaml:"create-issues,omitempty"`
-	AddIssueComments   *AddIssueCommentsConfig   `yaml:"add-issue-comments,omitempty"`
-	CreatePullRequests *CreatePullRequestsConfig `yaml:"create-pull-requests,omitempty"`
-	AddIssueLabels     *AddIssueLabelsConfig     `yaml:"add-issue-labels,omitempty"`
+	CreateIssues       *CreateIssuesConfig       `yaml:"create-issue,omitempty"`
+	AddIssueComments   *AddIssueCommentsConfig   `yaml:"add-issue-comment,omitempty"`
+	CreatePullRequests *CreatePullRequestsConfig `yaml:"create-pull-request,omitempty"`
+	AddIssueLabels     *AddIssueLabelsConfig     `yaml:"add-issue-label,omitempty"`
+	UpdateIssues       *UpdateIssuesConfig       `yaml:"update-issue,omitempty"`
+	PushToBranch       *PushToBranchConfig       `yaml:"push-to-branch,omitempty"`
 	AllowedDomains     []string                  `yaml:"allowed-domains,omitempty"`
 }
 
@@ -177,8 +179,23 @@ type CreatePullRequestsConfig struct {
 
 // AddIssueLabelsConfig holds configuration for adding labels to issues/PRs from agent output
 type AddIssueLabelsConfig struct {
-	Allowed  []string `yaml:"allowed,omitempty"`   // Optional list of allowed labels. If omitted, any labels are allowed (including creating new ones).
-	MaxCount *int     `yaml:"max-count,omitempty"` // Optional maximum number of labels to add (default: 3)
+	Allowed  []string `yaml:"allowed,omitempty"` // Optional list of allowed labels. If omitted, any labels are allowed (including creating new ones).
+	MaxCount *int     `yaml:"max,omitempty"`     // Optional maximum number of labels to add (default: 3)
+}
+
+// UpdateIssuesConfig holds configuration for updating GitHub issues from agent output
+type UpdateIssuesConfig struct {
+	Status *bool  `yaml:"status,omitempty"` // Allow updating issue status (open/closed) - presence indicates field can be updated
+	Target string `yaml:"target,omitempty"` // Target for updates: "triggering" (default), "*" (any issue), or explicit issue number
+	Title  *bool  `yaml:"title,omitempty"`  // Allow updating issue title - presence indicates field can be updated
+	Body   *bool  `yaml:"body,omitempty"`   // Allow updating issue body - presence indicates field can be updated
+	Max    int    `yaml:"max,omitempty"`    // Maximum number of issues to update (default: 1)
+}
+
+// PushToBranchConfig holds configuration for pushing changes to a specific branch from agent output
+type PushToBranchConfig struct {
+	Branch string `yaml:"branch"`           // The branch to push changes to (defaults to "triggering")
+	Target string `yaml:"target,omitempty"` // Target for push-to-branch: like add-issue-comment but for pull requests
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -447,6 +464,26 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Extract AI engine setting from frontmatter
 	engineSetting, engineConfig := c.extractEngineConfig(result.Frontmatter)
 
+	// Extract strict mode setting from frontmatter
+	strictMode := c.extractStrictMode(result.Frontmatter)
+
+	// Apply strict mode: inject deny-all network permissions if strict mode is enabled
+	// and no explicit network permissions are configured
+	if strictMode && engineConfig != nil && engineConfig.ID == "claude" {
+		if engineConfig.Permissions == nil || engineConfig.Permissions.Network == nil {
+			// Initialize permissions structure if needed
+			if engineConfig.Permissions == nil {
+				engineConfig.Permissions = &EnginePermissions{}
+			}
+			if engineConfig.Permissions.Network == nil {
+				// Inject deny-all network permissions (empty allowed list)
+				engineConfig.Permissions.Network = &NetworkPermissions{
+					Allowed: []string{}, // Empty list means deny-all
+				}
+			}
+		}
+	}
+
 	// Override with command line AI engine setting if provided
 	if c.engineOverride != "" {
 		originalEngineSetting := engineSetting
@@ -483,6 +520,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		}
 		fmt.Println(console.FormatInfoMessage("Processing tools and includes..."))
 	}
+
+	// Extract SafeOutputs configuration early so we can use it when applying default tools
+	safeOutputs := c.extractSafeOutputsConfig(result.Frontmatter)
 
 	var tools map[string]any
 
@@ -526,7 +566,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 
 		// Apply default GitHub MCP tools (only for engines that support MCP)
 		if agenticEngine.SupportsToolsWhitelist() {
-			tools = c.applyDefaultGitHubMCPAndClaudeTools(tools)
+			tools = c.applyDefaultGitHubMCPAndClaudeTools(tools, safeOutputs)
 		}
 
 		if c.verbose && len(tools) > 0 {
@@ -612,8 +652,8 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	workflowData.Command = c.extractCommandName(result.Frontmatter)
 	workflowData.Jobs = c.extractJobsFromFrontmatter(result.Frontmatter)
 
-	// Parse output configuration
-	workflowData.SafeOutputs = c.extractSafeOutputsConfig(result.Frontmatter)
+	// Use the already extracted output configuration
+	workflowData.SafeOutputs = safeOutputs
 
 	// Check if "command" is used as a trigger in the "on" section
 	// Also extract "reaction" from the "on" section
@@ -682,7 +722,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	}
 
 	// Apply defaults
-	c.applyDefaults(workflowData, markdownPath)
+	c.applyDefaults(workflowData, markdownPath, strictMode)
 
 	// Apply pull request draft filter if specified
 	c.applyPullRequestDraftFilter(workflowData, result.Frontmatter)
@@ -884,7 +924,7 @@ func (c *Compiler) extractCommandName(frontmatter map[string]any) string {
 }
 
 // applyDefaults applies default values for missing workflow sections
-func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
+func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string, strictMode bool) {
 	// Check if this is a command trigger workflow (by checking if user specified "on.command")
 	isCommandTrigger := false
 	if data.On == "" {
@@ -982,7 +1022,16 @@ func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
 	}
 
 	if data.Permissions == "" {
-		data.Permissions = `permissions: read-all`
+		if strictMode {
+			// In strict mode, default to empty permissions instead of read-all
+			data.Permissions = `permissions: {}`
+		} else {
+			// Default behavior: use read-all permissions
+			data.Permissions = `permissions: read-all`
+		}
+	} else if strictMode {
+		// In strict mode, validate permissions and warn about write permissions
+		c.validatePermissionsInStrictMode(data.Permissions)
 	}
 
 	// Generate concurrency configuration using the dedicated concurrency module
@@ -1114,7 +1163,7 @@ func (c *Compiler) mergeTools(topTools map[string]any, includedToolsJSON string)
 }
 
 // applyDefaultGitHubMCPAndClaudeTools adds default read-only GitHub MCP tools, creating github tool if not present
-func (c *Compiler) applyDefaultGitHubMCPAndClaudeTools(tools map[string]any) map[string]any {
+func (c *Compiler) applyDefaultGitHubMCPAndClaudeTools(tools map[string]any, safeOutputs *SafeOutputsConfig) map[string]any {
 	// Always apply default GitHub tools (create github section if it doesn't exist)
 
 	// Define the default read-only GitHub MCP tools
@@ -1262,11 +1311,88 @@ func (c *Compiler) applyDefaultGitHubMCPAndClaudeTools(tools map[string]any) map
 		}
 	}
 
+	// Add Git commands and file editing tools when safe-outputs includes create-pull-request or push-to-branch
+	if safeOutputs != nil && needsGitCommands(safeOutputs) {
+		gitCommands := []any{
+			"git checkout:*",
+			"git branch:*",
+			"git switch:*",
+			"git add:*",
+			"git rm:*",
+			"git commit:*",
+			"git merge:*",
+		}
+
+		// Add additional Claude tools needed for file editing and pull request creation
+		additionalTools := []string{
+			"Edit",
+			"MultiEdit",
+			"Write",
+			"NotebookEdit",
+		}
+
+		// Add file editing tools that aren't already present
+		for _, tool := range additionalTools {
+			if _, exists := claudeExistingAllowed[tool]; !exists {
+				claudeExistingAllowed[tool] = nil // Add tool with null value
+			}
+		}
+
+		// Add Bash tool with Git commands if not already present
+		if _, exists := claudeExistingAllowed["Bash"]; !exists {
+			// Bash tool doesn't exist, add it with Git commands
+			claudeExistingAllowed["Bash"] = gitCommands
+		} else {
+			// Bash tool exists, merge Git commands with existing commands
+			existingBash := claudeExistingAllowed["Bash"]
+			if existingCommands, ok := existingBash.([]any); ok {
+				// Convert existing commands to strings for comparison
+				existingSet := make(map[string]bool)
+				for _, cmd := range existingCommands {
+					if cmdStr, ok := cmd.(string); ok {
+						existingSet[cmdStr] = true
+						// If we see :* or *, all bash commands are already allowed
+						if cmdStr == ":*" || cmdStr == "*" {
+							// Don't add specific Git commands since all are already allowed
+							goto bashComplete
+						}
+					}
+				}
+
+				// Add Git commands that aren't already present
+				newCommands := make([]any, len(existingCommands))
+				copy(newCommands, existingCommands)
+				for _, gitCmd := range gitCommands {
+					if gitCmdStr, ok := gitCmd.(string); ok {
+						if !existingSet[gitCmdStr] {
+							newCommands = append(newCommands, gitCmd)
+						}
+					}
+				}
+				claudeExistingAllowed["Bash"] = newCommands
+			} else if existingBash == nil {
+				// Bash tool exists but with nil value (allows all commands)
+				// Keep it as nil since that's more permissive than specific commands
+				// No action needed - nil value already permits all commands
+				_ = existingBash // Keep the nil value as-is
+			}
+		}
+	bashComplete:
+	}
+
 	// Update the claude section with the new format
 	claudeSection["allowed"] = claudeExistingAllowed
 	tools["claude"] = claudeSection
 
 	return tools
+}
+
+// needsGitCommands checks if safe outputs configuration requires Git commands
+func needsGitCommands(safeOutputs *SafeOutputsConfig) bool {
+	if safeOutputs == nil {
+		return false
+	}
+	return safeOutputs.CreatePullRequests != nil || safeOutputs.PushToBranch != nil
 }
 
 // detectTextOutputUsage checks if the markdown content uses ${{ needs.task.outputs.text }}
@@ -1560,7 +1686,7 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 		}
 
-		// Build create_issue_comment job if output.add-issue-comments is configured
+		// Build create_issue_comment job if output.add-issue-comment is configured
 		if data.SafeOutputs.AddIssueComments != nil {
 			createCommentJob, err := c.buildCreateOutputAddIssueCommentJob(data, jobName)
 			if err != nil {
@@ -1571,7 +1697,7 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 		}
 
-		// Build create_pull_request job if output.create-pull-requests is configured
+		// Build create_pull_request job if output.create-pull-request is configured
 		if data.SafeOutputs.CreatePullRequests != nil {
 			createPullRequestJob, err := c.buildCreateOutputPullRequestJob(data, jobName)
 			if err != nil {
@@ -1582,7 +1708,7 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 		}
 
-		// Build add_labels job if output.add-issue-labels is configured (including null/empty)
+		// Build add_labels job if output.add-issue-label is configured (including null/empty)
 		if data.SafeOutputs.AddIssueLabels != nil {
 			addLabelsJob, err := c.buildCreateOutputLabelJob(data, jobName)
 			if err != nil {
@@ -1590,6 +1716,28 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 			if err := c.jobManager.AddJob(addLabelsJob); err != nil {
 				return fmt.Errorf("failed to add add_labels job: %w", err)
+			}
+		}
+
+		// Build update_issue job if output.update-issue is configured
+		if data.SafeOutputs.UpdateIssues != nil {
+			updateIssueJob, err := c.buildCreateOutputUpdateIssueJob(data, jobName)
+			if err != nil {
+				return fmt.Errorf("failed to build update_issue job: %w", err)
+			}
+			if err := c.jobManager.AddJob(updateIssueJob); err != nil {
+				return fmt.Errorf("failed to add update_issue job: %w", err)
+			}
+		}
+
+		// Build push_to_branch job if output.push-to-branch is configured
+		if data.SafeOutputs.PushToBranch != nil {
+			pushToBranchJob, err := c.buildCreateOutputPushToBranchJob(data, jobName)
+			if err != nil {
+				return fmt.Errorf("failed to build push_to_branch job: %w", err)
+			}
+			if err := c.jobManager.AddJob(pushToBranchJob); err != nil {
+				return fmt.Errorf("failed to add push_to_branch job: %w", err)
 			}
 		}
 	}
@@ -1725,7 +1873,7 @@ func (c *Compiler) buildAddReactionJob(data *WorkflowData, taskJobCreated bool) 
 // buildCreateOutputIssueJob creates the create_issue job
 func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName string) (*Job, error) {
 	if data.SafeOutputs == nil || data.SafeOutputs.CreateIssues == nil {
-		return nil, fmt.Errorf("safe-outputs.create-issues configuration is required")
+		return nil, fmt.Errorf("safe-outputs.create-issue configuration is required")
 	}
 
 	var steps []string
@@ -1758,9 +1906,20 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 		"issue_url":    "${{ steps.create_issue.outputs.issue_url }}",
 	}
 
+	// Determine the job condition for command workflows
+	var jobCondition string
+	if data.Command != "" {
+		// Build the command trigger condition
+		commandCondition := buildCommandOnlyCondition(data.Command)
+		commandConditionStr := commandCondition.Render()
+		jobCondition = fmt.Sprintf("if: %s", commandConditionStr)
+	} else {
+		jobCondition = "" // No conditional execution
+	}
+
 	job := &Job{
 		Name:           "create_issue",
-		If:             "", // No conditional execution
+		If:             jobCondition,
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      issues: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
@@ -1775,7 +1934,7 @@ func (c *Compiler) buildCreateOutputIssueJob(data *WorkflowData, mainJobName str
 // buildCreateOutputAddIssueCommentJob creates the create_issue_comment job
 func (c *Compiler) buildCreateOutputAddIssueCommentJob(data *WorkflowData, mainJobName string) (*Job, error) {
 	if data.SafeOutputs == nil || data.SafeOutputs.AddIssueComments == nil {
-		return nil, fmt.Errorf("safe-outputs.add-issue-comments configuration is required")
+		return nil, fmt.Errorf("safe-outputs.add-issue-comment configuration is required")
 	}
 
 	var steps []string
@@ -1806,13 +1965,33 @@ func (c *Compiler) buildCreateOutputAddIssueCommentJob(data *WorkflowData, mainJ
 	}
 
 	// Determine the job condition based on target configuration
-	var jobCondition string
+	var baseCondition string
 	if data.SafeOutputs.AddIssueComments.Target == "*" {
 		// Allow the job to run in any context when target is "*"
-		jobCondition = "if: always()" // This allows the job to run even without triggering issue/PR
+		baseCondition = "always()" // This allows the job to run even without triggering issue/PR
 	} else {
 		// Default behavior: only run in issue or PR context
-		jobCondition = "if: github.event.issue.number || github.event.pull_request.number"
+		baseCondition = "github.event.issue.number || github.event.pull_request.number"
+	}
+
+	// If this is a command workflow, combine the command trigger condition with the base condition
+	var jobCondition string
+	if data.Command != "" {
+		// Build the command trigger condition
+		commandCondition := buildCommandOnlyCondition(data.Command)
+		commandConditionStr := commandCondition.Render()
+
+		// Combine command condition with base condition using AND
+		if baseCondition == "always()" {
+			// If base condition is always(), just use the command condition
+			jobCondition = fmt.Sprintf("if: %s", commandConditionStr)
+		} else {
+			// Combine both conditions with AND
+			jobCondition = fmt.Sprintf("if: (%s) && (%s)", commandConditionStr, baseCondition)
+		}
+	} else {
+		// No command trigger, just use the base condition
+		jobCondition = fmt.Sprintf("if: %s", baseCondition)
 	}
 
 	job := &Job{
@@ -1832,7 +2011,7 @@ func (c *Compiler) buildCreateOutputAddIssueCommentJob(data *WorkflowData, mainJ
 // buildCreateOutputPullRequestJob creates the create_pull_request job
 func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobName string) (*Job, error) {
 	if data.SafeOutputs == nil || data.SafeOutputs.CreatePullRequests == nil {
-		return nil, fmt.Errorf("safe-outputs.create-pull-requests configuration is required")
+		return nil, fmt.Errorf("safe-outputs.create-pull-request configuration is required")
 	}
 
 	var steps []string
@@ -1891,9 +2070,20 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		"branch_name":         "${{ steps.create_pull_request.outputs.branch_name }}",
 	}
 
+	// Determine the job condition for command workflows
+	var jobCondition string
+	if data.Command != "" {
+		// Build the command trigger condition
+		commandCondition := buildCommandOnlyCondition(data.Command)
+		commandConditionStr := commandCondition.Render()
+		jobCondition = fmt.Sprintf("if: %s", commandConditionStr)
+	} else {
+		jobCondition = "" // No conditional execution
+	}
+
 	job := &Job{
 		Name:           "create_pull_request",
-		If:             "", // No conditional execution
+		If:             jobCondition,
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: write\n      issues: write\n      pull-requests: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
@@ -1926,7 +2116,7 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 	}
 
 	// Build outputs for all engines (GITHUB_AW_SAFE_OUTPUTS functionality)
-	// Only include output if the workflow actually uses the output feature
+	// Only include output if the workflow actually uses the safe-outputs feature
 	var outputs map[string]string
 	if data.SafeOutputs != nil {
 		outputs = map[string]string{
@@ -2141,7 +2331,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 		}
 	}
 
-	// Generate output file setup step only if output feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
+	// Generate output file setup step only if safe-outputs feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
 	if data.SafeOutputs != nil {
 		c.generateOutputFileSetup(yaml, data)
 	}
@@ -2170,7 +2360,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	// add workflow_complete.txt
 	c.generateWorkflowComplete(yaml)
 
-	// Add output collection step only if output feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
+	// Add output collection step only if safe-outputs feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
 	if data.SafeOutputs != nil {
 		c.generateOutputCollectionStep(yaml, data)
 	}
@@ -2180,15 +2370,19 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 		c.generateEngineOutputCollection(yaml, engine)
 	}
 
+	// Extract and upload squid access logs (if any proxy tools were used)
+	c.generateExtractAccessLogs(yaml, data.Tools)
+	c.generateUploadAccessLogs(yaml, data.Tools)
+
 	// parse agent logs for GITHUB_STEP_SUMMARY
 	c.generateLogParsing(yaml, engine, logFileFull)
 
 	// upload agent logs
 	c.generateUploadAgentLogs(yaml, logFile, logFileFull)
 
-	// Add git patch generation step only if output feature is used
-	if data.SafeOutputs != nil {
-		c.generateGitPatchStep(yaml)
+	// Add git patch generation step only if safe-outputs create-pull-request feature is used
+	if data.SafeOutputs != nil && (data.SafeOutputs.CreatePullRequests != nil || data.SafeOutputs.PushToBranch != nil) {
+		c.generateGitPatchStep(yaml, data)
 	}
 
 	// Add post-steps (if any) after AI execution
@@ -2262,10 +2456,68 @@ func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
 	yaml.WriteString("          if-no-files-found: warn\n")
 }
 
+func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[string]any) {
+	// Check if any tools require proxy setup
+	var proxyTools []string
+	for toolName, toolConfig := range tools {
+		if toolConfigMap, ok := toolConfig.(map[string]any); ok {
+			needsProxySetup, _ := needsProxy(toolConfigMap)
+			if needsProxySetup {
+				proxyTools = append(proxyTools, toolName)
+			}
+		}
+	}
+
+	// If no proxy tools, no access logs to extract
+	if len(proxyTools) == 0 {
+		return
+	}
+
+	yaml.WriteString("      - name: Extract squid access logs\n")
+	yaml.WriteString("        if: always()\n")
+	yaml.WriteString("        run: |\n")
+	yaml.WriteString("          mkdir -p /tmp/access-logs\n")
+
+	for _, toolName := range proxyTools {
+		fmt.Fprintf(yaml, "          echo 'Extracting access.log from squid-proxy-%s container'\n", toolName)
+		fmt.Fprintf(yaml, "          if docker ps -a --format '{{.Names}}' | grep -q '^squid-proxy-%s$'; then\n", toolName)
+		fmt.Fprintf(yaml, "            docker cp squid-proxy-%s:/var/log/squid/access.log /tmp/access-logs/access-%s.log 2>/dev/null || echo 'No access.log found for %s'\n", toolName, toolName, toolName)
+		yaml.WriteString("          else\n")
+		fmt.Fprintf(yaml, "            echo 'Container squid-proxy-%s not found'\n", toolName)
+		yaml.WriteString("          fi\n")
+	}
+}
+
+func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[string]any) {
+	// Check if any tools require proxy setup
+	var proxyTools []string
+	for toolName, toolConfig := range tools {
+		if toolConfigMap, ok := toolConfig.(map[string]any); ok {
+			needsProxySetup, _ := needsProxy(toolConfigMap)
+			if needsProxySetup {
+				proxyTools = append(proxyTools, toolName)
+			}
+		}
+	}
+
+	// If no proxy tools, no access logs to upload
+	if len(proxyTools) == 0 {
+		return
+	}
+
+	yaml.WriteString("      - name: Upload squid access logs\n")
+	yaml.WriteString("        if: always()\n")
+	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
+	yaml.WriteString("        with:\n")
+	yaml.WriteString("          name: access.log\n")
+	yaml.WriteString("          path: /tmp/access-logs/\n")
+	yaml.WriteString("          if-no-files-found: warn\n")
+}
+
 func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine) {
 	yaml.WriteString("      - name: Create prompt\n")
 
-	// Only add GITHUB_AW_SAFE_OUTPUTS environment variable if output feature is used
+	// Only add GITHUB_AW_SAFE_OUTPUTS environment variable if safe-outputs feature is used
 	if data.SafeOutputs != nil {
 		yaml.WriteString("        env:\n")
 		yaml.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
@@ -2309,10 +2561,26 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 				yaml.WriteString(", ")
 			}
 			yaml.WriteString("Adding Labels to Issues or Pull Requests")
+			written = true
+		}
+
+		if data.SafeOutputs.UpdateIssues != nil {
+			if written {
+				yaml.WriteString(", ")
+			}
+			yaml.WriteString("Updating Issues")
+			written = true
+		}
+
+		if data.SafeOutputs.PushToBranch != nil {
+			if written {
+				yaml.WriteString(", ")
+			}
+			yaml.WriteString("Pushing Changes to Branch")
 		}
 		yaml.WriteString("\n")
 		yaml.WriteString("          \n")
-		yaml.WriteString("          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.\n")
+		yaml.WriteString("          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.\n")
 		yaml.WriteString("          \n")
 		yaml.WriteString("          **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.\n")
 		yaml.WriteString("          \n")
@@ -2321,17 +2589,25 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 
 		if data.SafeOutputs.AddIssueComments != nil {
 			yaml.WriteString("          **Adding a Comment to an Issue or Pull Request**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          To add a comment to an issue or pull request:\n")
+			yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
 			yaml.WriteString("          ```json\n")
 			yaml.WriteString("          {\"type\": \"add-issue-comment\", \"body\": \"Your comment content in markdown\"}\n")
 			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
 			yaml.WriteString("          \n")
 		}
 
 		if data.SafeOutputs.CreateIssues != nil {
 			yaml.WriteString("          **Creating an Issue**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          To create an issue:\n")
+			yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
 			yaml.WriteString("          ```json\n")
 			yaml.WriteString("          {\"type\": \"create-issue\", \"title\": \"Issue title\", \"body\": \"Issue body in markdown\", \"labels\": [\"optional\", \"labels\"]}\n")
 			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
 			yaml.WriteString("          \n")
 		}
 
@@ -2340,19 +2616,72 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			yaml.WriteString("          \n")
 			yaml.WriteString("          To create a pull request:\n")
 			yaml.WriteString("          1. Make any file changes directly in the working directory\n")
-			yaml.WriteString("          2. Leave the changes uncommitted and unstaged\n")
-			yaml.WriteString("          3. Write the PR specification:\n")
+			yaml.WriteString("          2. If you haven't done so already, create a local branch using an appropriate unique name\n")
+			yaml.WriteString("          3. Add and commit your changes to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.\n")
+			yaml.WriteString("          4. Do not push your changes. That will be done later. Instead append the PR specification to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
 			yaml.WriteString("          ```json\n")
-			yaml.WriteString("          {\"type\": \"create-pull-request\", \"title\": \"PR title\", \"body\": \"PR body in markdown\", \"labels\": [\"optional\", \"labels\"]}\n")
+			yaml.WriteString("          {\"type\": \"create-pull-request\", \"branch\": \"branch-name\", \"title\": \"PR title\", \"body\": \"PR body in markdown\", \"labels\": [\"optional\", \"labels\"]}\n")
 			yaml.WriteString("          ```\n")
+			yaml.WriteString("          5. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
 			yaml.WriteString("          \n")
 		}
 
 		if data.SafeOutputs.AddIssueLabels != nil {
 			yaml.WriteString("          **Adding Labels to Issues or Pull Requests**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          To add labels to a pull request:\n")
+			yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
 			yaml.WriteString("          ```json\n")
-			yaml.WriteString("          {\"type\": \"add-issue-labels\", \"labels\": [\"label1\", \"label2\", \"label3\"]}\n")
+			yaml.WriteString("          {\"type\": \"add-issue-label\", \"labels\": [\"label1\", \"label2\", \"label3\"]}\n")
 			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
+			yaml.WriteString("          \n")
+		}
+
+		if data.SafeOutputs.UpdateIssues != nil {
+			yaml.WriteString("          **Updating an Issue**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          To udpate an issue:\n")
+			yaml.WriteString("          ```json\n")
+
+			// Build example based on allowed fields
+			var fields []string
+			if data.SafeOutputs.UpdateIssues.Status != nil {
+				fields = append(fields, "\"status\": \"open\" // or \"closed\"")
+			}
+			if data.SafeOutputs.UpdateIssues.Title != nil {
+				fields = append(fields, "\"title\": \"New issue title\"")
+			}
+			if data.SafeOutputs.UpdateIssues.Body != nil {
+				fields = append(fields, "\"body\": \"Updated issue body in markdown\"")
+			}
+
+			if len(fields) > 0 {
+				yaml.WriteString("          {\"type\": \"update-issue\"")
+				for _, field := range fields {
+					yaml.WriteString(", " + field)
+				}
+				yaml.WriteString("}\n")
+			} else {
+				yaml.WriteString("          {\"type\": \"update-issue\", \"title\": \"New issue title\", \"body\": \"Updated issue body\", \"status\": \"open\"}\n")
+			}
+
+			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
+			yaml.WriteString("          \n")
+		}
+
+		if data.SafeOutputs.PushToBranch != nil {
+			yaml.WriteString("          **Pushing Changes to Branch**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          To push changes to a branch, for example to add code to a pull request:\n")
+			yaml.WriteString("          1. Make any file changes directly in the working directory\n")
+			yaml.WriteString("          2. Add and commit your changes to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.\n")
+			yaml.WriteString("          3. Indicate your intention to push to the branch by writing to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
+			yaml.WriteString("          ```json\n")
+			yaml.WriteString("          {\"type\": \"push-to-branch\", \"message\": \"Commit message describing the changes\"}\n")
+			yaml.WriteString("          ```\n")
+			yaml.WriteString("          4. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
 			yaml.WriteString("          \n")
 		}
 
@@ -2374,7 +2703,11 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			exampleCount++
 		}
 		if data.SafeOutputs.AddIssueLabels != nil {
-			yaml.WriteString("          {\"type\": \"add-issue-labels\", \"labels\": [\"bug\", \"priority-high\"]}\n")
+			yaml.WriteString("          {\"type\": \"add-issue-label\", \"labels\": [\"bug\", \"priority-high\"]}\n")
+			exampleCount++
+		}
+		if data.SafeOutputs.PushToBranch != nil {
+			yaml.WriteString("          {\"type\": \"push-to-branch\", \"message\": \"Update documentation with latest changes\"}\n")
 			exampleCount++
 		}
 
@@ -2439,19 +2772,19 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 		if outputMap, ok := output.(map[string]any); ok {
 			config := &SafeOutputsConfig{}
 
-			// Handle create-issue and create-issues
+			// Handle create-issue
 			issuesConfig := c.parseIssuesConfig(outputMap)
 			if issuesConfig != nil {
 				config.CreateIssues = issuesConfig
 			}
 
-			// Handle add-issue-comment and add-issue-comments
+			// Handle add-issue-comment
 			commentsConfig := c.parseCommentsConfig(outputMap)
 			if commentsConfig != nil {
 				config.AddIssueComments = commentsConfig
 			}
 
-			// Handle create-pull-request and create-pull-requests
+			// Handle create-pull-request
 			pullRequestsConfig := c.parsePullRequestsConfig(outputMap)
 			if pullRequestsConfig != nil {
 				config.CreatePullRequests = pullRequestsConfig
@@ -2470,8 +2803,8 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				}
 			}
 
-			// Parse add-issue-labels configuration
-			if labels, exists := outputMap["add-issue-labels"]; exists {
+			// Parse add-issue-label configuration
+			if labels, exists := outputMap["add-issue-label"]; exists {
 				if labelsMap, ok := labels.(map[string]any); ok {
 					labelConfig := &AddIssueLabelsConfig{}
 
@@ -2488,8 +2821,8 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 						}
 					}
 
-					// Parse max-count (optional)
-					if maxCount, exists := labelsMap["max-count"]; exists {
+					// Parse max (optional)
+					if maxCount, exists := labelsMap["max"]; exists {
 						// Handle different numeric types that YAML parsers might return
 						var maxCountInt int
 						var validMaxCount bool
@@ -2519,152 +2852,95 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				}
 			}
 
+			// Handle update-issue
+			updateIssuesConfig := c.parseUpdateIssuesConfig(outputMap)
+			if updateIssuesConfig != nil {
+				config.UpdateIssues = updateIssuesConfig
+			}
+
+			// Handle push-to-branch
+			pushToBranchConfig := c.parsePushToBranchConfig(outputMap)
+			if pushToBranchConfig != nil {
+				config.PushToBranch = pushToBranchConfig
+			}
+
 			return config
 		}
 	}
 	return nil
 }
 
-// parseIssuesConfig handles both create-issue (singular) and create-issues (plural) configurations
+// parseIssuesConfig handles create-issue configuration
 func (c *Compiler) parseIssuesConfig(outputMap map[string]any) *CreateIssuesConfig {
-	// Check for both singular and plural forms
-	hasSingular := false
-	hasPlural := false
+	if configData, exists := outputMap["create-issue"]; exists {
+		issuesConfig := &CreateIssuesConfig{Max: 1} // Default max is 1
 
-	if _, exists := outputMap["create-issue"]; exists {
-		hasSingular = true
-	}
-	if _, exists := outputMap["create-issues"]; exists {
-		hasPlural = true
-	}
-
-	// Error if both are specified
-	if hasSingular && hasPlural {
-		// This should be caught by validation, but we'll handle it gracefully
-		// Prefer plural form
-		hasSingular = false
-	}
-
-	var configData any
-	var defaultMax int
-
-	if hasPlural {
-		configData = outputMap["create-issues"]
-		defaultMax = 10 // Default for plural form
-	} else if hasSingular {
-		configData = outputMap["create-issue"]
-		defaultMax = 1 // Singular form always has max 1
-	} else {
-		return nil
-	}
-
-	issuesConfig := &CreateIssuesConfig{Max: defaultMax}
-
-	if configMap, ok := configData.(map[string]any); ok {
-		// Parse title-prefix
-		if titlePrefix, exists := configMap["title-prefix"]; exists {
-			if titlePrefixStr, ok := titlePrefix.(string); ok {
-				issuesConfig.TitlePrefix = titlePrefixStr
-			}
-		}
-
-		// Parse labels
-		if labels, exists := configMap["labels"]; exists {
-			if labelsArray, ok := labels.([]any); ok {
-				var labelStrings []string
-				for _, label := range labelsArray {
-					if labelStr, ok := label.(string); ok {
-						labelStrings = append(labelStrings, labelStr)
-					}
+		if configMap, ok := configData.(map[string]any); ok {
+			// Parse title-prefix
+			if titlePrefix, exists := configMap["title-prefix"]; exists {
+				if titlePrefixStr, ok := titlePrefix.(string); ok {
+					issuesConfig.TitlePrefix = titlePrefixStr
 				}
-				issuesConfig.Labels = labelStrings
 			}
-		}
 
-		// Parse max (only for plural form)
-		if hasPlural {
+			// Parse labels
+			if labels, exists := configMap["labels"]; exists {
+				if labelsArray, ok := labels.([]any); ok {
+					var labelStrings []string
+					for _, label := range labelsArray {
+						if labelStr, ok := label.(string); ok {
+							labelStrings = append(labelStrings, labelStr)
+						}
+					}
+					issuesConfig.Labels = labelStrings
+				}
+			}
+
+			// Parse max
 			if max, exists := configMap["max"]; exists {
 				if maxInt, ok := c.parseIntValue(max); ok {
 					issuesConfig.Max = maxInt
 				}
 			}
 		}
+
+		return issuesConfig
 	}
 
-	return issuesConfig
+	return nil
 }
 
-// parseCommentsConfig handles both add-issue-comment (singular) and add-issue-comments (plural) configurations
+// parseCommentsConfig handles add-issue-comment configuration
 func (c *Compiler) parseCommentsConfig(outputMap map[string]any) *AddIssueCommentsConfig {
-	// Check for both singular and plural forms
-	hasSingular := false
-	hasPlural := false
+	if configData, exists := outputMap["add-issue-comment"]; exists {
+		commentsConfig := &AddIssueCommentsConfig{Max: 1} // Default max is 1
 
-	if _, exists := outputMap["add-issue-comment"]; exists {
-		hasSingular = true
-	}
-	if _, exists := outputMap["add-issue-comments"]; exists {
-		hasPlural = true
-	}
-
-	// Error if both are specified
-	if hasSingular && hasPlural {
-		// This should be caught by validation, but we'll handle it gracefully
-		// Prefer plural form
-		hasSingular = false
-	}
-
-	var configData any
-	var defaultMax int
-
-	if hasPlural {
-		configData = outputMap["add-issue-comments"]
-		defaultMax = 10 // Default for plural form
-	} else if hasSingular {
-		configData = outputMap["add-issue-comment"]
-		defaultMax = 1 // Singular form always has max 1
-	} else {
-		return nil
-	}
-
-	commentsConfig := &AddIssueCommentsConfig{Max: defaultMax}
-
-	if configMap, ok := configData.(map[string]any); ok {
-		// Parse max (only for plural form)
-		if hasPlural {
+		if configMap, ok := configData.(map[string]any); ok {
+			// Parse max
 			if max, exists := configMap["max"]; exists {
 				if maxInt, ok := c.parseIntValue(max); ok {
 					commentsConfig.Max = maxInt
 				}
 			}
-		}
 
-		// Parse target field (for both singular and plural forms)
-		if target, exists := configMap["target"]; exists {
-			if targetStr, ok := target.(string); ok {
-				commentsConfig.Target = targetStr
+			// Parse target
+			if target, exists := configMap["target"]; exists {
+				if targetStr, ok := target.(string); ok {
+					commentsConfig.Target = targetStr
+				}
 			}
 		}
+
+		return commentsConfig
 	}
 
-	return commentsConfig
+	return nil
 }
 
 // parsePullRequestsConfig handles only create-pull-request (singular) configuration
 func (c *Compiler) parsePullRequestsConfig(outputMap map[string]any) *CreatePullRequestsConfig {
 	// Check for singular form only
-	hasSingular := false
-	if _, exists := outputMap["create-pull-request"]; exists {
-		hasSingular = true
-	}
-
-	// Check for unsupported plural form and return nil (no error, just ignore)
-	if _, exists := outputMap["create-pull-requests"]; exists {
-		// Plural form is not supported for pull requests - ignore it
-		return nil
-	}
-
-	if !hasSingular {
+	if _, exists := outputMap["create-pull-request"]; !exists {
 		return nil
 	}
 
@@ -2720,6 +2996,84 @@ func (c *Compiler) parseIntValue(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// parseUpdateIssuesConfig handles update-issue configuration
+func (c *Compiler) parseUpdateIssuesConfig(outputMap map[string]any) *UpdateIssuesConfig {
+	if configData, exists := outputMap["update-issue"]; exists {
+		updateIssuesConfig := &UpdateIssuesConfig{Max: 1} // Default max is 1
+
+		if configMap, ok := configData.(map[string]any); ok {
+			// Parse max
+			if max, exists := configMap["max"]; exists {
+				if maxInt, ok := c.parseIntValue(max); ok {
+					updateIssuesConfig.Max = maxInt
+				}
+			}
+
+			// Parse target
+			if target, exists := configMap["target"]; exists {
+				if targetStr, ok := target.(string); ok {
+					updateIssuesConfig.Target = targetStr
+				}
+			}
+
+			// Parse status - presence of the key (even if nil/empty) indicates field can be updated
+			if _, exists := configMap["status"]; exists {
+				// If the key exists, it means we can update the status
+				// We don't care about the value - just that the key is present
+				updateIssuesConfig.Status = new(bool) // Allocate a new bool pointer (defaults to false)
+			}
+
+			// Parse title - presence of the key (even if nil/empty) indicates field can be updated
+			if _, exists := configMap["title"]; exists {
+				updateIssuesConfig.Title = new(bool)
+			}
+
+			// Parse body - presence of the key (even if nil/empty) indicates field can be updated
+			if _, exists := configMap["body"]; exists {
+				updateIssuesConfig.Body = new(bool)
+			}
+		}
+
+		return updateIssuesConfig
+	}
+
+	return nil
+}
+
+// parsePushToBranchConfig handles push-to-branch configuration
+func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBranchConfig {
+	if configData, exists := outputMap["push-to-branch"]; exists {
+		pushToBranchConfig := &PushToBranchConfig{
+			Branch: "triggering", // Default branch value
+		}
+
+		// Handle the case where configData is nil (push-to-branch: with no value)
+		if configData == nil {
+			return pushToBranchConfig
+		}
+
+		if configMap, ok := configData.(map[string]any); ok {
+			// Parse branch (optional, defaults to "triggering")
+			if branch, exists := configMap["branch"]; exists {
+				if branchStr, ok := branch.(string); ok {
+					pushToBranchConfig.Branch = branchStr
+				}
+			}
+
+			// Parse target (optional, similar to add-issue-comment)
+			if target, exists := configMap["target"]; exists {
+				if targetStr, ok := target.(string); ok {
+					pushToBranchConfig.Target = targetStr
+				}
+			}
+		}
+
+		return pushToBranchConfig
+	}
+
+	return nil
 }
 
 // buildCustomJobs creates custom jobs defined in the frontmatter jobs section
@@ -2891,7 +3245,7 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 				fmt.Fprintf(yaml, "          %s: %s\n", key, value)
 			}
 		}
-		// Add environment section to pass GITHUB_AW_SAFE_OUTPUTS to the action only if output feature is used
+		// Add environment section to pass GITHUB_AW_SAFE_OUTPUTS to the action only if safe-outputs feature is used
 		if data.SafeOutputs != nil {
 			yaml.WriteString("        env:\n")
 			yaml.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
@@ -3016,7 +3370,20 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 			safeOutputsConfig["create-pull-request"] = true
 		}
 		if data.SafeOutputs.AddIssueLabels != nil {
-			safeOutputsConfig["add-issue-labels"] = true
+			safeOutputsConfig["add-issue-label"] = true
+		}
+		if data.SafeOutputs.UpdateIssues != nil {
+			safeOutputsConfig["update-issue"] = true
+		}
+		if data.SafeOutputs.PushToBranch != nil {
+			pushToBranchConfig := map[string]interface{}{
+				"enabled": true,
+				"branch":  data.SafeOutputs.PushToBranch.Branch,
+			}
+			if data.SafeOutputs.PushToBranch.Target != "" {
+				pushToBranchConfig["target"] = data.SafeOutputs.PushToBranch.Target
+			}
+			safeOutputsConfig["push-to-branch"] = pushToBranchConfig
 		}
 
 		// Convert to JSON string for environment variable

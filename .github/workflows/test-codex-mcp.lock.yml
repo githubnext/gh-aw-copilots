@@ -277,16 +277,20 @@ jobs:
           
           ## Creating an Issue
           
-          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
+          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
           **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.
           
           ### Available Output Types:
           
           **Creating an Issue**
+          
+          To create an issue:
+          1. Write an entry to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
           ```json
           {"type": "create-issue", "title": "Issue title", "body": "Issue body in markdown", "labels": ["optional", "labels"]}
           ```
+          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
@@ -506,13 +510,17 @@ jobs:
                 // Use default limits for plural-supported types
                 switch (itemType) {
                   case 'create-issue':
-                    return 10; // Allow multiple issues
+                    return 1; // Only one issue allowed
                   case 'add-issue-comment':
-                    return 10; // Allow multiple comments
+                    return 1; // Only one comment allowed
                   case 'create-pull-request':
                     return 1;  // Only one pull request allowed
-                  case 'add-issue-labels':
-                    return 1;  // Only one labels operation allowed
+                  case 'add-issue-label':
+                    return 5;  // Only one labels operation allowed
+                  case 'update-issue':
+                    return 1;  // Only one issue update allowed
+                  case 'push-to-branch':
+                    return 1;  // Only one push to branch allowed
                   default:
                     return 1;  // Default to single item for unknown types
                 }
@@ -686,22 +694,83 @@ jobs:
                       // Sanitize text content
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
+                      // Sanitize branch name if present
+                      if (item.branch && typeof item.branch === 'string') {
+                        item.branch = sanitizeContent(item.branch);
+                      }
                       // Sanitize labels if present
                       if (item.labels && Array.isArray(item.labels)) {
                         item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
                       }
                       break;
-                    case 'add-issue-labels':
+                    case 'add-issue-label':
                       if (!item.labels || !Array.isArray(item.labels)) {
-                        errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
+                        errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
                         continue;
                       }
                       if (item.labels.some(label => typeof label !== 'string')) {
-                        errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
+                        errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
                         continue;
                       }
                       // Sanitize label strings
                       item.labels = item.labels.map(label => sanitizeContent(label));
+                      break;
+                    case 'update-issue':
+                      // Check that at least one updateable field is provided
+                      const hasValidField = (item.status !== undefined) || 
+                                            (item.title !== undefined) || 
+                                            (item.body !== undefined);
+                      if (!hasValidField) {
+                        errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
+                        continue;
+                      }
+                      // Validate status if provided
+                      if (item.status !== undefined) {
+                        if (typeof item.status !== 'string' || (item.status !== 'open' && item.status !== 'closed')) {
+                          errors.push(`Line ${i + 1}: update-issue 'status' must be 'open' or 'closed'`);
+                          continue;
+                        }
+                      }
+                      // Validate title if provided
+                      if (item.title !== undefined) {
+                        if (typeof item.title !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'title' must be a string`);
+                          continue;
+                        }
+                        item.title = sanitizeContent(item.title);
+                      }
+                      // Validate body if provided
+                      if (item.body !== undefined) {
+                        if (typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'body' must be a string`);
+                          continue;
+                        }
+                        item.body = sanitizeContent(item.body);
+                      }
+                      // Validate issue_number if provided (for target "*")
+                      if (item.issue_number !== undefined) {
+                        if (typeof item.issue_number !== 'number' && typeof item.issue_number !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'issue_number' must be a number or string`);
+                          continue;
+                        }
+                      }
+                      break;
+                    case 'push-to-branch':
+                      // Validate message if provided (optional)
+                      if (item.message !== undefined) {
+                        if (typeof item.message !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'message' must be a string`);
+                          continue;
+                        }
+                        item.message = sanitizeContent(item.message);
+                      }
+                      // Validate pull_request_number if provided (for target "*")
+                      if (item.pull_request_number !== undefined) {
+                        if (typeof item.pull_request_number !== 'number' && typeof item.pull_request_number !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'pull_request_number' must be a number or string`);
+                          continue;
+                        }
+                      }
                       break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
@@ -988,68 +1057,6 @@ jobs:
           name: test-codex-mcp.log
           path: /tmp/test-codex-mcp.log
           if-no-files-found: warn
-      - name: Generate git patch
-        if: always()
-        run: |
-          # Check current git status
-          echo "Current git status:"
-          git status
-          # Get the initial commit SHA from the base branch of the pull request
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_review_comment" ]; then
-            INITIAL_SHA="$GITHUB_BASE_REF"
-          else
-            INITIAL_SHA="$GITHUB_SHA"
-          fi
-          echo "Base commit SHA: $INITIAL_SHA"
-          # Configure git user for GitHub Actions
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          # Stage any unstaged files
-          git add -A || true
-          # Check if there are staged files to commit
-          if ! git diff --cached --quiet; then
-            echo "Staged files found, committing them..."
-            git commit -m "[agent] staged files" || true
-            echo "Staged files committed"
-          else
-            echo "No staged files to commit"
-          fi
-          # Check updated git status
-          echo "Updated git status after committing staged files:"
-          git status
-          # Show compact diff information between initial commit and HEAD (committed changes only)
-          echo '## Git diff' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          git diff --name-only "$INITIAL_SHA"..HEAD >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          # Check if there are any committed changes since the initial commit
-          if git diff --quiet "$INITIAL_SHA" HEAD; then
-            echo "No committed changes detected since initial commit"
-            echo "Skipping patch generation - no committed changes to create patch from"
-          else
-            echo "Committed changes detected, generating patch..."
-            # Generate patch from initial commit to HEAD (committed changes only)
-            git format-patch "$INITIAL_SHA"..HEAD --stdout > /tmp/aw.patch || echo "Failed to generate patch" > /tmp/aw.patch
-            echo "Patch file created at /tmp/aw.patch"
-            ls -la /tmp/aw.patch
-            # Show the first 50 lines of the patch for review
-            echo '## Git Patch' >> $GITHUB_STEP_SUMMARY
-            echo '' >> $GITHUB_STEP_SUMMARY
-            echo '```diff' >> $GITHUB_STEP_SUMMARY
-            head -50 /tmp/aw.patch >> $GITHUB_STEP_SUMMARY || echo "Could not display patch contents" >> $GITHUB_STEP_SUMMARY
-            echo '...' >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo '' >> $GITHUB_STEP_SUMMARY
-          fi
-      - name: Upload git patch
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: aw.patch
-          path: /tmp/aw.patch
-          if-no-files-found: ignore
 
   create_issue:
     needs: test-codex-mcp
