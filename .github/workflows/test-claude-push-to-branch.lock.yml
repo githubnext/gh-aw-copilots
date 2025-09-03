@@ -2,19 +2,69 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Create Pull Request"
+name: "Claude Test File"
 on:
-  workflow_dispatch: null
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created, edited]
+  pull_request:
+    types: [opened, edited, reopened]
+  pull_request_review_comment:
+    types: [created, edited]
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}"
 
-run-name: "Test Claude Create Pull Request"
+run-name: "Claude Test File"
 
 jobs:
-  test-claude-create-pull-request:
+  task:
+    if: ((contains(github.event.issue.body, '/test-claude-push-to-branch')) || (contains(github.event.comment.body, '/test-claude-push-to-branch'))) || (contains(github.event.pull_request.body, '/test-claude-push-to-branch'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check team membership for command workflow
+        id: check-team-member
+        if: contains(github.event.issue.body, '/test-claude-push-to-branch') || contains(github.event.comment.body, '/test-claude-push-to-branch') || contains(github.event.pull_request.body, '/test-claude-push-to-branch')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            async function main() {
+              const actor = context.actor;
+              const { owner, repo } = context.repo;
+              // Check if the actor has repository access (admin, maintain permissions)
+              try {
+                console.log(`Checking if user '${actor}' is admin or maintainer of ${owner}/${repo}`);
+                const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: owner,
+                  repo: repo,
+                  username: actor
+                });
+                const permission = repoPermission.data.permission;
+                console.log(`Repository permission level: ${permission}`);
+                if (permission === 'admin' || permission === 'maintain') {
+                  console.log(`User has ${permission} access to repository`);
+                  core.setOutput('is_team_member', 'true');
+                  return;
+                }
+              } catch (repoError) {
+                const errorMessage = repoError instanceof Error ? repoError.message : String(repoError);
+                console.log(`Repository permission check failed: ${errorMessage}`);
+              }
+              core.setOutput('is_team_member', 'false');
+            }
+            await main();
+      - name: Validate team membership
+        if: steps.check-team-member.outputs.is_team_member == 'false'
+        run: |
+          echo "❌ Access denied: Only team members can trigger command workflows"
+          echo "User ${{ github.actor }} is not a team member"
+          exit 1
+
+  claude-test-file:
+    needs: task
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -76,18 +126,52 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          Add a file "TEST.md" with content "Hello from Claude"
+          Create a new file called "claude-test-file.md" with the following content:
           
-          Add a log file "foo.log" containing the current time. This is just a log file and isn't meant to go in the pull request.
+          ```markdown
+          # Claude Test File
           
-          Create a pull request with title "A Pull Request from Claude" and body "World"
+          This file was created by the Claude agentic workflow to test the push-to-branch functionality.
           
-          Add a haiku about GitHub Actions and AI to the PR body.
+          Created at: {{ current timestamp }}
+          
+          ## Test Content
+          
+          This is a test file created by Claude to demonstrate:
+          - File creation
+          - Branch pushing
+          - Automated commit generation
+          
+          The workflow should push this file to the specified branch.
+          ```
+          
+          Also create a simple Python script called "claude-script.py" with:
+          
+          ```python
+          #!/usr/bin/env python3
+          """
+          Test script created by Claude agentic workflow
+          """
+          
+          import datetime
+          
+          def main():
+              print("Hello from Claude agentic workflow!")
+              print(f"Current time: {datetime.datetime.now()}")
+              print("This script was created to test push-to-branch functionality.")
+          
+          if __name__ == "__main__":
+              main()
+          ```
+          
+          Create a commit message: "Add test files created by Claude agentic workflow"
+          
+          Push these changes to the branch for the pull request
           
           
           ---
           
-          ## Creating a Pull Request
+          ## Pushing Changes to Branch
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -95,20 +179,19 @@ jobs:
           
           ### Available Output Types:
           
-          **Creating a Pull Request**
+          **Pushing Changes to Branch**
           
-          To create a pull request:
+          To push changes to a branch:
           1. Make any file changes directly in the working directory
-          2. If you haven't done so already, create a local branch using an appropriate unique name
-          3. Add and commit your changes to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.
-          4. Do not push your changes. That will be done later. Instead append the PR specification to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
+          2. Add and commit your changes to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.
+          3. Indicate your intention to push to the branch by writing to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
           ```json
-          {"type": "create-pull-request", "branch": "branch-name", "title": "PR title", "body": "PR body in markdown", "labels": ["optional", "labels"]}
+          {"type": "push-to-branch", "message": "Commit message describing the changes"}
           ```
           
           **Example JSONL file content:**
           ```
-          {"type": "create-pull-request", "title": "Fix typo", "body": "Corrected spelling mistake in documentation"}
+          {"type": "push-to-branch", "message": "Update documentation with latest changes"}
           ```
           
           **Important Notes:**
@@ -136,7 +219,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Create Pull Request",
+              workflow_name: "Claude Test File",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -246,13 +329,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-create-pull-request.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/claude-test-file.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-create-pull-request.log
+            echo "No execution file output found from Agentic Action" >> /tmp/claude-test-file.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-create-pull-request.log
+          touch /tmp/claude-test-file.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -274,7 +357,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"create-pull-request\":true}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"push-to-branch\":{\"branch\":\"claude-test-branch\",\"enabled\":true,\"target\":\"*\"}}"
         with:
           script: |
             async function main() {
@@ -648,7 +731,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-create-pull-request.log
+          AGENT_LOG_FILE: /tmp/claude-test-file.log
         with:
           script: |
             function main() {
@@ -923,13 +1006,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-create-pull-request.log
-          path: /tmp/test-claude-create-pull-request.log
+          name: claude-test-file.log
+          path: /tmp/claude-test-file.log
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
+          GITHUB_AW_PUSH_BRANCH: "claude-test-branch"
         run: |
           # Check current git status
           echo "Current git status:"
@@ -1046,18 +1130,18 @@ jobs:
           path: /tmp/aw.patch
           if-no-files-found: ignore
 
-  create_pull_request:
-    needs: test-claude-create-pull-request
+  push_to_branch:
+    needs: claude-test-file
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
-      pull-requests: write
+      pull-requests: read
     timeout-minutes: 10
     outputs:
-      branch_name: ${{ steps.create_pull_request.outputs.branch_name }}
-      pull_request_number: ${{ steps.create_pull_request.outputs.pull_request_number }}
-      pull_request_url: ${{ steps.create_pull_request.outputs.pull_request_url }}
+      branch_name: ${{ steps.push_to_branch.outputs.branch_name }}
+      commit_sha: ${{ steps.push_to_branch.outputs.commit_sha }}
+      push_url: ${{ steps.push_to_branch.outputs.push_url }}
     steps:
       - name: Download patch artifact
         uses: actions/download-artifact@v4
@@ -1068,47 +1152,45 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Create Pull Request
-        id: create_pull_request
+      - name: Push to Branch
+        id: push_to_branch
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-create-pull-request.outputs.output }}
-          GITHUB_AW_WORKFLOW_ID: "test-claude-create-pull-request"
-          GITHUB_AW_BASE_BRANCH: ${{ github.ref_name }}
-          GITHUB_AW_PR_TITLE_PREFIX: "[claude-test] "
-          GITHUB_AW_PR_LABELS: "claude,automation,bot"
-          GITHUB_AW_PR_DRAFT: "true"
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.claude-test-file.outputs.output }}
+          GITHUB_AW_PUSH_BRANCH: "claude-test-branch"
+          GITHUB_AW_PUSH_TARGET: "*"
         with:
           script: |
-            /** @type {typeof import("fs")} */
-            const fs = require("fs");
-            /** @type {typeof import("crypto")} */
-            const crypto = require("crypto");
-            const { execSync } = require("child_process");
             async function main() {
+              /** @type {typeof import("fs")} */
+              const fs = require("fs");
+              const { execSync } = require("child_process");
               // Environment validation - fail early if required variables are missing
-              const workflowId = process.env.GITHUB_AW_WORKFLOW_ID;
-              if (!workflowId) {
-                throw new Error('GITHUB_AW_WORKFLOW_ID environment variable is required');
-              }
-              const baseBranch = process.env.GITHUB_AW_BASE_BRANCH;
-              if (!baseBranch) {
-                throw new Error('GITHUB_AW_BASE_BRANCH environment variable is required');
+              const branchName = process.env.GITHUB_AW_PUSH_BRANCH;
+              if (!branchName) {
+                core.setFailed('GITHUB_AW_PUSH_BRANCH environment variable is required');
+                return;
               }
               const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT || "";
               if (outputContent.trim() === '') {
                 console.log('Agent output content is empty');
+                return;
               }
+              const target = process.env.GITHUB_AW_PUSH_TARGET || "triggering";
               // Check if patch file exists and has valid content
               if (!fs.existsSync('/tmp/aw.patch')) {
-                throw new Error('No patch file found - cannot create pull request without changes');
+                core.setFailed('No patch file found - cannot push without changes');
+                return;
               }
               const patchContent = fs.readFileSync('/tmp/aw.patch', 'utf8');
               if (!patchContent || !patchContent.trim() || patchContent.includes('Failed to generate patch')) {
-                throw new Error('Patch file is empty or contains error message - cannot create pull request without changes');
+                core.setFailed('Patch file is empty or contains error message - cannot push without changes');
+                return;
               }
               console.log('Agent output content length:', outputContent.length);
               console.log('Patch content validation passed');
+              console.log('Target branch:', branchName);
+              console.log('Target configuration:', target);
               // Parse the validated output JSON
               let validatedOutput;
               try {
@@ -1121,113 +1203,82 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find the create-pull-request item
-              const pullRequestItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'create-pull-request');
-              if (!pullRequestItem) {
-                console.log('No create-pull-request item found in agent output');
+              // Find the push-to-branch item
+              const pushItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'push-to-branch');
+              if (!pushItem) {
+                console.log('No push-to-branch item found in agent output');
                 return;
               }
-              console.log('Found create-pull-request item:', { title: pullRequestItem.title, bodyLength: pullRequestItem.body.length });
-              // Extract title, body, and branch from the JSON item
-              let title = pullRequestItem.title.trim();
-              let bodyLines = pullRequestItem.body.split('\n');
-              let branchName = pullRequestItem.branch ? pullRequestItem.branch.trim() : null;
-              // If no title was found, use a default
-              if (!title) {
-                title = 'Agent Output';
+              console.log('Found push-to-branch item');
+              // Validate target configuration for pull request context
+              if (target !== "*" && target !== "triggering") {
+                // If target is a specific number, validate it's a valid pull request number
+                const targetNumber = parseInt(target, 10);
+                if (isNaN(targetNumber)) {
+                  core.setFailed('Invalid target configuration: must be "triggering", "*", or a valid pull request number');
+                  return;
+                }
               }
-              // Apply title prefix if provided via environment variable
-              const titlePrefix = process.env.GITHUB_AW_PR_TITLE_PREFIX;
-              if (titlePrefix && !title.startsWith(titlePrefix)) {
-                title = titlePrefix + title;
+              // Check if we're in a pull request context when required
+              if (target === "triggering" && !context.payload.pull_request) {
+                core.setFailed('push-to-branch with target "triggering" requires pull request context');
+                return;
               }
-              // Add AI disclaimer with run id, run htmlurl
-              const runId = context.runId;
-              const runUrl = context.payload.repository 
-                ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                : `https://github.com/actions/runs/${runId}`;
-              bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
-              // Prepare the body content
-              const body = bodyLines.join('\n').trim();
-              // Parse labels from environment variable (comma-separated string)
-              const labelsEnv = process.env.GITHUB_AW_PR_LABELS;
-              const labels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
-              // Parse draft setting from environment variable (defaults to true)
-              const draftEnv = process.env.GITHUB_AW_PR_DRAFT;
-              const draft = draftEnv ? draftEnv.toLowerCase() === 'true' : true;
-              console.log('Creating pull request with title:', title);
-              console.log('Labels:', labels);
-              console.log('Draft:', draft);
-              console.log('Body length:', body.length);
-              // Use branch name from JSONL if provided, otherwise generate unique branch name
-              if (!branchName) {
-                console.log('No branch name provided in JSONL, generating unique branch name');
-                // Generate unique branch name using cryptographic random hex
-                const randomHex = crypto.randomBytes(8).toString('hex');
-                branchName = `${workflowId}/${randomHex}`;
-              } else {
-                console.log('Using branch name from JSONL:', branchName);
-              }
-              console.log('Generated branch name:', branchName);
-              console.log('Base branch:', baseBranch);
-              // Create a new branch using git CLI
               // Configure git (required for commits)
               execSync('git config --global user.email "action@github.com"', { stdio: 'inherit' });
               execSync('git config --global user.name "GitHub Action"', { stdio: 'inherit' });
-              // Handle branch creation/checkout
-              const branchFromJsonl = pullRequestItem.branch ? pullRequestItem.branch.trim() : null;
-              if (branchFromJsonl) {
-                console.log('Checking if branch from JSONL exists:', branchFromJsonl);
-                console.log('Branch does not exist locally, creating new branch:', branchFromJsonl);
-                execSync(`git checkout -b ${branchFromJsonl}`, { stdio: 'inherit' });
-                console.log('Using existing/created branch:', branchFromJsonl);
-              } else {
-                // Create and checkout new branch with generated name
+              // Switch to or create the target branch
+              console.log('Switching to branch:', branchName);
+              try {
+                // Try to checkout existing branch first
+                execSync('git fetch origin', { stdio: 'inherit' });
+                execSync(`git checkout ${branchName}`, { stdio: 'inherit' });
+                console.log('Checked out existing branch:', branchName);
+              } catch (error) {
+                // Branch doesn't exist, create it
+                console.log('Branch does not exist, creating new branch:', branchName);
                 execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
-                console.log('Created and checked out new branch:', branchName);
               }
               // Apply the patch using git CLI
               console.log('Applying patch...');
-              // Apply the patch using git apply
-              execSync('git apply /tmp/aw.patch', { stdio: 'inherit' });
-              console.log('Patch applied successfully');
+              try {
+                execSync('git apply /tmp/aw.patch', { stdio: 'inherit' });
+                console.log('Patch applied successfully');
+              } catch (error) {
+                console.error('Failed to apply patch:', error instanceof Error ? error.message : String(error));
+                core.setFailed('Failed to apply patch');
+                return;
+              }
               // Commit and push the changes
               execSync('git add .', { stdio: 'inherit' });
-              execSync(`git commit -m "Add agent output: ${title}"`, { stdio: 'inherit' });
-              execSync(`git push origin ${branchName}`, { stdio: 'inherit' });
-              console.log('Changes committed and pushed');
-              // Create the pull request
-              const { data: pullRequest } = await github.rest.pulls.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: title,
-                body: body,
-                head: branchName,
-                base: baseBranch,
-                draft: draft
-              });
-              console.log('Created pull request #' + pullRequest.number + ': ' + pullRequest.html_url);
-              // Add labels if specified
-              if (labels.length > 0) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: pullRequest.number,
-                  labels: labels
-                });
-                console.log('Added labels to pull request:', labels);
+              // Check if there are changes to commit
+              try {
+                execSync('git diff --cached --exit-code', { stdio: 'ignore' });
+                console.log('No changes to commit');
+                return;
+              } catch (error) {
+                // Exit code != 0 means there are changes to commit, which is what we want
               }
-              // Set output for other jobs to use
-              core.setOutput('pull_request_number', pullRequest.number);
-              core.setOutput('pull_request_url', pullRequest.html_url);
+              const commitMessage = pushItem.message || 'Apply agent changes';
+              execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
+              execSync(`git push origin ${branchName}`, { stdio: 'inherit' });
+              console.log('Changes committed and pushed to branch:', branchName);
+              // Get commit SHA
+              const commitSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+              const pushUrl = context.payload.repository 
+                ? `${context.payload.repository.html_url}/tree/${branchName}`
+                : `https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName}`;
+              // Set outputs
               core.setOutput('branch_name', branchName);
+              core.setOutput('commit_sha', commitSha);
+              core.setOutput('push_url', pushUrl);
               // Write summary to GitHub Actions summary
               await core.summary
                 .addRaw(`
-            ## Pull Request
-            - **Pull Request**: [#${pullRequest.number}](${pullRequest.html_url})
+            ## Push to Branch
             - **Branch**: \`${branchName}\`
-            - **Base Branch**: \`${baseBranch}\`
+            - **Commit**: [${commitSha.substring(0, 7)}](${pushUrl})
+            - **URL**: [${pushUrl}](${pushUrl})
             `).write();
             }
             await main();
