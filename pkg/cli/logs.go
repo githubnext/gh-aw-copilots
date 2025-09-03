@@ -987,7 +987,7 @@ func displayAccessLogAnalysis(processedRuns []ProcessedRun, verbose bool) {
 		for _, pr := range processedRuns {
 			if pr.AccessAnalysis != nil {
 				analysis := pr.AccessAnalysis
-				fmt.Printf("  Run %d: %d requests (%d allowed, %d denied)\n", 
+				fmt.Printf("  Run %d: %d requests (%d allowed, %d denied)\n",
 					pr.Run.DatabaseID, analysis.TotalRequests, analysis.AllowedCount, analysis.DeniedCount)
 			}
 		}
@@ -1199,9 +1199,9 @@ func parseSquidAccessLog(logPath string, verbose bool) (*DomainAnalysis, error) 
 		// - 407: Proxy authentication required
 		// - 502, 503: Connection/upstream errors
 		statusCode := entry.Status
-		isAllowed := statusCode == "TCP_HIT/200" || statusCode == "TCP_MISS/200" || 
+		isAllowed := statusCode == "TCP_HIT/200" || statusCode == "TCP_MISS/200" ||
 			statusCode == "TCP_REFRESH_MODIFIED/200" || statusCode == "TCP_IMS_HIT/304" ||
-			strings.Contains(statusCode, "/200") || strings.Contains(statusCode, "/206") || 
+			strings.Contains(statusCode, "/200") || strings.Contains(statusCode, "/206") ||
 			strings.Contains(statusCode, "/304")
 
 		if isAllowed {
@@ -1279,7 +1279,7 @@ func extractDomainFromURL(url string) string {
 // analyzeAccessLogs analyzes access logs in a run directory
 func analyzeAccessLogs(runDir string, verbose bool) (*DomainAnalysis, error) {
 	accessLogPath := filepath.Join(runDir, "access.log")
-	
+
 	// Check if access.log exists
 	if _, err := os.Stat(accessLogPath); os.IsNotExist(err) {
 		if verbose {
