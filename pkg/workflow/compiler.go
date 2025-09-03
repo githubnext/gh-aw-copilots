@@ -2370,6 +2370,10 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 		c.generateEngineOutputCollection(yaml, engine)
 	}
 
+	// Extract and upload squid access logs (if any proxy tools were used)
+	c.generateExtractAccessLogs(yaml, data.Tools)
+	c.generateUploadAccessLogs(yaml, data.Tools)
+
 	// parse agent logs for GITHUB_STEP_SUMMARY
 	c.generateLogParsing(yaml, engine, logFileFull)
 
@@ -2449,6 +2453,64 @@ func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          name: aw_info.json\n")
 	yaml.WriteString("          path: /tmp/aw_info.json\n")
+	yaml.WriteString("          if-no-files-found: warn\n")
+}
+
+func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[string]any) {
+	// Check if any tools require proxy setup
+	var proxyTools []string
+	for toolName, toolConfig := range tools {
+		if toolConfigMap, ok := toolConfig.(map[string]any); ok {
+			needsProxySetup, _ := needsProxy(toolConfigMap)
+			if needsProxySetup {
+				proxyTools = append(proxyTools, toolName)
+			}
+		}
+	}
+
+	// If no proxy tools, no access logs to extract
+	if len(proxyTools) == 0 {
+		return
+	}
+
+	yaml.WriteString("      - name: Extract squid access logs\n")
+	yaml.WriteString("        if: always()\n")
+	yaml.WriteString("        run: |\n")
+	yaml.WriteString("          mkdir -p /tmp/access-logs\n")
+
+	for _, toolName := range proxyTools {
+		fmt.Fprintf(yaml, "          echo 'Extracting access.log from squid-proxy-%s container'\n", toolName)
+		fmt.Fprintf(yaml, "          if docker ps -a --format '{{.Names}}' | grep -q '^squid-proxy-%s$'; then\n", toolName)
+		fmt.Fprintf(yaml, "            docker cp squid-proxy-%s:/var/log/squid/access.log /tmp/access-logs/access-%s.log 2>/dev/null || echo 'No access.log found for %s'\n", toolName, toolName, toolName)
+		yaml.WriteString("          else\n")
+		fmt.Fprintf(yaml, "            echo 'Container squid-proxy-%s not found'\n", toolName)
+		yaml.WriteString("          fi\n")
+	}
+}
+
+func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[string]any) {
+	// Check if any tools require proxy setup
+	var proxyTools []string
+	for toolName, toolConfig := range tools {
+		if toolConfigMap, ok := toolConfig.(map[string]any); ok {
+			needsProxySetup, _ := needsProxy(toolConfigMap)
+			if needsProxySetup {
+				proxyTools = append(proxyTools, toolName)
+			}
+		}
+	}
+
+	// If no proxy tools, no access logs to upload
+	if len(proxyTools) == 0 {
+		return
+	}
+
+	yaml.WriteString("      - name: Upload squid access logs\n")
+	yaml.WriteString("        if: always()\n")
+	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
+	yaml.WriteString("        with:\n")
+	yaml.WriteString("          name: access.log\n")
+	yaml.WriteString("          path: /tmp/access-logs/\n")
 	yaml.WriteString("          if-no-files-found: warn\n")
 }
 
