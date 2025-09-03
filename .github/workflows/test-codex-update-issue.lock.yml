@@ -2,7 +2,7 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Add Issue Comment"
+name: "Test Codex Update Issue"
 "on":
   issues:
     types:
@@ -14,7 +14,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
 
-run-name: "Test Claude Add Issue Comment"
+run-name: "Test Codex Update Issue"
 
 jobs:
   add_reaction:
@@ -187,7 +187,7 @@ jobs:
             }
             await main();
 
-  test-claude-add-issue-comment:
+  test-codex-update-issue:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -195,6 +195,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Codex
+        run: npm install -g @openai/codex
       - name: Setup agent output
         id: setup_agent_output
         uses: actions/github-script@v7
@@ -223,25 +229,21 @@ jobs:
       - name: Setup MCPs
         run: |
           mkdir -p /tmp/mcp-config
-          cat > /tmp/mcp-config/mcp-servers.json << 'EOF'
-          {
-            "mcpServers": {
-              "github": {
-                "command": "docker",
-                "args": [
-                  "run",
-                  "-i",
-                  "--rm",
-                  "-e",
-                  "GITHUB_PERSONAL_ACCESS_TOKEN",
-                  "ghcr.io/github/github-mcp-server:sha-45e90ae"
-                ],
-                "env": {
-                  "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ secrets.GITHUB_TOKEN }}"
-                }
-              }
-            }
-          }
+          cat > /tmp/mcp-config/config.toml << EOF
+          [history]
+          persistence = "none"
+          
+          [mcp_servers.github]
+          command = "docker"
+          args = [
+            "run",
+            "-i",
+            "--rm",
+            "-e",
+            "GITHUB_PERSONAL_ACCESS_TOKEN",
+            "ghcr.io/github/github-mcp-server:sha-45e90ae"
+          ]
+          env = { "GITHUB_PERSONAL_ACCESS_TOKEN" = "${{ secrets.GITHUB_TOKEN }}" }
           EOF
       - name: Create prompt
         env:
@@ -249,12 +251,16 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} is "Hello from Claude" then add a comment on the issue "Reply from Claude".
+          If the title of the issue #${{ github.event.issue.number }} is exactly "[codex-test] Update Issue Test" then:
+          
+          1. Change the status to "closed"
+          2. Update the title to "[UPDATED] Update Issue Test - Processed by Codex"
+          3. Add a line to the end of the body saying "This issue was automatically updated by the Codex agentic workflow."
           
           
           ---
           
-          ## Adding a Comment to an Issue or Pull Request
+          ## Updating Issues
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -262,18 +268,17 @@ jobs:
           
           ### Available Output Types:
           
-          **Adding a Comment to an Issue or Pull Request**
+          **Updating an Issue**
           
-          To add a comment to an issue or pull request:
-          1. Write an entry to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
+          To udpate an issue:
           ```json
-          {"type": "add-issue-comment", "body": "Your comment content in markdown"}
+          {"type": "update-issue", "status": "open" // or "closed", "title": "New issue title", "body": "Updated issue body in markdown"}
           ```
           2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
-          {"type": "add-issue-comment", "body": "This is related to the issue above."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -297,14 +302,14 @@ jobs:
             const fs = require('fs');
             
             const awInfo = {
-              engine_id: "claude",
-              engine_name: "Claude Code",
+              engine_id: "codex",
+              engine_name: "Codex",
               model: "",
               version: "",
-              workflow_name: "Test Claude Add Issue Comment",
-              experimental: false,
+              workflow_name: "Test Codex Update Issue",
+              experimental: true,
               supports_tools_whitelist: true,
-              supports_http_transport: true,
+              supports_http_transport: false,
               run_id: context.runId,
               run_number: context.runNumber,
               run_attempt: process.env.GITHUB_RUN_ATTEMPT,
@@ -328,86 +333,22 @@ jobs:
           name: aw_info.json
           path: /tmp/aw_info.json
           if-no-files-found: warn
-      - name: Execute Claude Code Action
-        id: agentic_execution
-        uses: anthropics/claude-code-base-action@v0.0.56
-        with:
-          # Allowed tools (sorted):
-          # - ExitPlanMode
-          # - Glob
-          # - Grep
-          # - LS
-          # - NotebookRead
-          # - Read
-          # - Task
-          # - TodoWrite
-          # - Write
-          # - mcp__github__download_workflow_run_artifact
-          # - mcp__github__get_code_scanning_alert
-          # - mcp__github__get_commit
-          # - mcp__github__get_dependabot_alert
-          # - mcp__github__get_discussion
-          # - mcp__github__get_discussion_comments
-          # - mcp__github__get_file_contents
-          # - mcp__github__get_issue
-          # - mcp__github__get_issue_comments
-          # - mcp__github__get_job_logs
-          # - mcp__github__get_me
-          # - mcp__github__get_notification_details
-          # - mcp__github__get_pull_request
-          # - mcp__github__get_pull_request_comments
-          # - mcp__github__get_pull_request_diff
-          # - mcp__github__get_pull_request_files
-          # - mcp__github__get_pull_request_reviews
-          # - mcp__github__get_pull_request_status
-          # - mcp__github__get_secret_scanning_alert
-          # - mcp__github__get_tag
-          # - mcp__github__get_workflow_run
-          # - mcp__github__get_workflow_run_logs
-          # - mcp__github__get_workflow_run_usage
-          # - mcp__github__list_branches
-          # - mcp__github__list_code_scanning_alerts
-          # - mcp__github__list_commits
-          # - mcp__github__list_dependabot_alerts
-          # - mcp__github__list_discussion_categories
-          # - mcp__github__list_discussions
-          # - mcp__github__list_issues
-          # - mcp__github__list_notifications
-          # - mcp__github__list_pull_requests
-          # - mcp__github__list_secret_scanning_alerts
-          # - mcp__github__list_tags
-          # - mcp__github__list_workflow_jobs
-          # - mcp__github__list_workflow_run_artifacts
-          # - mcp__github__list_workflow_runs
-          # - mcp__github__list_workflows
-          # - mcp__github__search_code
-          # - mcp__github__search_issues
-          # - mcp__github__search_orgs
-          # - mcp__github__search_pull_requests
-          # - mcp__github__search_repositories
-          # - mcp__github__search_users
-          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_env: |
-            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          mcp_config: /tmp/mcp-config/mcp-servers.json
-          prompt_file: /tmp/aw-prompts/prompt.txt
-          timeout_minutes: 5
+      - name: Run Codex
+        run: |
+          INSTRUCTION=$(cat /tmp/aw-prompts/prompt.txt)
+          export CODEX_HOME=/tmp/mcp-config
+          
+          # Create log directory outside git repo
+          mkdir -p /tmp/aw-logs
+          
+          # Run codex with log capture
+          codex exec \
+            -c model=o4-mini \
+            --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/test-codex-update-issue.log
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-      - name: Capture Agentic Action logs
-        if: always()
-        run: |
-          # Copy the detailed execution file from Agentic Action if available
-          if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-add-issue-comment.log
-          else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-add-issue-comment.log
-          fi
-          
-          # Ensure log file exists
-          touch /tmp/test-claude-add-issue-comment.log
+          GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -429,7 +370,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"add-issue-comment\":{\"enabled\":true}}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"update-issue\":true}"
         with:
           script: |
             async function main() {
@@ -789,27 +730,16 @@ jobs:
           name: aw_output.txt
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           if-no-files-found: warn
-      - name: Upload engine output files
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent_outputs
-          path: |
-            output.txt
-          if-no-files-found: ignore
-      - name: Clean up engine output files
-        run: |
-          rm -f output.txt
       - name: Parse agent logs for step summary
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-add-issue-comment.log
+          AGENT_LOG_FILE: /tmp/test-codex-update-issue.log
         with:
           script: |
             function main() {
               const fs = require('fs');
               try {
-                // Get the log file path from environment
                 const logFile = process.env.AGENT_LOG_FILE;
                 if (!logFile) {
                   console.log('No agent log file specified');
@@ -819,63 +749,72 @@ jobs:
                   console.log(`Log file not found: ${logFile}`);
                   return;
                 }
-                const logContent = fs.readFileSync(logFile, 'utf8');
-                const markdown = parseClaudeLog(logContent);
-                // Append to GitHub step summary
-                core.summary.addRaw(markdown).write();
+                const content = fs.readFileSync(logFile, 'utf8');
+                const parsedLog = parseCodexLog(content);
+                if (parsedLog) {
+                  core.summary.addRaw(parsedLog).write();
+                  console.log('Codex log parsed successfully');
+                } else {
+                  console.log('Failed to parse Codex log');
+                }
               } catch (error) {
-                console.error('Error parsing Claude log:', error.message);
                 core.setFailed(error.message);
               }
             }
-            function parseClaudeLog(logContent) {
+            function parseCodexLog(logContent) {
               try {
-                const logEntries = JSON.parse(logContent);
-                if (!Array.isArray(logEntries)) {
-                  return '## Agent Log Summary\n\nLog format not recognized as Claude JSON array.\n';
-                }
+                const lines = logContent.split('\n');
                 let markdown = '## 🤖 Commands and Tools\n\n';
-                const toolUsePairs = new Map(); // Map tool_use_id to tool_result
-                const commandSummary = []; // For the succinct summary
-                // First pass: collect tool results by tool_use_id
-                for (const entry of logEntries) {
-                  if (entry.type === 'user' && entry.message?.content) {
-                    for (const content of entry.message.content) {
-                      if (content.type === 'tool_result' && content.tool_use_id) {
-                        toolUsePairs.set(content.tool_use_id, content);
+                const commandSummary = [];
+                // First pass: collect commands for summary
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  // Detect tool usage and exec commands
+                  if (line.includes('] tool ') && line.includes('(')) {
+                    // Extract tool name
+                    const toolMatch = line.match(/\] tool ([^(]+)\(/);
+                    if (toolMatch) {
+                      const toolName = toolMatch[1];
+                      // Look ahead to find the result status
+                      let statusIcon = '❓'; // Unknown by default
+                      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                        const nextLine = lines[j];
+                        if (nextLine.includes('success in')) {
+                          statusIcon = '✅';
+                          break;
+                        } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+                          statusIcon = '❌';
+                          break;
+                        }
+                      }
+                      if (toolName.includes('.')) {
+                        // Format as provider::method
+                        const parts = toolName.split('.');
+                        const provider = parts[0];
+                        const method = parts.slice(1).join('_');
+                        commandSummary.push(`* ${statusIcon} \`${provider}::${method}(...)\``);
+                      } else {
+                        commandSummary.push(`* ${statusIcon} \`${toolName}(...)\``);
                       }
                     }
-                  }
-                }
-                // Collect all tool uses for summary
-                for (const entry of logEntries) {
-                  if (entry.type === 'assistant' && entry.message?.content) {
-                    for (const content of entry.message.content) {
-                      if (content.type === 'tool_use') {
-                        const toolName = content.name;
-                        const input = content.input || {};
-                        // Skip internal tools - only show external commands and API calls
-                        if (['Read', 'Write', 'Edit', 'MultiEdit', 'LS', 'Grep', 'Glob', 'TodoWrite'].includes(toolName)) {
-                          continue; // Skip internal file operations and searches
-                        }
-                        // Find the corresponding tool result to get status
-                        const toolResult = toolUsePairs.get(content.id);
-                        let statusIcon = '❓';
-                        if (toolResult) {
-                          statusIcon = toolResult.is_error === true ? '❌' : '✅';
-                        }
-                        // Add to command summary (only external tools)
-                        if (toolName === 'Bash') {
-                          const formattedCommand = formatBashCommand(input.command || '');
-                          commandSummary.push(`* ${statusIcon} \`${formattedCommand}\``);
-                        } else if (toolName.startsWith('mcp__')) {
-                          const mcpName = formatMcpName(toolName);
-                          commandSummary.push(`* ${statusIcon} \`${mcpName}(...)\``);
-                        } else {
-                          // Handle other external tools (if any)
-                          commandSummary.push(`* ${statusIcon} ${toolName}`);
+                  } else if (line.includes('] exec ')) {
+                    // Extract exec command
+                    const execMatch = line.match(/exec (.+?) in/);
+                    if (execMatch) {
+                      const formattedCommand = formatBashCommand(execMatch[1]);
+                      // Look ahead to find the result status
+                      let statusIcon = '❓'; // Unknown by default
+                      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                        const nextLine = lines[j];
+                        if (nextLine.includes('succeeded in')) {
+                          statusIcon = '✅';
+                          break;
+                        } else if (nextLine.includes('failed in') || nextLine.includes('error')) {
+                          statusIcon = '❌';
+                          break;
                         }
                       }
+                      commandSummary.push(`* ${statusIcon} \`${formattedCommand}\``);
                     }
                   }
                 }
@@ -887,163 +826,110 @@ jobs:
                 } else {
                   markdown += 'No commands or tools used.\n';
                 }
-                // Add Information section from the last entry with result metadata
+                // Add Information section
                 markdown += '\n## 📊 Information\n\n';
-                // Find the last entry with metadata
-                const lastEntry = logEntries[logEntries.length - 1];
-                if (lastEntry && (lastEntry.num_turns || lastEntry.duration_ms || lastEntry.total_cost_usd || lastEntry.usage)) {
-                  if (lastEntry.num_turns) {
-                    markdown += `**Turns:** ${lastEntry.num_turns}\n\n`;
-                  }
-                  if (lastEntry.duration_ms) {
-                    const durationSec = Math.round(lastEntry.duration_ms / 1000);
-                    const minutes = Math.floor(durationSec / 60);
-                    const seconds = durationSec % 60;
-                    markdown += `**Duration:** ${minutes}m ${seconds}s\n\n`;
-                  }
-                  if (lastEntry.total_cost_usd) {
-                    markdown += `**Total Cost:** $${lastEntry.total_cost_usd.toFixed(4)}\n\n`;
-                  }
-                  if (lastEntry.usage) {
-                    const usage = lastEntry.usage;
-                    if (usage.input_tokens || usage.output_tokens) {
-                      markdown += `**Token Usage:**\n`;
-                      if (usage.input_tokens) markdown += `- Input: ${usage.input_tokens.toLocaleString()}\n`;
-                      if (usage.cache_creation_input_tokens) markdown += `- Cache Creation: ${usage.cache_creation_input_tokens.toLocaleString()}\n`;
-                      if (usage.cache_read_input_tokens) markdown += `- Cache Read: ${usage.cache_read_input_tokens.toLocaleString()}\n`;
-                      if (usage.output_tokens) markdown += `- Output: ${usage.output_tokens.toLocaleString()}\n`;
-                      markdown += '\n';
-                    }
-                  }
-                  if (lastEntry.permission_denials && lastEntry.permission_denials.length > 0) {
-                    markdown += `**Permission Denials:** ${lastEntry.permission_denials.length}\n\n`;
+                // Extract metadata from Codex logs
+                let totalTokens = 0;
+                const tokenMatches = logContent.match(/tokens used: (\d+)/g);
+                if (tokenMatches) {
+                  for (const match of tokenMatches) {
+                    const tokens = parseInt(match.match(/(\d+)/)[1]);
+                    totalTokens += tokens;
                   }
                 }
+                if (totalTokens > 0) {
+                  markdown += `**Total Tokens Used:** ${totalTokens.toLocaleString()}\n\n`;
+                }
+                // Count tool calls and exec commands
+                const toolCalls = (logContent.match(/\] tool /g) || []).length;
+                const execCommands = (logContent.match(/\] exec /g) || []).length;
+                if (toolCalls > 0) {
+                  markdown += `**Tool Calls:** ${toolCalls}\n\n`;
+                }
+                if (execCommands > 0) {
+                  markdown += `**Commands Executed:** ${execCommands}\n\n`;
+                }
                 markdown += '\n## 🤖 Reasoning\n\n';
-                // Second pass: process assistant messages in sequence
-                for (const entry of logEntries) {
-                  if (entry.type === 'assistant' && entry.message?.content) {
-                    for (const content of entry.message.content) {
-                      if (content.type === 'text' && content.text) {
-                        // Add reasoning text directly (no header)
-                        const text = content.text.trim();
-                        if (text && text.length > 0) {
-                          markdown += text + '\n\n';
-                        }
-                      } else if (content.type === 'tool_use') {
-                        // Process tool use with its result
-                        const toolResult = toolUsePairs.get(content.id);
-                        const toolMarkdown = formatToolUse(content, toolResult);
-                        if (toolMarkdown) {
-                          markdown += toolMarkdown;
+                // Second pass: process full conversation flow with interleaved reasoning, tools, and commands
+                let inThinkingSection = false;
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  // Skip metadata lines
+                  if (line.includes('OpenAI Codex') || line.startsWith('--------') || 
+                      line.includes('workdir:') || line.includes('model:') || 
+                      line.includes('provider:') || line.includes('approval:') || 
+                      line.includes('sandbox:') || line.includes('reasoning effort:') || 
+                      line.includes('reasoning summaries:') || line.includes('tokens used:')) {
+                    continue;
+                  }
+                  // Process thinking sections
+                  if (line.includes('] thinking')) {
+                    inThinkingSection = true;
+                    continue;
+                  }
+                  // Process tool calls
+                  if (line.includes('] tool ') && line.includes('(')) {
+                    inThinkingSection = false;
+                    const toolMatch = line.match(/\] tool ([^(]+)\(/);
+                    if (toolMatch) {
+                      const toolName = toolMatch[1];
+                      // Look ahead to find the result status
+                      let statusIcon = '❓'; // Unknown by default
+                      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                        const nextLine = lines[j];
+                        if (nextLine.includes('success in')) {
+                          statusIcon = '✅';
+                          break;
+                        } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+                          statusIcon = '❌';
+                          break;
                         }
                       }
+                      if (toolName.includes('.')) {
+                        const parts = toolName.split('.');
+                        const provider = parts[0];
+                        const method = parts.slice(1).join('_');
+                        markdown += `${statusIcon} ${provider}::${method}(...)\n\n`;
+                      } else {
+                        markdown += `${statusIcon} ${toolName}(...)\n\n`;
+                      }
                     }
+                    continue;
+                  }
+                  // Process exec commands
+                  if (line.includes('] exec ')) {
+                    inThinkingSection = false;
+                    const execMatch = line.match(/exec (.+?) in/);
+                    if (execMatch) {
+                      const formattedCommand = formatBashCommand(execMatch[1]);
+                      // Look ahead to find the result status
+                      let statusIcon = '❓'; // Unknown by default
+                      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                        const nextLine = lines[j];
+                        if (nextLine.includes('succeeded in')) {
+                          statusIcon = '✅';
+                          break;
+                        } else if (nextLine.includes('failed in') || nextLine.includes('error')) {
+                          statusIcon = '❌';
+                          break;
+                        }
+                      }
+                      markdown += `${statusIcon} \`${formattedCommand}\`\n\n`;
+                    }
+                    continue;
+                  }
+                  // Process thinking content
+                  if (inThinkingSection && line.trim().length > 20 && !line.startsWith('[2025-')) {
+                    const trimmed = line.trim();
+                    // Add thinking content directly
+                    markdown += `${trimmed}\n\n`;
                   }
                 }
                 return markdown;
               } catch (error) {
-                return `## Agent Log Summary\n\nError parsing Claude log: ${error.message}\n`;
+                console.error('Error parsing Codex log:', error);
+                return '## 🤖 Commands and Tools\n\nError parsing log content.\n\n## 🤖 Reasoning\n\nUnable to parse reasoning from log.\n\n';
               }
-            }
-            function formatToolUse(toolUse, toolResult) {
-              const toolName = toolUse.name;
-              const input = toolUse.input || {};
-              // Skip TodoWrite except the very last one (we'll handle this separately)
-              if (toolName === 'TodoWrite') {
-                return ''; // Skip for now, would need global context to find the last one
-              }
-              // Helper function to determine status icon
-              function getStatusIcon() {
-                if (toolResult) {
-                  return toolResult.is_error === true ? '❌' : '✅';
-                }
-                return '❓'; // Unknown by default
-              }
-              let markdown = '';
-              const statusIcon = getStatusIcon();
-              switch (toolName) {
-                case 'Bash':
-                  const command = input.command || '';
-                  const description = input.description || '';
-                  // Format the command to be single line
-                  const formattedCommand = formatBashCommand(command);
-                  if (description) {
-                    markdown += `${description}:\n\n`;
-                  }
-                  markdown += `${statusIcon} \`${formattedCommand}\`\n\n`;
-                  break;
-                case 'Read':
-                  const filePath = input.file_path || input.path || '';
-                  const relativePath = filePath.replace(/^\/[^\/]*\/[^\/]*\/[^\/]*\/[^\/]*\//, ''); // Remove /home/runner/work/repo/repo/ prefix
-                  markdown += `${statusIcon} Read \`${relativePath}\`\n\n`;
-                  break;
-                case 'Write':
-                case 'Edit':
-                case 'MultiEdit':
-                  const writeFilePath = input.file_path || input.path || '';
-                  const writeRelativePath = writeFilePath.replace(/^\/[^\/]*\/[^\/]*\/[^\/]*\/[^\/]*\//, '');
-                  markdown += `${statusIcon} Write \`${writeRelativePath}\`\n\n`;
-                  break;
-                case 'Grep':
-                case 'Glob':
-                  const query = input.query || input.pattern || '';
-                  markdown += `${statusIcon} Search for \`${truncateString(query, 80)}\`\n\n`;
-                  break;
-                case 'LS':
-                  const lsPath = input.path || '';
-                  const lsRelativePath = lsPath.replace(/^\/[^\/]*\/[^\/]*\/[^\/]*\/[^\/]*\//, '');
-                  markdown += `${statusIcon} LS: ${lsRelativePath || lsPath}\n\n`;
-                  break;
-                default:
-                  // Handle MCP calls and other tools
-                  if (toolName.startsWith('mcp__')) {
-                    const mcpName = formatMcpName(toolName);
-                    const params = formatMcpParameters(input);
-                    markdown += `${statusIcon} ${mcpName}(${params})\n\n`;
-                  } else {
-                    // Generic tool formatting - show the tool name and main parameters
-                    const keys = Object.keys(input);
-                    if (keys.length > 0) {
-                      // Try to find the most important parameter
-                      const mainParam = keys.find(k => ['query', 'command', 'path', 'file_path', 'content'].includes(k)) || keys[0];
-                      const value = String(input[mainParam] || '');
-                      if (value) {
-                        markdown += `${statusIcon} ${toolName}: ${truncateString(value, 100)}\n\n`;
-                      } else {
-                        markdown += `${statusIcon} ${toolName}\n\n`;
-                      }
-                    } else {
-                      markdown += `${statusIcon} ${toolName}\n\n`;
-                    }
-                  }
-              }
-              return markdown;
-            }
-            function formatMcpName(toolName) {
-              // Convert mcp__github__search_issues to github::search_issues
-              if (toolName.startsWith('mcp__')) {
-                const parts = toolName.split('__');
-                if (parts.length >= 3) {
-                  const provider = parts[1]; // github, etc.
-                  const method = parts.slice(2).join('_'); // search_issues, etc.
-                  return `${provider}::${method}`;
-                }
-              }
-              return toolName;
-            }
-            function formatMcpParameters(input) {
-              const keys = Object.keys(input);
-              if (keys.length === 0) return '';
-              const paramStrs = [];
-              for (const key of keys.slice(0, 4)) { // Show up to 4 parameters
-                const value = String(input[key] || '');
-                paramStrs.push(`${key}: ${truncateString(value, 40)}`);
-              }
-              if (keys.length > 4) {
-                paramStrs.push('...');
-              }
-              return paramStrs.join(', ');
             }
             function formatBashCommand(command) {
               if (!command) return '';
@@ -1071,35 +957,37 @@ jobs:
             }
             // Export for testing
             if (typeof module !== 'undefined' && module.exports) {
-              module.exports = { parseClaudeLog, formatToolUse, formatBashCommand, truncateString };
+              module.exports = { parseCodexLog, formatBashCommand, truncateString };
             }
             main();
       - name: Upload agent logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-add-issue-comment.log
-          path: /tmp/test-claude-add-issue-comment.log
+          name: test-codex-update-issue.log
+          path: /tmp/test-codex-update-issue.log
           if-no-files-found: warn
 
-  create_issue_comment:
-    needs: test-claude-add-issue-comment
-    if: github.event.issue.number || github.event.pull_request.number
+  update_issue:
+    needs: test-codex-update-issue
+    if: github.event.issue.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-      pull-requests: write
     timeout-minutes: 10
     outputs:
-      comment_id: ${{ steps.create_comment.outputs.comment_id }}
-      comment_url: ${{ steps.create_comment.outputs.comment_url }}
+      issue_number: ${{ steps.update_issue.outputs.issue_number }}
+      issue_url: ${{ steps.update_issue.outputs.issue_url }}
     steps:
-      - name: Add Issue Comment
-        id: create_comment
+      - name: Update Issue
+        id: update_issue
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-add-issue-comment.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-update-issue.outputs.output }}
+          GITHUB_AW_UPDATE_STATUS: true
+          GITHUB_AW_UPDATE_TITLE: true
+          GITHUB_AW_UPDATE_BODY: true
         with:
           script: |
             async function main() {
@@ -1126,117 +1014,137 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find all add-issue-comment items
-              const commentItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'add-issue-comment');
-              if (commentItems.length === 0) {
-                console.log('No add-issue-comment items found in agent output');
+              // Find all update-issue items
+              const updateItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'update-issue');
+              if (updateItems.length === 0) {
+                console.log('No update-issue items found in agent output');
                 return;
               }
-              console.log(`Found ${commentItems.length} add-issue-comment item(s)`);
-              // Get the target configuration from environment variable
-              const commentTarget = process.env.GITHUB_AW_COMMENT_TARGET || "triggering";
-              console.log(`Comment target configuration: ${commentTarget}`);
-              // Check if we're in an issue or pull request context
+              console.log(`Found ${updateItems.length} update-issue item(s)`);
+              // Get the configuration from environment variables
+              const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
+              const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === 'true';
+              const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === 'true';
+              const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === 'true';
+              console.log(`Update target configuration: ${updateTarget}`);
+              console.log(`Can update status: ${canUpdateStatus}, title: ${canUpdateTitle}, body: ${canUpdateBody}`);
+              // Check if we're in an issue context
               const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
-              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
               // Validate context based on target configuration
-              if (commentTarget === "triggering" && !isIssueContext && !isPRContext) {
-                console.log('Target is "triggering" but not running in issue or pull request context, skipping comment creation');
+              if (updateTarget === "triggering" && !isIssueContext) {
+                console.log('Target is "triggering" but not running in issue context, skipping issue update');
                 return;
               }
-              const createdComments = [];
-              // Process each comment item
-              for (let i = 0; i < commentItems.length; i++) {
-                const commentItem = commentItems[i];
-                console.log(`Processing add-issue-comment item ${i + 1}/${commentItems.length}:`, { bodyLength: commentItem.body.length });
-                // Determine the issue/PR number and comment endpoint for this comment
+              const updatedIssues = [];
+              // Process each update item
+              for (let i = 0; i < updateItems.length; i++) {
+                const updateItem = updateItems[i];
+                console.log(`Processing update-issue item ${i + 1}/${updateItems.length}`);
+                // Determine the issue number for this update
                 let issueNumber;
-                let commentEndpoint;
-                if (commentTarget === "*") {
-                  // For target "*", we need an explicit issue number from the comment item
-                  if (commentItem.issue_number) {
-                    issueNumber = parseInt(commentItem.issue_number, 10);
+                if (updateTarget === "*") {
+                  // For target "*", we need an explicit issue number from the update item
+                  if (updateItem.issue_number) {
+                    issueNumber = parseInt(updateItem.issue_number, 10);
                     if (isNaN(issueNumber) || issueNumber <= 0) {
-                      console.log(`Invalid issue number specified: ${commentItem.issue_number}`);
+                      console.log(`Invalid issue number specified: ${updateItem.issue_number}`);
                       continue;
                     }
-                    commentEndpoint = 'issues';
                   } else {
-                    console.log('Target is "*" but no issue_number specified in comment item');
+                    console.log('Target is "*" but no issue_number specified in update item');
                     continue;
                   }
-                } else if (commentTarget && commentTarget !== "triggering") {
+                } else if (updateTarget && updateTarget !== "triggering") {
                   // Explicit issue number specified in target
-                  issueNumber = parseInt(commentTarget, 10);
+                  issueNumber = parseInt(updateTarget, 10);
                   if (isNaN(issueNumber) || issueNumber <= 0) {
-                    console.log(`Invalid issue number in target configuration: ${commentTarget}`);
+                    console.log(`Invalid issue number in target configuration: ${updateTarget}`);
                     continue;
                   }
-                  commentEndpoint = 'issues';
                 } else {
-                  // Default behavior: use triggering issue/PR
+                  // Default behavior: use triggering issue
                   if (isIssueContext) {
                     if (context.payload.issue) {
                       issueNumber = context.payload.issue.number;
-                      commentEndpoint = 'issues';
                     } else {
                       console.log('Issue context detected but no issue found in payload');
                       continue;
                     }
-                  } else if (isPRContext) {
-                    if (context.payload.pull_request) {
-                      issueNumber = context.payload.pull_request.number;
-                      commentEndpoint = 'issues'; // PR comments use the issues API endpoint
-                    } else {
-                      console.log('Pull request context detected but no pull request found in payload');
-                      continue;
-                    }
+                  } else {
+                    console.log('Could not determine issue number');
+                    continue;
                   }
                 }
                 if (!issueNumber) {
-                  console.log('Could not determine issue or pull request number');
+                  console.log('Could not determine issue number');
                   continue;
                 }
-                // Extract body from the JSON item
-                let body = commentItem.body.trim();
-                // Add AI disclaimer with run id, run htmlurl
-                const runId = context.runId;
-                const runUrl = context.payload.repository 
-                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                  : `https://github.com/actions/runs/${runId}`;  
-                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
-                console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
-                console.log('Comment content length:', body.length);
+                console.log(`Updating issue #${issueNumber}`);
+                // Build the update object based on allowed fields and provided values
+                const updateData = {};
+                let hasUpdates = false;
+                if (canUpdateStatus && updateItem.status !== undefined) {
+                  // Validate status value
+                  if (updateItem.status === 'open' || updateItem.status === 'closed') {
+                    updateData.state = updateItem.status;
+                    hasUpdates = true;
+                    console.log(`Will update status to: ${updateItem.status}`);
+                  } else {
+                    console.log(`Invalid status value: ${updateItem.status}. Must be 'open' or 'closed'`);
+                  }
+                }
+                if (canUpdateTitle && updateItem.title !== undefined) {
+                  if (typeof updateItem.title === 'string' && updateItem.title.trim().length > 0) {
+                    updateData.title = updateItem.title.trim();
+                    hasUpdates = true;
+                    console.log(`Will update title to: ${updateItem.title.trim()}`);
+                  } else {
+                    console.log('Invalid title value: must be a non-empty string');
+                  }
+                }
+                if (canUpdateBody && updateItem.body !== undefined) {
+                  if (typeof updateItem.body === 'string') {
+                    updateData.body = updateItem.body;
+                    hasUpdates = true;
+                    console.log(`Will update body (length: ${updateItem.body.length})`);
+                  } else {
+                    console.log('Invalid body value: must be a string');
+                  }
+                }
+                if (!hasUpdates) {
+                  console.log('No valid updates to apply for this item');
+                  continue;
+                }
                 try {
-                  // Create the comment using GitHub API
-                  const { data: comment } = await github.rest.issues.createComment({
+                  // Update the issue using GitHub API
+                  const { data: issue } = await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issueNumber,
-                    body: body
+                    ...updateData
                   });
-                  console.log('Created comment #' + comment.id + ': ' + comment.html_url);
-                  createdComments.push(comment);
-                  // Set output for the last created comment (for backward compatibility)
-                  if (i === commentItems.length - 1) {
-                    core.setOutput('comment_id', comment.id);
-                    core.setOutput('comment_url', comment.html_url);
+                  console.log('Updated issue #' + issue.number + ': ' + issue.html_url);
+                  updatedIssues.push(issue);
+                  // Set output for the last updated issue (for backward compatibility)
+                  if (i === updateItems.length - 1) {
+                    core.setOutput('issue_number', issue.number);
+                    core.setOutput('issue_url', issue.html_url);
                   }
                 } catch (error) {
-                  console.error(`✗ Failed to create comment:`, error instanceof Error ? error.message : String(error));
+                  console.error(`✗ Failed to update issue #${issueNumber}:`, error instanceof Error ? error.message : String(error));
                   throw error;
                 }
               }
-              // Write summary for all created comments
-              if (createdComments.length > 0) {
-                let summaryContent = '\n\n## GitHub Comments\n';
-                for (const comment of createdComments) {
-                  summaryContent += `- Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
+              // Write summary for all updated issues
+              if (updatedIssues.length > 0) {
+                let summaryContent = '\n\n## Updated Issues\n';
+                for (const issue of updatedIssues) {
+                  summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully created ${createdComments.length} comment(s)`);
-              return createdComments;
+              console.log(`Successfully updated ${updatedIssues.length} issue(s)`);
+              return updatedIssues;
             }
             await main();
 

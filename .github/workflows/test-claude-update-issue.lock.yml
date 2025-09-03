@@ -2,7 +2,7 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Add Issue Comment"
+name: "Test Claude Update Issue"
 "on":
   issues:
     types:
@@ -14,7 +14,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
 
-run-name: "Test Claude Add Issue Comment"
+run-name: "Test Claude Update Issue"
 
 jobs:
   add_reaction:
@@ -187,7 +187,7 @@ jobs:
             }
             await main();
 
-  test-claude-add-issue-comment:
+  test-claude-update-issue:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -249,12 +249,16 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} is "Hello from Claude" then add a comment on the issue "Reply from Claude".
+          If the title of the issue #${{ github.event.issue.number }} is exactly "[claude-test] Update Issue Test" then:
+          
+          1. Change the status to "closed"
+          2. Update the title to "[UPDATED] Update Issue Test - Processed by Claude"
+          3. Add a line to the end of the body saying "This issue was automatically updated by the Claude agentic workflow."
           
           
           ---
           
-          ## Adding a Comment to an Issue or Pull Request
+          ## Updating Issues
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -262,18 +266,17 @@ jobs:
           
           ### Available Output Types:
           
-          **Adding a Comment to an Issue or Pull Request**
+          **Updating an Issue**
           
-          To add a comment to an issue or pull request:
-          1. Write an entry to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
+          To udpate an issue:
           ```json
-          {"type": "add-issue-comment", "body": "Your comment content in markdown"}
+          {"type": "update-issue", "status": "open" // or "closed", "title": "New issue title", "body": "Updated issue body in markdown"}
           ```
           2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
-          {"type": "add-issue-comment", "body": "This is related to the issue above."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -301,7 +304,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Add Issue Comment",
+              workflow_name: "Test Claude Update Issue",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -401,13 +404,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-add-issue-comment.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-update-issue.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-add-issue-comment.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-update-issue.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-add-issue-comment.log
+          touch /tmp/test-claude-update-issue.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -429,7 +432,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"add-issue-comment\":{\"enabled\":true}}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"update-issue\":true}"
         with:
           script: |
             async function main() {
@@ -803,7 +806,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-add-issue-comment.log
+          AGENT_LOG_FILE: /tmp/test-claude-update-issue.log
         with:
           script: |
             function main() {
@@ -1078,28 +1081,30 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-add-issue-comment.log
-          path: /tmp/test-claude-add-issue-comment.log
+          name: test-claude-update-issue.log
+          path: /tmp/test-claude-update-issue.log
           if-no-files-found: warn
 
-  create_issue_comment:
-    needs: test-claude-add-issue-comment
-    if: github.event.issue.number || github.event.pull_request.number
+  update_issue:
+    needs: test-claude-update-issue
+    if: github.event.issue.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
-      pull-requests: write
     timeout-minutes: 10
     outputs:
-      comment_id: ${{ steps.create_comment.outputs.comment_id }}
-      comment_url: ${{ steps.create_comment.outputs.comment_url }}
+      issue_number: ${{ steps.update_issue.outputs.issue_number }}
+      issue_url: ${{ steps.update_issue.outputs.issue_url }}
     steps:
-      - name: Add Issue Comment
-        id: create_comment
+      - name: Update Issue
+        id: update_issue
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-add-issue-comment.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-update-issue.outputs.output }}
+          GITHUB_AW_UPDATE_STATUS: true
+          GITHUB_AW_UPDATE_TITLE: true
+          GITHUB_AW_UPDATE_BODY: true
         with:
           script: |
             async function main() {
@@ -1126,117 +1131,137 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find all add-issue-comment items
-              const commentItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'add-issue-comment');
-              if (commentItems.length === 0) {
-                console.log('No add-issue-comment items found in agent output');
+              // Find all update-issue items
+              const updateItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'update-issue');
+              if (updateItems.length === 0) {
+                console.log('No update-issue items found in agent output');
                 return;
               }
-              console.log(`Found ${commentItems.length} add-issue-comment item(s)`);
-              // Get the target configuration from environment variable
-              const commentTarget = process.env.GITHUB_AW_COMMENT_TARGET || "triggering";
-              console.log(`Comment target configuration: ${commentTarget}`);
-              // Check if we're in an issue or pull request context
+              console.log(`Found ${updateItems.length} update-issue item(s)`);
+              // Get the configuration from environment variables
+              const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
+              const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === 'true';
+              const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === 'true';
+              const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === 'true';
+              console.log(`Update target configuration: ${updateTarget}`);
+              console.log(`Can update status: ${canUpdateStatus}, title: ${canUpdateTitle}, body: ${canUpdateBody}`);
+              // Check if we're in an issue context
               const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
-              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
               // Validate context based on target configuration
-              if (commentTarget === "triggering" && !isIssueContext && !isPRContext) {
-                console.log('Target is "triggering" but not running in issue or pull request context, skipping comment creation');
+              if (updateTarget === "triggering" && !isIssueContext) {
+                console.log('Target is "triggering" but not running in issue context, skipping issue update');
                 return;
               }
-              const createdComments = [];
-              // Process each comment item
-              for (let i = 0; i < commentItems.length; i++) {
-                const commentItem = commentItems[i];
-                console.log(`Processing add-issue-comment item ${i + 1}/${commentItems.length}:`, { bodyLength: commentItem.body.length });
-                // Determine the issue/PR number and comment endpoint for this comment
+              const updatedIssues = [];
+              // Process each update item
+              for (let i = 0; i < updateItems.length; i++) {
+                const updateItem = updateItems[i];
+                console.log(`Processing update-issue item ${i + 1}/${updateItems.length}`);
+                // Determine the issue number for this update
                 let issueNumber;
-                let commentEndpoint;
-                if (commentTarget === "*") {
-                  // For target "*", we need an explicit issue number from the comment item
-                  if (commentItem.issue_number) {
-                    issueNumber = parseInt(commentItem.issue_number, 10);
+                if (updateTarget === "*") {
+                  // For target "*", we need an explicit issue number from the update item
+                  if (updateItem.issue_number) {
+                    issueNumber = parseInt(updateItem.issue_number, 10);
                     if (isNaN(issueNumber) || issueNumber <= 0) {
-                      console.log(`Invalid issue number specified: ${commentItem.issue_number}`);
+                      console.log(`Invalid issue number specified: ${updateItem.issue_number}`);
                       continue;
                     }
-                    commentEndpoint = 'issues';
                   } else {
-                    console.log('Target is "*" but no issue_number specified in comment item');
+                    console.log('Target is "*" but no issue_number specified in update item');
                     continue;
                   }
-                } else if (commentTarget && commentTarget !== "triggering") {
+                } else if (updateTarget && updateTarget !== "triggering") {
                   // Explicit issue number specified in target
-                  issueNumber = parseInt(commentTarget, 10);
+                  issueNumber = parseInt(updateTarget, 10);
                   if (isNaN(issueNumber) || issueNumber <= 0) {
-                    console.log(`Invalid issue number in target configuration: ${commentTarget}`);
+                    console.log(`Invalid issue number in target configuration: ${updateTarget}`);
                     continue;
                   }
-                  commentEndpoint = 'issues';
                 } else {
-                  // Default behavior: use triggering issue/PR
+                  // Default behavior: use triggering issue
                   if (isIssueContext) {
                     if (context.payload.issue) {
                       issueNumber = context.payload.issue.number;
-                      commentEndpoint = 'issues';
                     } else {
                       console.log('Issue context detected but no issue found in payload');
                       continue;
                     }
-                  } else if (isPRContext) {
-                    if (context.payload.pull_request) {
-                      issueNumber = context.payload.pull_request.number;
-                      commentEndpoint = 'issues'; // PR comments use the issues API endpoint
-                    } else {
-                      console.log('Pull request context detected but no pull request found in payload');
-                      continue;
-                    }
+                  } else {
+                    console.log('Could not determine issue number');
+                    continue;
                   }
                 }
                 if (!issueNumber) {
-                  console.log('Could not determine issue or pull request number');
+                  console.log('Could not determine issue number');
                   continue;
                 }
-                // Extract body from the JSON item
-                let body = commentItem.body.trim();
-                // Add AI disclaimer with run id, run htmlurl
-                const runId = context.runId;
-                const runUrl = context.payload.repository 
-                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                  : `https://github.com/actions/runs/${runId}`;  
-                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
-                console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
-                console.log('Comment content length:', body.length);
+                console.log(`Updating issue #${issueNumber}`);
+                // Build the update object based on allowed fields and provided values
+                const updateData = {};
+                let hasUpdates = false;
+                if (canUpdateStatus && updateItem.status !== undefined) {
+                  // Validate status value
+                  if (updateItem.status === 'open' || updateItem.status === 'closed') {
+                    updateData.state = updateItem.status;
+                    hasUpdates = true;
+                    console.log(`Will update status to: ${updateItem.status}`);
+                  } else {
+                    console.log(`Invalid status value: ${updateItem.status}. Must be 'open' or 'closed'`);
+                  }
+                }
+                if (canUpdateTitle && updateItem.title !== undefined) {
+                  if (typeof updateItem.title === 'string' && updateItem.title.trim().length > 0) {
+                    updateData.title = updateItem.title.trim();
+                    hasUpdates = true;
+                    console.log(`Will update title to: ${updateItem.title.trim()}`);
+                  } else {
+                    console.log('Invalid title value: must be a non-empty string');
+                  }
+                }
+                if (canUpdateBody && updateItem.body !== undefined) {
+                  if (typeof updateItem.body === 'string') {
+                    updateData.body = updateItem.body;
+                    hasUpdates = true;
+                    console.log(`Will update body (length: ${updateItem.body.length})`);
+                  } else {
+                    console.log('Invalid body value: must be a string');
+                  }
+                }
+                if (!hasUpdates) {
+                  console.log('No valid updates to apply for this item');
+                  continue;
+                }
                 try {
-                  // Create the comment using GitHub API
-                  const { data: comment } = await github.rest.issues.createComment({
+                  // Update the issue using GitHub API
+                  const { data: issue } = await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issueNumber,
-                    body: body
+                    ...updateData
                   });
-                  console.log('Created comment #' + comment.id + ': ' + comment.html_url);
-                  createdComments.push(comment);
-                  // Set output for the last created comment (for backward compatibility)
-                  if (i === commentItems.length - 1) {
-                    core.setOutput('comment_id', comment.id);
-                    core.setOutput('comment_url', comment.html_url);
+                  console.log('Updated issue #' + issue.number + ': ' + issue.html_url);
+                  updatedIssues.push(issue);
+                  // Set output for the last updated issue (for backward compatibility)
+                  if (i === updateItems.length - 1) {
+                    core.setOutput('issue_number', issue.number);
+                    core.setOutput('issue_url', issue.html_url);
                   }
                 } catch (error) {
-                  console.error(`✗ Failed to create comment:`, error instanceof Error ? error.message : String(error));
+                  console.error(`✗ Failed to update issue #${issueNumber}:`, error instanceof Error ? error.message : String(error));
                   throw error;
                 }
               }
-              // Write summary for all created comments
-              if (createdComments.length > 0) {
-                let summaryContent = '\n\n## GitHub Comments\n';
-                for (const comment of createdComments) {
-                  summaryContent += `- Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
+              // Write summary for all updated issues
+              if (updatedIssues.length > 0) {
+                let summaryContent = '\n\n## Updated Issues\n';
+                for (const issue of updatedIssues) {
+                  summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully created ${createdComments.length} comment(s)`);
-              return createdComments;
+              console.log(`Successfully updated ${updatedIssues.length} issue(s)`);
+              return updatedIssues;
             }
             await main();
 

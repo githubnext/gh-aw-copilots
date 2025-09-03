@@ -141,13 +141,17 @@ async function main() {
     // Use default limits for plural-supported types
     switch (itemType) {
       case 'create-issue':
-        return 10; // Allow multiple issues
+        return 1; // Only one issue allowed
       case 'add-issue-comment':
-        return 10; // Allow multiple comments
+        return 1; // Only one comment allowed
       case 'create-pull-request':
         return 1;  // Only one pull request allowed
-      case 'add-issue-labels':
-        return 1;  // Only one labels operation allowed
+      case 'add-issue-label':
+        return 5;  // Only one labels operation allowed
+      case 'update-issue':
+        return 1;  // Only one issue update allowed
+      case 'push-to-branch':
+        return 1;  // Only one push to branch allowed
       default:
         return 1;  // Default to single item for unknown types
     }
@@ -261,23 +265,86 @@ async function main() {
           // Sanitize text content
           item.title = sanitizeContent(item.title);
           item.body = sanitizeContent(item.body);
+          // Sanitize branch name if present
+          if (item.branch && typeof item.branch === 'string') {
+            item.branch = sanitizeContent(item.branch);
+          }
           // Sanitize labels if present
           if (item.labels && Array.isArray(item.labels)) {
             item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
           }
           break;
 
-        case 'add-issue-labels':
+        case 'add-issue-label':
           if (!item.labels || !Array.isArray(item.labels)) {
-            errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
+            errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
             continue;
           }
           if (item.labels.some(label => typeof label !== 'string')) {
-            errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
+            errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
             continue;
           }
           // Sanitize label strings
           item.labels = item.labels.map(label => sanitizeContent(label));
+          break;
+
+        case 'update-issue':
+          // Check that at least one updateable field is provided
+          const hasValidField = (item.status !== undefined) || 
+                                (item.title !== undefined) || 
+                                (item.body !== undefined);
+          if (!hasValidField) {
+            errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
+            continue;
+          }
+          // Validate status if provided
+          if (item.status !== undefined) {
+            if (typeof item.status !== 'string' || (item.status !== 'open' && item.status !== 'closed')) {
+              errors.push(`Line ${i + 1}: update-issue 'status' must be 'open' or 'closed'`);
+              continue;
+            }
+          }
+          // Validate title if provided
+          if (item.title !== undefined) {
+            if (typeof item.title !== 'string') {
+              errors.push(`Line ${i + 1}: update-issue 'title' must be a string`);
+              continue;
+            }
+            item.title = sanitizeContent(item.title);
+          }
+          // Validate body if provided
+          if (item.body !== undefined) {
+            if (typeof item.body !== 'string') {
+              errors.push(`Line ${i + 1}: update-issue 'body' must be a string`);
+              continue;
+            }
+            item.body = sanitizeContent(item.body);
+          }
+          // Validate issue_number if provided (for target "*")
+          if (item.issue_number !== undefined) {
+            if (typeof item.issue_number !== 'number' && typeof item.issue_number !== 'string') {
+              errors.push(`Line ${i + 1}: update-issue 'issue_number' must be a number or string`);
+              continue;
+            }
+          }
+          break;
+
+        case 'push-to-branch':
+          // Validate message if provided (optional)
+          if (item.message !== undefined) {
+            if (typeof item.message !== 'string') {
+              errors.push(`Line ${i + 1}: push-to-branch 'message' must be a string`);
+              continue;
+            }
+            item.message = sanitizeContent(item.message);
+          }
+          // Validate pull_request_number if provided (for target "*")
+          if (item.pull_request_number !== undefined) {
+            if (typeof item.pull_request_number !== 'number' && typeof item.pull_request_number !== 'string') {
+              errors.push(`Line ${i + 1}: push-to-branch 'pull_request_number' must be a number or string`);
+              continue;
+            }
+          }
           break;
 
         default:

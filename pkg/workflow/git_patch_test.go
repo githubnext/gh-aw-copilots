@@ -30,8 +30,7 @@ func TestGitPatchGeneration(t *testing.T) {
 on:
   workflow_dispatch:
 safe-outputs:
-  add-issue-labels:
-    allowed: ["bug", "enhancement"]
+  create-pull-request:
 ---
 
 # Test Git Patch

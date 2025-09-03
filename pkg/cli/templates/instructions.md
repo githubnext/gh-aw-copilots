@@ -88,12 +88,15 @@ The YAML frontmatter supports these fields:
       create-issue:
         title-prefix: "[ai] "           # Optional: prefix for issue titles  
         labels: [automation, agentic]    # Optional: labels to attach to issues
+        max: 5                          # Optional: maximum number of issues (default: 1)
     ```
     When using `safe-outputs.create-issue`, the main job does **not** need `issues: write` permission since issue creation is handled by a separate job with appropriate permissions.
-  - `add_issue_comment:` - Safe comment creation on issues/PRs
+  - `add-issue-comment:` - Safe comment creation on issues/PRs
     ```yaml
     safe-outputs:
-      add_issue_comment: {}
+      add-issue-comment:
+        max: 3                          # Optional: maximum number of comments (default: 1)
+        target: "*"                     # Optional: target for comments (default: "triggering")
     ```
     When using `safe-outputs.add-issue-comment`, the main job does **not** need `issues: write` or `pull-requests: write` permissions since comment creation is handled by a separate job with appropriate permissions.
   - `create-pull-request:` - Safe pull request creation with git patches
@@ -104,7 +107,18 @@ The YAML frontmatter supports these fields:
         labels: [automation, ai-agent]  # Optional: labels to attach to PRs
         draft: true                     # Optional: create as draft PR (defaults to true)
     ```
-    When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions. 
+    When using `output.create-pull-request`, the main job does **not** need `contents: write` or `pull-requests: write` permissions since PR creation is handled by a separate job with appropriate permissions.
+  - `update-issue:` - Safe issue updates 
+    ```yaml
+    safe-outputs:
+      update-issue:
+        status: true                    # Optional: allow updating issue status (open/closed)
+        target: "*"                     # Optional: target for updates (default: "triggering")
+        title: true                     # Optional: allow updating issue title
+        body: true                      # Optional: allow updating issue body
+        max: 3                          # Optional: maximum number of issues to update (default: 1)
+    ```
+    When using `safe-outputs.update-issue`, the main job does **not** need `issues: write` permission since issue updates are handled by a separate job with appropriate permissions. 
   
 - **`alias:`** - Alternative workflow name (string)
 - **`cache:`** - Cache configuration for workflow dependencies (object or array)
@@ -494,6 +508,7 @@ permissions:
 engine: claude
 safe-outputs:
   add-issue-comment:
+    max: 3                # Optional: create multiple comments (default: 1)
 ---
 
 # Issue Analysis Agent

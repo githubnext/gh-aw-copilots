@@ -252,4 +252,58 @@ describe('create_pull_request.cjs', () => {
     expect(callArgs.body).toContain('[12345]');
     expect(callArgs.body).toContain('https://github.com/testowner/testrepo/actions/runs/12345');
   });
+
+  it('should apply title prefix when provided', async () => {
+    mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = 'test-workflow';
+    mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = 'main';
+    mockDependencies.process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
+      items: [{
+        type: 'create-pull-request',
+        title: 'Simple PR title',
+        body: 'Simple PR body content'
+      }]
+    });
+    mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = '[BOT] ';
+    
+    const mockPullRequest = {
+      number: 987,
+      html_url: 'https://github.com/testowner/testrepo/pull/987'
+    };
+    
+    mockDependencies.github.rest.pulls.create.mockResolvedValue({ data: mockPullRequest });
+    
+    const mainFunction = createMainFunction(mockDependencies);
+    
+    await mainFunction();
+    
+    const callArgs = mockDependencies.github.rest.pulls.create.mock.calls[0][0];
+    expect(callArgs.title).toBe('[BOT] Simple PR title');
+  });
+
+  it('should not duplicate title prefix when already present', async () => {
+    mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = 'test-workflow';
+    mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = 'main';
+    mockDependencies.process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
+      items: [{
+        type: 'create-pull-request',
+        title: '[BOT] PR title already prefixed',
+        body: 'PR body content'
+      }]
+    });
+    mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = '[BOT] ';
+    
+    const mockPullRequest = {
+      number: 988,
+      html_url: 'https://github.com/testowner/testrepo/pull/988'
+    };
+    
+    mockDependencies.github.rest.pulls.create.mockResolvedValue({ data: mockPullRequest });
+    
+    const mainFunction = createMainFunction(mockDependencies);
+    
+    await mainFunction();
+    
+    const callArgs = mockDependencies.github.rest.pulls.create.mock.calls[0][0];
+    expect(callArgs.title).toBe('[BOT] PR title already prefixed'); // Should not be duplicated
+  });
 });
