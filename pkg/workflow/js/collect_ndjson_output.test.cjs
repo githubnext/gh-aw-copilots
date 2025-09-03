@@ -194,6 +194,87 @@ describe('collect_ndjson_output.cjs', () => {
     expect(parsedOutput.errors[0]).toContain('Invalid JSON');
   });
 
+  it('should repair invalid JSON using jsonrepair and include valid items', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"}
+{type: "add-issue-comment", body: "Test comment"}
+{"type": "create-issue", "title": "Another Issue", "body": "Another body"}`;
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(3); // All items should be parsed (including repaired one)
+    expect(parsedOutput.errors).toHaveLength(0); // No errors since JSON was successfully repaired
+    
+    // Check that the repaired item has the correct structure
+    const commentItem = parsedOutput.items.find(item => item.type === 'add-issue-comment');
+    expect(commentItem).toBeDefined();
+    expect(commentItem.body).toBe('Test comment');
+    
+    // Verify the logging shows repair attempt
+    expect(console.log).toHaveBeenCalledWith('Line 2: Attempting to repair invalid JSON');
+    expect(console.log).toHaveBeenCalledWith('Line 2: Successfully repaired and validated add-issue-comment item');
+  });
+
+  it('should handle JSON that cannot be repaired', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"}
+{completely broken json that cannot be repaired [[[
+{"type": "add-issue-comment", "body": "Test comment"}`;
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(2); // Only valid items should be included
+    expect(parsedOutput.errors).toHaveLength(1); // One error for the repaired JSON that's missing type field
+    expect(parsedOutput.errors[0]).toContain('Missing required \'type\' field (after repair)');
+    
+    // Verify the logging shows repair attempt
+    expect(console.log).toHaveBeenCalledWith('Line 2: Attempting to repair invalid JSON');
+  });
+
+  it('should handle truly unrepairable JSON', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    // Use content that will trigger initial parse failure 
+    const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"}
+{invalid json syntax
+{"type": "add-issue-comment", "body": "Test comment"}`;
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(2); // Only valid items should be included  
+    expect(parsedOutput.errors).toHaveLength(1); // One error for the unparseable content
+    expect(parsedOutput.errors[0]).toContain('Line 2:');
+    
+    // Verify the logging shows repair attempt
+    expect(console.log).toHaveBeenCalledWith('Line 2: Attempting to repair invalid JSON');
+  });
+
   it('should allow multiple items of supported types up to limits', async () => {
     const testFile = '/tmp/test-ndjson-output.txt';
     const ndjsonContent = `{"type": "create-issue", "title": "First Issue", "body": "First body"}

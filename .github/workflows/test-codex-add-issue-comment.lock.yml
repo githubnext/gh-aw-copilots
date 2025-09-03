@@ -368,6 +368,7 @@ jobs:
           script: |
             async function main() {
               const fs = require("fs");
+              const { jsonrepair } = require("jsonrepair");
               /**
                * Sanitizes content for safe output in GitHub Actions
                * @param {string} content - The content to sanitize
@@ -617,7 +618,94 @@ jobs:
                   console.log(`Line ${i + 1}: Valid ${itemType} item`);
                   parsedItems.push(item);
                 } catch (error) {
-                  errors.push(`Line ${i + 1}: Invalid JSON - ${error.message}`);
+                  // Try to repair the JSON and parse again
+                  try {
+                    console.log(`Line ${i + 1}: Attempting to repair invalid JSON`);
+                    const repairedJson = jsonrepair(line);
+                    const item = JSON.parse(repairedJson);
+                    // Validate that the item has a 'type' field
+                    if (!item.type) {
+                      errors.push(`Line ${i + 1}: Missing required 'type' field (after repair)`);
+                      continue;
+                    }
+                    // Validate against expected output types
+                    const itemType = item.type;
+                    if (!expectedOutputTypes[itemType]) {
+                      errors.push(`Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')} (after repair)`);
+                      continue;
+                    }
+                    // Check for too many items of the same type
+                    const typeCount = parsedItems.filter(existing => existing.type === itemType).length;
+                    const maxAllowed = getMaxAllowedForType(itemType, expectedOutputTypes);
+                    if (typeCount >= maxAllowed) {
+                      errors.push(`Line ${i + 1}: Too many items of type '${itemType}'. Maximum allowed: ${maxAllowed}. (after repair)`);
+                      continue;
+                    }
+                    // Basic validation based on type (same validation as above)
+                    switch (itemType) {
+                      case 'create-issue':
+                        if (!item.title || typeof item.title !== 'string') {
+                          errors.push(`Line ${i + 1}: create-issue requires a 'title' string field (after repair)`);
+                          continue;
+                        }
+                        if (!item.body || typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: create-issue requires a 'body' string field (after repair)`);
+                          continue;
+                        }
+                        // Sanitize text content
+                        item.title = sanitizeContent(item.title);
+                        item.body = sanitizeContent(item.body);
+                        // Sanitize labels if present
+                        if (item.labels && Array.isArray(item.labels)) {
+                          item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+                        }
+                        break;
+                      case 'add-issue-comment':
+                        if (!item.body || typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: add-issue-comment requires a 'body' string field (after repair)`);
+                          continue;
+                        }
+                        // Sanitize text content
+                        item.body = sanitizeContent(item.body);
+                        break;
+                      case 'create-pull-request':
+                        if (!item.title || typeof item.title !== 'string') {
+                          errors.push(`Line ${i + 1}: create-pull-request requires a 'title' string field (after repair)`);
+                          continue;
+                        }
+                        if (!item.body || typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: create-pull-request requires a 'body' string field (after repair)`);
+                          continue;
+                        }
+                        // Sanitize text content
+                        item.title = sanitizeContent(item.title);
+                        item.body = sanitizeContent(item.body);
+                        // Sanitize labels if present
+                        if (item.labels && Array.isArray(item.labels)) {
+                          item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+                        }
+                        break;
+                      case 'add-issue-labels':
+                        if (!item.labels || !Array.isArray(item.labels)) {
+                          errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field (after repair)`);
+                          continue;
+                        }
+                        if (item.labels.some(label => typeof label !== 'string')) {
+                          errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings (after repair)`);
+                          continue;
+                        }
+                        // Sanitize label strings
+                        item.labels = item.labels.map(label => sanitizeContent(label));
+                        break;
+                      default:
+                        errors.push(`Line ${i + 1}: Unknown output type '${itemType}' (after repair)`);
+                        continue;
+                    }
+                    console.log(`Line ${i + 1}: Successfully repaired and validated ${itemType} item`);
+                    parsedItems.push(item);
+                  } catch (repairError) {
+                    errors.push(`Line ${i + 1}: Invalid JSON - ${error.message} (repair failed: ${repairError.message})`);
+                  }
                 }
               }
               // Report validation results
