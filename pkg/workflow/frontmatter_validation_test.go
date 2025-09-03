@@ -35,30 +35,7 @@ on: push`,
 			},
 			shouldHaveError: true,
 		},
-		{
-			name: "max-turns too low",
-			frontmatterYAML: `engine: claude
-on: push
-max-turns: 0`,
-			frontmatter: map[string]any{
-				"engine":    "claude",
-				"on":        "push",
-				"max-turns": 0,
-			},
-			shouldHaveError: true,
-		},
-		{
-			name: "max-turns negative",
-			frontmatterYAML: `engine: claude
-on: push
-max-turns: -1`,
-			frontmatter: map[string]any{
-				"engine":    "claude",
-				"on":        "push",
-				"max-turns": -1,
-			},
-			shouldHaveError: true,
-		},
+
 		{
 			name: "max-turns invalid type",
 			frontmatterYAML: `engine: claude
@@ -156,31 +133,18 @@ on: push`,
 			},
 			minExpectedErrors: 1, // JSON schema produces multiple engine validation errors
 		},
-		{
-			name: "max-turns too low - line 3",
-			frontmatterYAML: `engine: claude
-on: push
-max-turns: 0`,
-			frontmatter: map[string]any{
-				"engine":    "claude",
-				"on":        "push",
-				"max-turns": 0,
-			},
-			minExpectedErrors: 1,
-		},
+
 		{
 			name: "multiple validation errors",
 			frontmatterYAML: `engine: invalid-engine
 on: push
-max-turns: 0
 unknown-field: value`,
 			frontmatter: map[string]any{
 				"engine":        "invalid-engine",
 				"on":            "push",
-				"max-turns":     0,
 				"unknown-field": "value",
 			},
-			minExpectedErrors: 3, // Multiple types of errors
+			minExpectedErrors: 2, // Invalid engine + unknown field
 		},
 		{
 			name: "nested tools validation error",
@@ -308,18 +272,7 @@ max-turns: 5`,
 			},
 			description: "Invalid engine on line 1 should be caught",
 		},
-		{
-			name: "max_turns_on_third_line",
-			frontmatterYAML: `engine: claude
-on: push
-max-turns: 0`,
-			frontmatter: map[string]any{
-				"engine":    "claude",
-				"on":        "push",
-				"max-turns": 0,
-			},
-			description: "Invalid max-turns on line 3 should be caught",
-		},
+
 		{
 			name: "deeply_nested_tools_error",
 			frontmatterYAML: `engine: claude

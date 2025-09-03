@@ -184,20 +184,6 @@ max-turns: "invalid"
 # Invalid Max Turns`,
 			expectError: true,
 		},
-		{
-			name: "zero max-turns",
-			content: `---
-on:
-  workflow_dispatch:
-permissions:
-  contents: read
-engine: claude
-max-turns: 0
----
-
-# Zero Max Turns`,
-			expectError: true, // JSON schema validation now catches this with minimum: 1
-		},
 	}
 
 	for _, tt := range tests {

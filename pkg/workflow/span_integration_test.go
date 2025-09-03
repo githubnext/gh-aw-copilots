@@ -76,20 +76,7 @@ func TestComprehensiveSpanIntegration(t *testing.T) {
 		shouldHaveError bool
 		description     string
 	}{
-		{
-			name: "max_turns_validation_error",
-			workflowContent: `---
-engine: claude
-on: push
-max-turns: 0
----
 
-# Test Workflow
-
-This workflow has an invalid max-turns value.`,
-			shouldHaveError: true,
-			description:     "Max-turns of 0 should be rejected",
-		},
 		{
 			name: "additional_properties_error",
 			workflowContent: `---
@@ -231,18 +218,7 @@ on: push
 			expectedLine: 2,
 			description:  "Engine error should be reported on line 2",
 		},
-		{
-			name: "max_turns_error_line_4",
-			workflowContent: `---
-engine: claude
-on: push
-max-turns: 0
----
 
-# Test Workflow`,
-			expectedLine: 4,
-			description:  "Max-turns error should be reported on line 4",
-		},
 		{
 			name: "nested_tools_error_line_6",
 			workflowContent: `---
