@@ -52,10 +52,10 @@ func TestAccessLogParsing(t *testing.T) {
 func TestMultipleAccessLogAnalysis(t *testing.T) {
 	// Create a temporary directory for the test
 	tempDir := t.TempDir()
-	accessLogsDir := filepath.Join(tempDir, "access-logs")
+	accessLogsDir := filepath.Join(tempDir, "access.log")
 	err := os.MkdirAll(accessLogsDir, 0755)
 	if err != nil {
-		t.Fatalf("Failed to create access-logs directory: %v", err)
+		t.Fatalf("Failed to create access.log directory: %v", err)
 	}
 
 	// Create test access log content for multiple MCP servers
@@ -115,10 +115,10 @@ func TestAnalyzeAccessLogsDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Test case 1: Multiple access logs in access-logs subdirectory
-	accessLogsDir := filepath.Join(tempDir, "run1", "access-logs")
+	accessLogsDir := filepath.Join(tempDir, "run1", "access.log")
 	err := os.MkdirAll(accessLogsDir, 0755)
 	if err != nil {
-		t.Fatalf("Failed to create access-logs directory: %v", err)
+		t.Fatalf("Failed to create access.log directory: %v", err)
 	}
 
 	fetchLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html`

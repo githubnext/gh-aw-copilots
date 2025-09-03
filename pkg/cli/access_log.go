@@ -262,12 +262,6 @@ func displayAccessLogAnalysis(processedRuns []ProcessedRun, verbose bool) {
 		return
 	}
 
-	// Display header with better formatting
-	fmt.Println()
-	fmt.Println(console.FormatListHeader("🌐 Network Access Analysis"))
-	fmt.Println(console.FormatListHeader("=========================="))
-	fmt.Println()
-
 	// Aggregate statistics
 	totalRequests := 0
 	totalAllowed := 0
@@ -288,22 +282,11 @@ func displayAccessLogAnalysis(processedRuns []ProcessedRun, verbose bool) {
 		}
 	}
 
-	// Display summary with improved formatting
-	fmt.Println(console.FormatCountMessage(fmt.Sprintf("📊 Found access logs in %d of %d runs", runsWithAccess, len(processedRuns))))
-	fmt.Println(console.FormatCountMessage(fmt.Sprintf("📊 Total network requests: %d", totalRequests)))
-	fmt.Println(console.FormatCountMessage(fmt.Sprintf("📊 Allowed requests: %d", totalAllowed)))
-	fmt.Println(console.FormatCountMessage(fmt.Sprintf("📊 Denied requests: %d", totalDenied)))
-
-	if totalRequests > 0 {
-		allowedPercent := float64(totalAllowed) / float64(totalRequests) * 100
-		fmt.Println(console.FormatCountMessage(fmt.Sprintf("📊 Success rate: %.1f%%", allowedPercent)))
-	}
-
 	fmt.Println()
 
 	// Display allowed domains with better formatting
 	if len(allAllowedDomains) > 0 {
-		fmt.Println(console.FormatSuccessMessage(fmt.Sprintf("✅ Allowed Domains (%d unique):", len(allAllowedDomains))))
+		fmt.Println(console.FormatSuccessMessage(fmt.Sprintf("✅ Allowed Domains (%d):", len(allAllowedDomains))))
 		allowedList := make([]string, 0, len(allAllowedDomains))
 		for domain := range allAllowedDomains {
 			allowedList = append(allowedList, domain)
@@ -317,7 +300,7 @@ func displayAccessLogAnalysis(processedRuns []ProcessedRun, verbose bool) {
 
 	// Display denied domains with better formatting
 	if len(allDeniedDomains) > 0 {
-		fmt.Println(console.FormatErrorMessage(fmt.Sprintf("❌ Denied Domains (%d unique):", len(allDeniedDomains))))
+		fmt.Println(console.FormatErrorMessage(fmt.Sprintf("❌ Denied Domains (%d):", len(allDeniedDomains))))
 		deniedList := make([]string, 0, len(allDeniedDomains))
 		for domain := range allDeniedDomains {
 			deniedList = append(deniedList, domain)
