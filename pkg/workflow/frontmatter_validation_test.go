@@ -131,6 +131,9 @@ tools:
 			}
 			if !tt.shouldHaveError && len(errors) > 0 {
 				t.Errorf("Expected no validation errors but got %d", len(errors))
+				for i, err := range errors {
+					t.Logf("Error %d: %s", i+1, err.Error())
+				}
 			}
 		})
 	}

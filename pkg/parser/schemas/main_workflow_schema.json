@@ -670,10 +670,6 @@
               "type": "string", 
               "description": "Optional LLM model to use"
             },
-            "max-turns": {
-              "type": "integer",
-              "description": "Maximum number of chat iterations per run"
-            },
             "permissions": {
               "type": "object",
               "description": "Engine-level permissions configuration",
@@ -702,6 +698,11 @@
           "additionalProperties": false
         }
       ]
+    },
+    "max-turns": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of chat iterations per run"
     },
     "claude": {
       "description": "Claude-specific configuration",

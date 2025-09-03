@@ -22,9 +22,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: codex
-  max-turns: 5
+engine: codex
+max-turns: 5
 ---
 
 # Test Workflow
@@ -41,9 +40,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-engine:
-  id: claude
-  max-turns: 5
+engine: claude
+max-turns: 5
 ---
 
 # Test Workflow
