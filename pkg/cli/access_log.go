@@ -161,25 +161,16 @@ func extractDomainFromURL(url string) string {
 // analyzeAccessLogs analyzes access logs in a run directory, supporting both single and multiple log files
 func analyzeAccessLogs(runDir string, verbose bool) (*DomainAnalysis, error) {
 	// Check for multiple separate access log files first (new format)
-	accessLogsDir := filepath.Join(runDir, "access-logs")
+	accessLogsDir := filepath.Join(runDir, "access.log")
 	if _, err := os.Stat(accessLogsDir); err == nil {
 		return analyzeMultipleAccessLogs(accessLogsDir, verbose)
 	}
 
 	// Fall back to single access.log file (legacy format)
-	accessLogPath := filepath.Join(runDir, "access.log")
-	if _, err := os.Stat(accessLogPath); os.IsNotExist(err) {
-		if verbose {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No access logs found in %s", runDir)))
-		}
-		return nil, nil
-	}
-
 	if verbose {
-		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Analyzing access.log from %s", runDir)))
+		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No access logs found in %s", runDir)))
 	}
-
-	return parseSquidAccessLog(accessLogPath, verbose)
+	return nil, nil
 }
 
 // analyzeMultipleAccessLogs analyzes multiple separate access log files
