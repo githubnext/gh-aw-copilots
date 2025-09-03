@@ -255,8 +255,7 @@ async function main() {
   /**
    * Attempts to parse JSON with repair fallback
    * @param {string} jsonStr - The JSON string to parse
-   * @returns {Object} The parsed JSON object
-   * @throws {Error} If parsing fails even after repair attempts
+   * @returns {Object|undefined} The parsed JSON object, or undefined if parsing fails
    */
   function parseJsonWithRepair(jsonStr) {
     try {
@@ -268,11 +267,9 @@ async function main() {
         const repairedJson = repairJson(jsonStr);
         return JSON.parse(repairedJson);
       } catch (repairError) {
-        // If repair also fails, throw the original error with context
-        const error = new Error(`JSON parsing failed. Original: ${originalError.message}. After repair: ${repairError.message}`);
-        error.originalError = originalError;
-        error.repairError = repairError;
-        throw error;
+        // If repair also fails, print error to console and return undefined
+        console.log(`JSON parsing failed. Original: ${originalError.message}. After repair: ${repairError.message}`);
+        return undefined;
       }
     }
   }
@@ -281,101 +278,102 @@ async function main() {
     const line = lines[i].trim();
     if (line === '') continue; // Skip empty lines
 
-    try {
-      const item = parseJsonWithRepair(line);
-      
-      // Validate that the item has a 'type' field
-      if (!item.type) {
-        errors.push(`Line ${i + 1}: Missing required 'type' field`);
-        continue;
-      }
-
-      // Validate against expected output types
-      const itemType = item.type;
-      if (!expectedOutputTypes[itemType]) {
-        errors.push(`Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`);
-        continue;
-      }
-
-      // Check for too many items of the same type
-      const typeCount = parsedItems.filter(existing => existing.type === itemType).length;
-      const maxAllowed = getMaxAllowedForType(itemType, expectedOutputTypes);
-      if (typeCount >= maxAllowed) {
-        errors.push(`Line ${i + 1}: Too many items of type '${itemType}'. Maximum allowed: ${maxAllowed}.`);
-        continue;
-      }
-
-      // Basic validation based on type
-      switch (itemType) {
-        case 'create-issue':
-          if (!item.title || typeof item.title !== 'string') {
-            errors.push(`Line ${i + 1}: create-issue requires a 'title' string field`);
-            continue;
-          }
-          if (!item.body || typeof item.body !== 'string') {
-            errors.push(`Line ${i + 1}: create-issue requires a 'body' string field`);
-            continue;
-          }
-          // Sanitize text content
-          item.title = sanitizeContent(item.title);
-          item.body = sanitizeContent(item.body);
-          // Sanitize labels if present
-          if (item.labels && Array.isArray(item.labels)) {
-            item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
-          }
-          break;
-
-        case 'add-issue-comment':
-          if (!item.body || typeof item.body !== 'string') {
-            errors.push(`Line ${i + 1}: add-issue-comment requires a 'body' string field`);
-            continue;
-          }
-          // Sanitize text content
-          item.body = sanitizeContent(item.body);
-          break;
-
-        case 'create-pull-request':
-          if (!item.title || typeof item.title !== 'string') {
-            errors.push(`Line ${i + 1}: create-pull-request requires a 'title' string field`);
-            continue;
-          }
-          if (!item.body || typeof item.body !== 'string') {
-            errors.push(`Line ${i + 1}: create-pull-request requires a 'body' string field`);
-            continue;
-          }
-          // Sanitize text content
-          item.title = sanitizeContent(item.title);
-          item.body = sanitizeContent(item.body);
-          // Sanitize labels if present
-          if (item.labels && Array.isArray(item.labels)) {
-            item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
-          }
-          break;
-
-        case 'add-issue-labels':
-          if (!item.labels || !Array.isArray(item.labels)) {
-            errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
-            continue;
-          }
-          if (item.labels.some(label => typeof label !== 'string')) {
-            errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
-            continue;
-          }
-          // Sanitize label strings
-          item.labels = item.labels.map(label => sanitizeContent(label));
-          break;
-
-        default:
-          errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
-          continue;
-      }
-
-      console.log(`Line ${i + 1}: Valid ${itemType} item`);
-      parsedItems.push(item);
-
-    } catch (error) {
-      errors.push(`Line ${i + 1}: Invalid JSON - ${error.message}`);
+    const item = parseJsonWithRepair(line);
+    
+    // If item is undefined (failed to parse), add error and process next line
+    if (item === undefined) {
+      errors.push(`Line ${i + 1}: Invalid JSON - JSON parsing failed`);
+      continue;
     }
+    
+    // Validate that the item has a 'type' field
+    if (!item.type) {
+      errors.push(`Line ${i + 1}: Missing required 'type' field`);
+      continue;
+    }
+
+    // Validate against expected output types
+    const itemType = item.type;
+    if (!expectedOutputTypes[itemType]) {
+      errors.push(`Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`);
+      continue;
+    }
+
+    // Check for too many items of the same type
+    const typeCount = parsedItems.filter(existing => existing.type === itemType).length;
+    const maxAllowed = getMaxAllowedForType(itemType, expectedOutputTypes);
+    if (typeCount >= maxAllowed) {
+      errors.push(`Line ${i + 1}: Too many items of type '${itemType}'. Maximum allowed: ${maxAllowed}.`);
+      continue;
+    }
+
+    // Basic validation based on type
+    switch (itemType) {
+      case 'create-issue':
+        if (!item.title || typeof item.title !== 'string') {
+          errors.push(`Line ${i + 1}: create-issue requires a 'title' string field`);
+          continue;
+        }
+        if (!item.body || typeof item.body !== 'string') {
+          errors.push(`Line ${i + 1}: create-issue requires a 'body' string field`);
+          continue;
+        }
+        // Sanitize text content
+        item.title = sanitizeContent(item.title);
+        item.body = sanitizeContent(item.body);
+        // Sanitize labels if present
+        if (item.labels && Array.isArray(item.labels)) {
+          item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+        }
+        break;
+
+      case 'add-issue-comment':
+        if (!item.body || typeof item.body !== 'string') {
+          errors.push(`Line ${i + 1}: add-issue-comment requires a 'body' string field`);
+          continue;
+        }
+        // Sanitize text content
+        item.body = sanitizeContent(item.body);
+        break;
+
+      case 'create-pull-request':
+        if (!item.title || typeof item.title !== 'string') {
+          errors.push(`Line ${i + 1}: create-pull-request requires a 'title' string field`);
+          continue;
+        }
+        if (!item.body || typeof item.body !== 'string') {
+          errors.push(`Line ${i + 1}: create-pull-request requires a 'body' string field`);
+          continue;
+        }
+        // Sanitize text content
+        item.title = sanitizeContent(item.title);
+        item.body = sanitizeContent(item.body);
+        // Sanitize labels if present
+        if (item.labels && Array.isArray(item.labels)) {
+          item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+        }
+        break;
+
+      case 'add-issue-labels':
+        if (!item.labels || !Array.isArray(item.labels)) {
+          errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
+          continue;
+        }
+        if (item.labels.some(label => typeof label !== 'string')) {
+          errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
+          continue;
+        }
+        // Sanitize label strings
+        item.labels = item.labels.map(label => sanitizeContent(label));
+        break;
+
+      default:
+        errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
+        continue;
+    }
+
+    console.log(`Line ${i + 1}: Valid ${itemType} item`);
+    parsedItems.push(item);
   }
 
   // Report validation results
