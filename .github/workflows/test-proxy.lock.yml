@@ -740,19 +740,12 @@ jobs:
           else
             echo 'Container squid-proxy-fetch not found'
           fi
-          if ls /tmp/access-logs/access-*.log 1> /dev/null 2>&1; then
-            cat /tmp/access-logs/access-*.log > /tmp/access.log
-            echo "Combined $(ls /tmp/access-logs/access-*.log | wc -l) access log files"
-          else
-            echo "No access log files found"
-            touch /tmp/access.log
-          fi
       - name: Upload squid access logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: access.log
-          path: /tmp/access.log
+          path: /tmp/access-logs/
           if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()

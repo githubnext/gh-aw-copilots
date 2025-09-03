@@ -9,7 +9,7 @@ import (
 func TestAccessLogParsing(t *testing.T) {
 	// Create a temporary directory for the test
 	tempDir := t.TempDir()
-	
+
 	// Create test access.log content
 	testLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html
 1701234568.456    250 192.168.1.100 TCP_DENIED/403 0 CONNECT github.com:443 - HIER_NONE/- -
@@ -47,6 +47,61 @@ func TestAccessLogParsing(t *testing.T) {
 	if len(analysis.AllowedDomains) != len(expectedAllowed) {
 		t.Errorf("Expected %d allowed domains, got %d", len(expectedAllowed), len(analysis.AllowedDomains))
 	}
+}
+
+func TestMultipleAccessLogAnalysis(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir := t.TempDir()
+	accessLogsDir := filepath.Join(tempDir, "access-logs")
+	err := os.MkdirAll(accessLogsDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create access-logs directory: %v", err)
+	}
+
+	// Create test access log content for multiple MCP servers
+	fetchLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html
+1701234568.456    250 192.168.1.100 TCP_HIT/200 5678 GET http://api.github.com/repos - HIER_DIRECT/140.82.112.6 application/json`
+
+	browserLogContent := `1701234569.789    120 192.168.1.100 TCP_DENIED/403 0 CONNECT github.com:443 - HIER_NONE/- -
+1701234570.012    0 192.168.1.100 TCP_DENIED/403 0 GET http://malicious.site/evil - HIER_NONE/- -`
+
+	// Write separate log files for different MCP servers
+	fetchLogPath := filepath.Join(accessLogsDir, "access-fetch.log")
+	err = os.WriteFile(fetchLogPath, []byte(fetchLogContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test access-fetch.log: %v", err)
+	}
+
+	browserLogPath := filepath.Join(accessLogsDir, "access-browser.log")
+	err = os.WriteFile(browserLogPath, []byte(browserLogContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test access-browser.log: %v", err)
+	}
+
+	// Test analysis of multiple access logs
+	analysis, err := analyzeMultipleAccessLogs(accessLogsDir, false)
+	if err != nil {
+		t.Fatalf("Failed to analyze multiple access logs: %v", err)
+	}
+
+	// Verify aggregated results
+	if analysis.TotalRequests != 4 {
+		t.Errorf("Expected 4 total requests, got %d", analysis.TotalRequests)
+	}
+
+	if analysis.AllowedCount != 2 {
+		t.Errorf("Expected 2 allowed requests, got %d", analysis.AllowedCount)
+	}
+
+	if analysis.DeniedCount != 2 {
+		t.Errorf("Expected 2 denied requests, got %d", analysis.DeniedCount)
+	}
+
+	// Check allowed domains
+	expectedAllowed := []string{"api.github.com", "example.com"}
+	if len(analysis.AllowedDomains) != len(expectedAllowed) {
+		t.Errorf("Expected %d allowed domains, got %d", len(expectedAllowed), len(analysis.AllowedDomains))
+	}
 
 	// Check denied domains
 	expectedDenied := []string{"github.com", "malicious.site"}
@@ -55,37 +110,78 @@ func TestAccessLogParsing(t *testing.T) {
 	}
 }
 
-func TestAnalyzeAccessLogs(t *testing.T) {
-	// Create a temporary directory for the test
+func TestAnalyzeAccessLogsDirectory(t *testing.T) {
+	// Create a temporary directory structure
 	tempDir := t.TempDir()
-	
-	// Test case 1: No access.log file
-	analysis, err := analyzeAccessLogs(tempDir, false)
+
+	// Test case 1: Multiple access logs in access-logs subdirectory
+	accessLogsDir := filepath.Join(tempDir, "run1", "access-logs")
+	err := os.MkdirAll(accessLogsDir, 0755)
 	if err != nil {
-		t.Errorf("Unexpected error when no access.log exists: %v", err)
-	}
-	if analysis != nil {
-		t.Errorf("Expected nil analysis when no access.log exists, got %v", analysis)
+		t.Fatalf("Failed to create access-logs directory: %v", err)
 	}
 
-	// Test case 2: With access.log file
-	testLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/ - HIER_DIRECT/93.184.216.34 text/html`
-	accessLogPath := filepath.Join(tempDir, "access.log")
-	err = os.WriteFile(accessLogPath, []byte(testLogContent), 0644)
+	fetchLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html`
+	fetchLogPath := filepath.Join(accessLogsDir, "access-fetch.log")
+	err = os.WriteFile(fetchLogPath, []byte(fetchLogContent), 0644)
 	if err != nil {
-		t.Fatalf("Failed to create test access.log: %v", err)
+		t.Fatalf("Failed to create test access-fetch.log: %v", err)
 	}
 
-	analysis, err = analyzeAccessLogs(tempDir, false)
+	analysis, err := analyzeAccessLogs(filepath.Join(tempDir, "run1"), false)
 	if err != nil {
 		t.Fatalf("Failed to analyze access logs: %v", err)
 	}
+
 	if analysis == nil {
 		t.Fatal("Expected analysis result, got nil")
 	}
 
 	if analysis.TotalRequests != 1 {
 		t.Errorf("Expected 1 total request, got %d", analysis.TotalRequests)
+	}
+
+	// Test case 2: Legacy single access.log file
+	run2Dir := filepath.Join(tempDir, "run2")
+	err = os.MkdirAll(run2Dir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create run2 directory: %v", err)
+	}
+
+	legacyLogContent := `1701234567.123    180 192.168.1.100 TCP_MISS/200 1234 GET http://example.com/api/data - HIER_DIRECT/93.184.216.34 text/html`
+	legacyLogPath := filepath.Join(run2Dir, "access.log")
+	err = os.WriteFile(legacyLogPath, []byte(legacyLogContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create legacy access.log: %v", err)
+	}
+
+	analysis, err = analyzeAccessLogs(run2Dir, false)
+	if err != nil {
+		t.Fatalf("Failed to analyze legacy access logs: %v", err)
+	}
+
+	if analysis == nil {
+		t.Fatal("Expected analysis result, got nil")
+	}
+
+	if analysis.TotalRequests != 1 {
+		t.Errorf("Expected 1 total request, got %d", analysis.TotalRequests)
+	}
+
+	// Test case 3: No access logs
+	run3Dir := filepath.Join(tempDir, "run3")
+	err = os.MkdirAll(run3Dir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create run3 directory: %v", err)
+	}
+
+	analysis, err = analyzeAccessLogs(run3Dir, false)
+	if err != nil {
+		t.Fatalf("Failed to analyze no access logs: %v", err)
+	}
+
+	if analysis != nil {
+		t.Errorf("Expected nil analysis for no access logs, got %+v", analysis)
 	}
 }
 

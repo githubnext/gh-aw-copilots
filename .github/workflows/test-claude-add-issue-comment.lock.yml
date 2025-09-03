@@ -735,7 +735,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: access.log
-          path: /tmp/access.log
+          path: /tmp/access-logs/
           if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()

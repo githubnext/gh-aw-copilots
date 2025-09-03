@@ -2296,15 +2296,6 @@ func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[st
 		fmt.Fprintf(yaml, "            echo 'Container squid-proxy-%s not found'\n", toolName)
 		yaml.WriteString("          fi\n")
 	}
-
-	// Combine all access logs into a single file for easier analysis
-	yaml.WriteString("          if ls /tmp/access-logs/access-*.log 1> /dev/null 2>&1; then\n")
-	yaml.WriteString("            cat /tmp/access-logs/access-*.log > /tmp/access.log\n")
-	yaml.WriteString("            echo \"Combined $(ls /tmp/access-logs/access-*.log | wc -l) access log files\"\n")
-	yaml.WriteString("          else\n")
-	yaml.WriteString("            echo \"No access log files found\"\n")
-	yaml.WriteString("            touch /tmp/access.log\n")
-	yaml.WriteString("          fi\n")
 }
 
 func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder) {
@@ -2313,7 +2304,7 @@ func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder) {
 	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          name: access.log\n")
-	yaml.WriteString("          path: /tmp/access.log\n")
+	yaml.WriteString("          path: /tmp/access-logs/\n")
 	yaml.WriteString("          if-no-files-found: warn\n")
 }
 
