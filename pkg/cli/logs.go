@@ -475,7 +475,7 @@ func listWorkflowRunsWithPagination(workflowName string, count int, startDate, e
 
 	// Add filters
 	if workflowName != "" {
-		args = append(args, "--workflow", workflowName)
+		args = append(args, "--workflow", fmt.Sprintf("%q", workflowName))
 	}
 	if count > 0 {
 		args = append(args, "--limit", strconv.Itoa(count))
@@ -513,6 +513,9 @@ func listWorkflowRunsWithPagination(workflowName string, count int, startDate, e
 		errMsg := err.Error()
 		outputMsg := string(output)
 		combinedMsg := errMsg + " " + outputMsg
+		if verbose {
+			fmt.Println(console.FormatVerboseMessage(outputMsg))
+		}
 		if strings.Contains(combinedMsg, "exit status 4") ||
 			strings.Contains(combinedMsg, "exit status 1") ||
 			strings.Contains(combinedMsg, "not logged into any GitHub hosts") ||
@@ -590,6 +593,10 @@ func downloadRunArtifacts(runID int64, outputDir string, verbose bool) error {
 		spinner.Stop()
 	}
 	if err != nil {
+		if verbose {
+			fmt.Println(console.FormatVerboseMessage(string(output)))
+		}
+
 		// Check if it's because there are no artifacts
 		if strings.Contains(string(output), "no valid artifacts") || strings.Contains(string(output), "not found") {
 			// Clean up empty directory
