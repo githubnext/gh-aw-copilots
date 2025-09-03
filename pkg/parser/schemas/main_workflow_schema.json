@@ -1012,7 +1012,7 @@
         "create-issues": {
           "oneOf": [
             {
-          "type": "object",
+              "type": "object",
               "description": "Configuration for creating GitHub issues from agentic workflow output (plural form)",
               "properties": {
                 "title-prefix": {
@@ -1044,7 +1044,7 @@
         "add-issue-comment": {
           "oneOf": [
             {
-          "type": "object",
+              "type": "object",
               "description": "Configuration for creating GitHub issue/PR comments from agentic workflow output",
               "additionalProperties": false
             },
@@ -1080,25 +1080,25 @@
             {
               "type": "object",
               "description": "Configuration for creating GitHub pull requests from agentic workflow output",
-          "properties": {
-            "title-prefix": {
-              "type": "string",
-              "description": "Optional prefix for the pull request title"
+              "properties": {
+                "title-prefix": {
+                  "type": "string",
+                  "description": "Optional prefix for the pull request title"
+                },
+                "labels": {
+                  "type": "array",
+                  "description": "Optional list of labels to attach to the pull request",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "draft": {
+                  "type": "boolean",
+                  "description": "Whether to create pull request as draft (defaults to true)"
+                }
+              },
+              "additionalProperties": false
             },
-            "labels": {
-              "type": "array",
-              "description": "Optional list of labels to attach to the pull request",
-              "items": {
-                "type": "string"
-              }
-            },
-            "draft": {
-              "type": "boolean",
-              "description": "Whether to create pull request as draft (defaults to true)"
-            }
-          },
-          "additionalProperties": false
-        },
             {
               "type": "null",
               "description": "Enable pull request creation with default configuration"
@@ -1112,25 +1112,25 @@
               "description": "Null configuration allows any labels"
             },
             {
-          "type": "object",
+              "type": "object",
               "description": "Configuration for adding labels to issues/PRs from agentic workflow output",
-          "properties": {
-            "allowed": {
-              "type": "array",
+              "properties": {
+                "allowed": {
+                  "type": "array",
                   "description": "Optional list of allowed labels that can be added. If omitted, any labels are allowed (including creating new ones).",
-              "items": {
-                "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "max-count": {
+                  "type": "integer",
+                  "description": "Optional maximum number of labels to add (default: 3)",
+                  "minimum": 1
+                }
               },
-              "minItems": 1
-            },
-            "max-count": {
-              "type": "integer",
-              "description": "Optional maximum number of labels to add (default: 3)",
-              "minimum": 1
+              "additionalProperties": false
             }
-          },
-          "additionalProperties": false
-        }
           ]
         }
       },
