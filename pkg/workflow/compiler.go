@@ -464,6 +464,26 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Extract AI engine setting from frontmatter
 	engineSetting, engineConfig := c.extractEngineConfig(result.Frontmatter)
 
+	// Extract strict mode setting from frontmatter
+	strictMode := c.extractStrictMode(result.Frontmatter)
+
+	// Apply strict mode: inject deny-all network permissions if strict mode is enabled
+	// and no explicit network permissions are configured
+	if strictMode && engineConfig != nil && engineConfig.ID == "claude" {
+		if engineConfig.Permissions == nil || engineConfig.Permissions.Network == nil {
+			// Initialize permissions structure if needed
+			if engineConfig.Permissions == nil {
+				engineConfig.Permissions = &EnginePermissions{}
+			}
+			if engineConfig.Permissions.Network == nil {
+				// Inject deny-all network permissions (empty allowed list)
+				engineConfig.Permissions.Network = &NetworkPermissions{
+					Allowed: []string{}, // Empty list means deny-all
+				}
+			}
+		}
+	}
+
 	// Override with command line AI engine setting if provided
 	if c.engineOverride != "" {
 		originalEngineSetting := engineSetting
@@ -702,7 +722,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	}
 
 	// Apply defaults
-	c.applyDefaults(workflowData, markdownPath)
+	c.applyDefaults(workflowData, markdownPath, strictMode)
 
 	// Apply pull request draft filter if specified
 	c.applyPullRequestDraftFilter(workflowData, result.Frontmatter)
@@ -904,7 +924,7 @@ func (c *Compiler) extractCommandName(frontmatter map[string]any) string {
 }
 
 // applyDefaults applies default values for missing workflow sections
-func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
+func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string, strictMode bool) {
 	// Check if this is a command trigger workflow (by checking if user specified "on.command")
 	isCommandTrigger := false
 	if data.On == "" {
@@ -1002,7 +1022,16 @@ func (c *Compiler) applyDefaults(data *WorkflowData, markdownPath string) {
 	}
 
 	if data.Permissions == "" {
-		data.Permissions = `permissions: read-all`
+		if strictMode {
+			// In strict mode, default to empty permissions instead of read-all
+			data.Permissions = `permissions: {}`
+		} else {
+			// Default behavior: use read-all permissions
+			data.Permissions = `permissions: read-all`
+		}
+	} else if strictMode {
+		// In strict mode, validate permissions and warn about write permissions
+		c.validatePermissionsInStrictMode(data.Permissions)
 	}
 
 	// Generate concurrency configuration using the dedicated concurrency module
