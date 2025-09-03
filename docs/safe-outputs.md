@@ -88,7 +88,7 @@ Create new discussions with your research findings. For each discussion, provide
 
 The compiled workflow will have additional prompting describing that, to create discussions, it should write the discussion details to a file.
 
-**Note:** If no `category-id` is specified, the workflow will use the first available discussion category in the repository. Discussions require the `discussions: write` permission.
+**Note:** If no `category-id` is specified, the workflow will use the first available discussion category in the repository.
 
 ### Issue Comment Creation (`add-issue-comment:`)
 

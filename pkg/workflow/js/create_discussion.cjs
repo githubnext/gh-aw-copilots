@@ -35,33 +35,17 @@ async function main() {
 
   console.log(`Found ${createDiscussionItems.length} create-discussion item(s)`);
   
-  // Get the repository ID using GraphQL
-  const repoQuery = `query GetRepository($owner: String!, $name: String!) {
-    repository(owner: $owner, name: $name) {
-      id
-      discussionCategories(first: 100) {
-        nodes {
-          id
-          name
-          slug
-        }
-      }
-    }
-  }`;
-
-  let repositoryId;
+  // Get discussion categories using REST API
   let discussionCategories = [];
   try {
-    const repoResult = await github.graphql(repoQuery, {
+    const { data: categories } = await github.request('GET /repos/{owner}/{repo}/discussions/categories', {
       owner: context.repo.owner,
-      name: context.repo.repo
+      repo: context.repo.repo
     });
-    repositoryId = repoResult.repository.id;
-    discussionCategories = repoResult.repository.discussionCategories.nodes;
-    console.log('Repository ID:', repositoryId);
+    discussionCategories = categories || [];
     console.log('Available categories:', discussionCategories.map(cat => ({ name: cat.name, id: cat.id })));
   } catch (error) {
-    console.error('Failed to get repository information:', error instanceof Error ? error.message : String(error));
+    console.error('Failed to get discussion categories:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 
@@ -114,33 +98,22 @@ async function main() {
     console.log('Body length:', body.length);
 
     try {
-      // Create the discussion using GitHub GraphQL API
-      const mutation = `mutation CreateDiscussion($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
-        createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
-          discussion {
-            id
-            number
-            title
-            url
-          }
-        }
-      }`;
-
-      const result = await github.graphql(mutation, {
-        repositoryId: repositoryId,
-        categoryId: categoryId,
+      // Create the discussion using GitHub REST API
+      const { data: discussion } = await github.request('POST /repos/{owner}/{repo}/discussions', {
+        owner: context.repo.owner,
+        repo: context.repo.repo,
         title: title,
-        body: body
+        body: body,
+        category_id: categoryId
       });
 
-      const discussion = result.createDiscussion.discussion;
-      console.log('Created discussion #' + discussion.number + ': ' + discussion.url);
+      console.log('Created discussion #' + discussion.number + ': ' + discussion.html_url);
       createdDiscussions.push(discussion);
 
       // Set output for the last created discussion (for backward compatibility)
       if (i === createDiscussionItems.length - 1) {
         core.setOutput('discussion_number', discussion.number);
-        core.setOutput('discussion_url', discussion.url);
+        core.setOutput('discussion_url', discussion.html_url);
       }
     } catch (error) {
       console.error(`✗ Failed to create discussion "${title}":`, error instanceof Error ? error.message : String(error));
@@ -152,7 +125,7 @@ async function main() {
   if (createdDiscussions.length > 0) {
     let summaryContent = '\n\n## GitHub Discussions\n';
     for (const discussion of createdDiscussions) {
-      summaryContent += `- Discussion #${discussion.number}: [${discussion.title}](${discussion.url})\n`;
+      summaryContent += `- Discussion #${discussion.number}: [${discussion.title}](${discussion.html_url})\n`;
     }
     await core.summary.addRaw(summaryContent).write();
   }

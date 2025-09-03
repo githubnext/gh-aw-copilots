@@ -12,7 +12,7 @@ const mockCore = {
 };
 
 const mockGithub = {
-  graphql: vi.fn()
+  request: vi.fn()
 };
 
 const mockContext = {
@@ -104,28 +104,21 @@ describe('create_discussion.cjs', () => {
   });
 
   it('should create discussions successfully with basic configuration', async () => {
-    // Mock the GraphQL responses
-    mockGithub.graphql
+    // Mock the REST API responses
+    mockGithub.request
       .mockResolvedValueOnce({
-        // Repository query response
-        repository: {
-          id: 'R_test123',
-          discussionCategories: {
-            nodes: [
-              { id: 'DIC_test456', name: 'General', slug: 'general' }
-            ]
-          }
-        }
+        // Discussion categories response
+        data: [
+          { id: 'DIC_test456', name: 'General', slug: 'general' }
+        ]
       })
       .mockResolvedValueOnce({
-        // Create discussion mutation response
-        createDiscussion: {
-          discussion: {
-            id: 'D_test789',
-            number: 1,
-            title: 'Test Discussion',
-            url: 'https://github.com/testowner/testrepo/discussions/1'
-          }
+        // Create discussion response
+        data: {
+          id: 'D_test789',
+          number: 1,
+          title: 'Test Discussion',
+          html_url: 'https://github.com/testowner/testrepo/discussions/1'
         }
       });
 
@@ -141,21 +134,22 @@ describe('create_discussion.cjs', () => {
     // Execute the script
     await eval(`(async () => { ${createDiscussionScript} })()`);
     
-    // Verify GraphQL calls
-    expect(mockGithub.graphql).toHaveBeenCalledTimes(2);
+    // Verify REST API calls
+    expect(mockGithub.request).toHaveBeenCalledTimes(2);
     
-    // Verify repository query
-    expect(mockGithub.graphql).toHaveBeenNthCalledWith(1, 
-      expect.stringContaining('query GetRepository'),
-      { owner: 'testowner', name: 'testrepo' }
+    // Verify discussion categories request
+    expect(mockGithub.request).toHaveBeenNthCalledWith(1, 
+      'GET /repos/{owner}/{repo}/discussions/categories',
+      { owner: 'testowner', repo: 'testrepo' }
     );
     
-    // Verify create discussion mutation
-    expect(mockGithub.graphql).toHaveBeenNthCalledWith(2,
-      expect.stringContaining('mutation CreateDiscussion'),
+    // Verify create discussion request
+    expect(mockGithub.request).toHaveBeenNthCalledWith(2,
+      'POST /repos/{owner}/{repo}/discussions',
       {
-        repositoryId: 'R_test123',
-        categoryId: 'DIC_test456',
+        owner: 'testowner',
+        repo: 'testrepo',
+        category_id: 'DIC_test456',
         title: 'Test Discussion',
         body: expect.stringContaining('Test discussion body')
       }
@@ -175,26 +169,19 @@ describe('create_discussion.cjs', () => {
   });
 
   it('should apply title prefix when configured', async () => {
-    // Mock the GraphQL responses
-    mockGithub.graphql
+    // Mock the REST API responses
+    mockGithub.request
       .mockResolvedValueOnce({
-        repository: {
-          id: 'R_test123',
-          discussionCategories: {
-            nodes: [
-              { id: 'DIC_test456', name: 'General', slug: 'general' }
-            ]
-          }
-        }
+        data: [
+          { id: 'DIC_test456', name: 'General', slug: 'general' }
+        ]
       })
       .mockResolvedValueOnce({
-        createDiscussion: {
-          discussion: {
-            id: 'D_test789',
-            number: 1,
-            title: '[ai] Test Discussion',
-            url: 'https://github.com/testowner/testrepo/discussions/1'
-          }
+        data: {
+          id: 'D_test789',
+          number: 1,
+          title: '[ai] Test Discussion',
+          html_url: 'https://github.com/testowner/testrepo/discussions/1'
         }
       });
 
@@ -212,8 +199,8 @@ describe('create_discussion.cjs', () => {
     await eval(`(async () => { ${createDiscussionScript} })()`);
     
     // Verify the title was prefixed
-    expect(mockGithub.graphql).toHaveBeenNthCalledWith(2,
-      expect.stringContaining('mutation CreateDiscussion'),
+    expect(mockGithub.request).toHaveBeenNthCalledWith(2,
+      'POST /repos/{owner}/{repo}/discussions',
       expect.objectContaining({
         title: '[ai] Test Discussion'
       })
@@ -223,27 +210,20 @@ describe('create_discussion.cjs', () => {
   });
 
   it('should use specified category ID when configured', async () => {
-    // Mock the GraphQL responses
-    mockGithub.graphql
+    // Mock the REST API responses
+    mockGithub.request
       .mockResolvedValueOnce({
-        repository: {
-          id: 'R_test123',
-          discussionCategories: {
-            nodes: [
-              { id: 'DIC_test456', name: 'General', slug: 'general' },
-              { id: 'DIC_custom789', name: 'Custom', slug: 'custom' }
-            ]
-          }
-        }
+        data: [
+          { id: 'DIC_test456', name: 'General', slug: 'general' },
+          { id: 'DIC_custom789', name: 'Custom', slug: 'custom' }
+        ]
       })
       .mockResolvedValueOnce({
-        createDiscussion: {
-          discussion: {
-            id: 'D_test789',
-            number: 1,
-            title: 'Test Discussion',
-            url: 'https://github.com/testowner/testrepo/discussions/1'
-          }
+        data: {
+          id: 'D_test789',
+          number: 1,
+          title: 'Test Discussion',
+          html_url: 'https://github.com/testowner/testrepo/discussions/1'
         }
       });
 
@@ -261,10 +241,10 @@ describe('create_discussion.cjs', () => {
     await eval(`(async () => { ${createDiscussionScript} })()`);
     
     // Verify the specified category was used
-    expect(mockGithub.graphql).toHaveBeenNthCalledWith(2,
-      expect.stringContaining('mutation CreateDiscussion'),
+    expect(mockGithub.request).toHaveBeenNthCalledWith(2,
+      'POST /repos/{owner}/{repo}/discussions',
       expect.objectContaining({
-        categoryId: 'DIC_custom789'
+        category_id: 'DIC_custom789'
       })
     );
     
