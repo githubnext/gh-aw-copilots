@@ -32,7 +32,7 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 				"steps":           []string{"step1"},
 				"engine":          "claude",
 				"tools":           map[string]any{"github": "test"},
-				"alias":           "test-workflow",
+				"command":         "test-workflow",
 			},
 			wantErr: false,
 		},
@@ -194,11 +194,11 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid frontmatter with alias trigger",
+			name: "valid frontmatter with command trigger",
 			frontmatter: map[string]any{
 				"on": map[string]any{
-					"alias": map[string]any{
-						"name": "test-alias",
+					"command": map[string]any{
+						"name": "test-command",
 					},
 				},
 				"permissions": map[string]any{
@@ -473,6 +473,31 @@ func TestValidateMainWorkflowFrontmatterWithSchema(t *testing.T) {
 			},
 			wantErr:     true,
 			errContains: "additional properties 'invalid_prop' not allowed",
+		},
+		{
+			name: "valid strict mode true",
+			frontmatter: map[string]any{
+				"on":     "push",
+				"strict": true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid strict mode false",
+			frontmatter: map[string]any{
+				"on":     "push",
+				"strict": false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strict mode as string",
+			frontmatter: map[string]any{
+				"on":     "push",
+				"strict": "true",
+			},
+			wantErr:     true,
+			errContains: "want boolean",
 		},
 		{
 			name: "valid claude engine with network permissions",

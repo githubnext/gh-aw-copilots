@@ -89,7 +89,7 @@ jobs:
           
           ## Creating a Pull Request
           
-          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools and do NOT attempt to use `gh` or the GitHub API. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
+          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
           **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.
           
@@ -99,11 +99,13 @@ jobs:
           
           To create a pull request:
           1. Make any file changes directly in the working directory
-          2. Leave the changes uncommitted and unstaged
-          3. Write the PR specification:
+          2. If you haven't done so already, create a local branch using an appropriate unique name
+          3. Add and commit your changes to the branch. Be careful to add exactly the files you intend, and check there are no extra files left un-added. Check you haven't deleted or changed any files you didn't intend to.
+          4. Do not push your changes. That will be done later. Instead append the PR specification to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
           ```json
-          {"type": "create-pull-request", "title": "PR title", "body": "PR body in markdown", "labels": ["optional", "labels"]}
+          {"type": "create-pull-request", "branch": "branch-name", "title": "PR title", "body": "PR body in markdown", "labels": ["optional", "labels"]}
           ```
+          5. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
@@ -167,10 +169,20 @@ jobs:
         uses: anthropics/claude-code-base-action@v0.0.56
         with:
           # Allowed tools (sorted):
+          # - Bash(git add:*)
+          # - Bash(git branch:*)
+          # - Bash(git checkout:*)
+          # - Bash(git commit:*)
+          # - Bash(git merge:*)
+          # - Bash(git rm:*)
+          # - Bash(git switch:*)
+          # - Edit
           # - ExitPlanMode
           # - Glob
           # - Grep
           # - LS
+          # - MultiEdit
+          # - NotebookEdit
           # - NotebookRead
           # - Read
           # - Task
@@ -220,7 +232,7 @@ jobs:
           # - mcp__github__search_pull_requests
           # - mcp__github__search_repositories
           # - mcp__github__search_users
-          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
+          allowed_tools: "Bash(git add:*),Bash(git branch:*),Bash(git checkout:*),Bash(git commit:*),Bash(git merge:*),Bash(git rm:*),Bash(git switch:*),Edit,ExitPlanMode,Glob,Grep,LS,MultiEdit,NotebookEdit,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_env: |
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -387,13 +399,17 @@ jobs:
                 // Use default limits for plural-supported types
                 switch (itemType) {
                   case 'create-issue':
-                    return 10; // Allow multiple issues
+                    return 1; // Only one issue allowed
                   case 'add-issue-comment':
-                    return 10; // Allow multiple comments
+                    return 1; // Only one comment allowed
                   case 'create-pull-request':
                     return 1;  // Only one pull request allowed
-                  case 'add-issue-labels':
-                    return 1;  // Only one labels operation allowed
+                  case 'add-issue-label':
+                    return 5;  // Only one labels operation allowed
+                  case 'update-issue':
+                    return 1;  // Only one issue update allowed
+                  case 'push-to-branch':
+                    return 1;  // Only one push to branch allowed
                   default:
                     return 1;  // Default to single item for unknown types
                 }
@@ -493,22 +509,83 @@ jobs:
                       // Sanitize text content
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
+                      // Sanitize branch name if present
+                      if (item.branch && typeof item.branch === 'string') {
+                        item.branch = sanitizeContent(item.branch);
+                      }
                       // Sanitize labels if present
                       if (item.labels && Array.isArray(item.labels)) {
                         item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
                       }
                       break;
-                    case 'add-issue-labels':
+                    case 'add-issue-label':
                       if (!item.labels || !Array.isArray(item.labels)) {
-                        errors.push(`Line ${i + 1}: add-issue-labels requires a 'labels' array field`);
+                        errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
                         continue;
                       }
                       if (item.labels.some(label => typeof label !== 'string')) {
-                        errors.push(`Line ${i + 1}: add-issue-labels labels array must contain only strings`);
+                        errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
                         continue;
                       }
                       // Sanitize label strings
                       item.labels = item.labels.map(label => sanitizeContent(label));
+                      break;
+                    case 'update-issue':
+                      // Check that at least one updateable field is provided
+                      const hasValidField = (item.status !== undefined) || 
+                                            (item.title !== undefined) || 
+                                            (item.body !== undefined);
+                      if (!hasValidField) {
+                        errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
+                        continue;
+                      }
+                      // Validate status if provided
+                      if (item.status !== undefined) {
+                        if (typeof item.status !== 'string' || (item.status !== 'open' && item.status !== 'closed')) {
+                          errors.push(`Line ${i + 1}: update-issue 'status' must be 'open' or 'closed'`);
+                          continue;
+                        }
+                      }
+                      // Validate title if provided
+                      if (item.title !== undefined) {
+                        if (typeof item.title !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'title' must be a string`);
+                          continue;
+                        }
+                        item.title = sanitizeContent(item.title);
+                      }
+                      // Validate body if provided
+                      if (item.body !== undefined) {
+                        if (typeof item.body !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'body' must be a string`);
+                          continue;
+                        }
+                        item.body = sanitizeContent(item.body);
+                      }
+                      // Validate issue_number if provided (for target "*")
+                      if (item.issue_number !== undefined) {
+                        if (typeof item.issue_number !== 'number' && typeof item.issue_number !== 'string') {
+                          errors.push(`Line ${i + 1}: update-issue 'issue_number' must be a number or string`);
+                          continue;
+                        }
+                      }
+                      break;
+                    case 'push-to-branch':
+                      // Validate message if provided (optional)
+                      if (item.message !== undefined) {
+                        if (typeof item.message !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'message' must be a string`);
+                          continue;
+                        }
+                        item.message = sanitizeContent(item.message);
+                      }
+                      // Validate pull_request_number if provided (for target "*")
+                      if (item.pull_request_number !== undefined) {
+                        if (typeof item.pull_request_number !== 'number' && typeof item.pull_request_number !== 'string') {
+                          errors.push(`Line ${i + 1}: push-to-branch 'pull_request_number' must be a number or string`);
+                          continue;
+                        }
+                      }
                       break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
@@ -852,10 +929,43 @@ jobs:
           if-no-files-found: warn
       - name: Generate git patch
         if: always()
+        env:
+          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
         run: |
           # Check current git status
           echo "Current git status:"
           git status
+          
+          # Extract branch name from JSONL output
+          BRANCH_NAME=""
+          if [ -f "$GITHUB_AW_SAFE_OUTPUTS" ]; then
+            echo "Checking for branch name in JSONL output..."
+            while IFS= read -r line; do
+              if [ -n "$line" ]; then
+                # Extract branch from create-pull-request line using simple grep and sed
+                if echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"create-pull-request"'; then
+                  echo "Found create-pull-request line: $line"
+                  # Extract branch value using sed
+                  BRANCH_NAME=$(echo "$line" | sed -n 's/.*"branch"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+                  if [ -n "$BRANCH_NAME" ]; then
+                    echo "Extracted branch name from create-pull-request: $BRANCH_NAME"
+                    break
+                  fi
+                # Extract branch from push-to-branch line using simple grep and sed
+                elif echo "$line" | grep -q '"type"[[:space:]]*:[[:space:]]*"push-to-branch"'; then
+                  echo "Found push-to-branch line: $line"
+                  # For push-to-branch, we don't extract branch from JSONL since it's configured in the workflow
+                  # The branch name should come from the environment variable GITHUB_AW_PUSH_BRANCH
+                  if [ -n "$GITHUB_AW_PUSH_BRANCH" ]; then
+                    BRANCH_NAME="$GITHUB_AW_PUSH_BRANCH"
+                    echo "Using configured push-to-branch target: $BRANCH_NAME"
+                    break
+                  fi
+                fi
+              fi
+            done < "$GITHUB_AW_SAFE_OUTPUTS"
+          fi
+          
           # Get the initial commit SHA from the base branch of the pull request
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_review_comment" ]; then
             INITIAL_SHA="$GITHUB_BASE_REF"
@@ -866,35 +976,59 @@ jobs:
           # Configure git user for GitHub Actions
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          # Stage any unstaged files
-          git add -A || true
-          # Check if there are staged files to commit
-          if ! git diff --cached --quiet; then
-            echo "Staged files found, committing them..."
-            git commit -m "[agent] staged files" || true
-            echo "Staged files committed"
-          else
-            echo "No staged files to commit"
+          
+          # If we have a branch name, check if that branch exists and get its diff
+          if [ -n "$BRANCH_NAME" ]; then
+            echo "Looking for branch: $BRANCH_NAME"
+            # Check if the branch exists
+            if git show-ref --verify --quiet refs/heads/$BRANCH_NAME; then
+              echo "Branch $BRANCH_NAME exists, generating patch from branch changes"
+              # Generate patch from the base to the branch
+              git format-patch "$INITIAL_SHA".."$BRANCH_NAME" --stdout > /tmp/aw.patch || echo "Failed to generate patch from branch" > /tmp/aw.patch
+              echo "Patch file created from branch: $BRANCH_NAME"
+            else
+              echo "Branch $BRANCH_NAME does not exist, falling back to current HEAD"
+              BRANCH_NAME=""
+            fi
           fi
-          # Check updated git status
-          echo "Updated git status after committing staged files:"
-          git status
-          # Show compact diff information between initial commit and HEAD (committed changes only)
-          echo '## Git diff' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          git diff --name-only "$INITIAL_SHA"..HEAD >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo '' >> $GITHUB_STEP_SUMMARY
-          # Check if there are any committed changes since the initial commit
-          if git diff --quiet "$INITIAL_SHA" HEAD; then
-            echo "No committed changes detected since initial commit"
-            echo "Skipping patch generation - no committed changes to create patch from"
-          else
-            echo "Committed changes detected, generating patch..."
-            # Generate patch from initial commit to HEAD (committed changes only)
-            git format-patch "$INITIAL_SHA"..HEAD --stdout > /tmp/aw.patch || echo "Failed to generate patch" > /tmp/aw.patch
-            echo "Patch file created at /tmp/aw.patch"
+          
+          # If no branch or branch doesn't exist, use the existing logic
+          if [ -z "$BRANCH_NAME" ]; then
+            echo "Using current HEAD for patch generation"
+            # Stage any unstaged files
+            git add -A || true
+            # Check if there are staged files to commit
+            if ! git diff --cached --quiet; then
+              echo "Staged files found, committing them..."
+              git commit -m "[agent] staged files" || true
+              echo "Staged files committed"
+            else
+              echo "No staged files to commit"
+            fi
+            # Check updated git status
+            echo "Updated git status after committing staged files:"
+            git status
+            # Show compact diff information between initial commit and HEAD (committed changes only)
+            echo '## Git diff' >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            git diff --name-only "$INITIAL_SHA"..HEAD >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            # Check if there are any committed changes since the initial commit
+            if git diff --quiet "$INITIAL_SHA" HEAD; then
+              echo "No committed changes detected since initial commit"
+              echo "Skipping patch generation - no committed changes to create patch from"
+            else
+              echo "Committed changes detected, generating patch..."
+              # Generate patch from initial commit to HEAD (committed changes only)
+              git format-patch "$INITIAL_SHA"..HEAD --stdout > /tmp/aw.patch || echo "Failed to generate patch" > /tmp/aw.patch
+              echo "Patch file created at /tmp/aw.patch"
+            fi
+          fi
+          
+          # Show patch info if it exists
+          if [ -f /tmp/aw.patch ]; then
             ls -la /tmp/aw.patch
             # Show the first 50 lines of the patch for review
             echo '## Git Patch' >> $GITHUB_STEP_SUMMARY
@@ -995,9 +1129,10 @@ jobs:
                 return;
               }
               console.log('Found create-pull-request item:', { title: pullRequestItem.title, bodyLength: pullRequestItem.body.length });
-              // Extract title and body from the JSON item
+              // Extract title, body, and branch from the JSON item
               let title = pullRequestItem.title.trim();
               let bodyLines = pullRequestItem.body.split('\n');
+              let branchName = pullRequestItem.branch ? pullRequestItem.branch.trim() : null;
               // If no title was found, use a default
               if (!title) {
                 title = 'Agent Output';
@@ -1025,18 +1160,33 @@ jobs:
               console.log('Labels:', labels);
               console.log('Draft:', draft);
               console.log('Body length:', body.length);
-              // Generate unique branch name using cryptographic random hex
-              const randomHex = crypto.randomBytes(8).toString('hex');
-              const branchName = `${workflowId}/${randomHex}`;
+              // Use branch name from JSONL if provided, otherwise generate unique branch name
+              if (!branchName) {
+                console.log('No branch name provided in JSONL, generating unique branch name');
+                // Generate unique branch name using cryptographic random hex
+                const randomHex = crypto.randomBytes(8).toString('hex');
+                branchName = `${workflowId}/${randomHex}`;
+              } else {
+                console.log('Using branch name from JSONL:', branchName);
+              }
               console.log('Generated branch name:', branchName);
               console.log('Base branch:', baseBranch);
               // Create a new branch using git CLI
               // Configure git (required for commits)
               execSync('git config --global user.email "action@github.com"', { stdio: 'inherit' });
               execSync('git config --global user.name "GitHub Action"', { stdio: 'inherit' });
-              // Create and checkout new branch
-              execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
-              console.log('Created and checked out branch:', branchName);
+              // Handle branch creation/checkout
+              const branchFromJsonl = pullRequestItem.branch ? pullRequestItem.branch.trim() : null;
+              if (branchFromJsonl) {
+                console.log('Checking if branch from JSONL exists:', branchFromJsonl);
+                console.log('Branch does not exist locally, creating new branch:', branchFromJsonl);
+                execSync(`git checkout -b ${branchFromJsonl}`, { stdio: 'inherit' });
+                console.log('Using existing/created branch:', branchFromJsonl);
+              } else {
+                // Create and checkout new branch with generated name
+                execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
+                console.log('Created and checked out new branch:', branchName);
+              }
               // Apply the patch using git CLI
               console.log('Applying patch...');
               // Apply the patch using git apply

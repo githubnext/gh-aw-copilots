@@ -11,31 +11,35 @@ The `safe-outputs:` element of your workflow's frontmatter declares that your ag
 2. The compiler automatically generates additional jobs that read this output and perform the requested actions
 3. Only these generated jobs receive the necessary write permissions
 
+For example:
+
+```yaml
+safe-outputs:
+  create-issue:
+  add-issue-comment:
+```
+
+This declares that the workflow should create at most one new issue and add at most one comment to the triggering issue or pull request based on the agentic workflow's output. To create multiple issues or comments, use the `max` parameter.
+
 ## Available Output Types
 
-### New Issue Creation (`create-issue:` / `create-issues:`)
+### New Issue Creation (`create-issue:`)
 
 Adding issue creation to the `safe-outputs:` section declares that the workflow should conclude with the creation of GitHub issues based on the workflow's output.
 
-**Singular Form (create exactly one issue):**
+**Basic Configuration:**
 ```yaml
 safe-outputs:
   create-issue:
 ```
 
-**Plural Form (create multiple issues):**
-```yaml
-safe-outputs:
-  create-issues:          
-    max: 5                          # Optional: maximum number of issues (default: 10)
-```
-
 **With Configuration:**
 ```yaml
 safe-outputs:
-  create-issue:                      # Singular form
+  create-issue:
     title-prefix: "[ai] "            # Optional: prefix for issue titles
     labels: [automation, agentic]    # Optional: labels to attach to issues
+    max: 5                           # Optional: maximum number of issues (default: 1)
 ```
 
 The agentic part of your workflow should describe the issue(s) it wants created.
@@ -51,21 +55,25 @@ Create new issues with your findings. For each issue, provide a title starting w
 
 The compiled workflow will have additional prompting describing that, to create issues, it should write the issue details to a file.
 
-### Issue Comment Creation (`add-issue-comment:` / `add-issue-comments:`)
+### Issue Comment Creation (`add-issue-comment:`)
 
-Adding comment creation to the `safe-outputs:` section declares that the workflow should conclude with posting comments on the triggering issue or pull request based on the workflow's output.
+Adding comment creation to the `safe-outputs:` section declares that the workflow should conclude with posting comments based on the workflow's output. By default, comments are posted on the triggering issue or pull request, but this can be configured using the `target` option.
 
-**Singular Form (adds exactly one comment):**
+**Basic Configuration:**
 ```yaml
 safe-outputs:
   add-issue-comment:
 ```
 
-**Plural Form (adds multiple comments):**
+**With Configuration:**
 ```yaml
 safe-outputs:
-  add-issue-comments:
-    max: 3                # Optional: maximum number of comments (default: 10)
+  add-issue-comment:
+    max: 3                          # Optional: maximum number of comments (default: 1)
+    target: "*"                     # Optional: target for comments
+                                    # "triggering" (default) - only comment on triggering issue/PR
+                                    # "*" - allow comments on any issue (requires issue_number in agent output)
+                                    # explicit number - comment on specific issue number
 ```
 
 The agentic part of your workflow should describe the comment(s) it wants posted.
@@ -116,22 +124,22 @@ Analyze the latest commit and suggest improvements.
 2. Create a pull request for your improvements, with a descriptive title and detailed description of the changes made
 ```
 
-### Label Addition (`add-issue-labels:`)
+### Label Addition (`add-issue-label:`)
 
-Adding `add-issue-labels:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the coding agent's analysis.
+Adding `add-issue-label:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the coding agent's analysis.
 
 ```yaml
 safe-outputs:
-  add-issue-labels:
+  add-issue-label:
 ```
 
 or with further configuration:
 
 ```yaml
 safe-outputs:
-  add-issue-labels:
+  add-issue-label:
     allowed: [triage, bug, enhancement] # Optional: allowed labels for addition.
-    max-count: 3                        # Optional: maximum number of labels to add (default: 3)
+    max: 3                              # Optional: maximum number of labels to add (default: 3)
 ```
 
 The agentic part of your workflow should analyze the issue content and determine appropriate labels. 
@@ -146,14 +154,121 @@ Analyze the issue content and add appropriate labels to the issue.
 
 The agentic part of your workflow will have implicit additional prompting saying that, to add labels to a GitHub issue, you must write labels to a special file, one label per line.
 
+### Issue Updates (`update-issue:`)
+
+Adding `update-issue:` to the `safe-outputs:` section declares that the workflow should conclude with updating GitHub issues based on the coding agent's analysis. You can configure which fields are allowed to be updated.
+
+**Basic Configuration:**
+```yaml
+safe-outputs:
+  update-issue:
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  update-issue:
+    status:                             # Optional: presence indicates status can be updated (open/closed)
+    target: "*"                         # Optional: target for updates
+                                        # "triggering" (default) - only update triggering issue
+                                        # "*" - allow updates to any issue (requires issue_number in agent output)
+                                        # explicit number - update specific issue number
+    title:                              # Optional: presence indicates title can be updated
+    body:                               # Optional: presence indicates body can be updated
+    max: 3                              # Optional: maximum number of issues to update (default: 1)
+```
+
+The agentic part of your workflow should analyze the issue and determine what updates to make.
+
+**Example natural language to generate the output:**
+
+```markdown
+# Issue Update Agent
+
+Analyze the issue and update its status, title, or body as needed.
+Update the issue based on your analysis. You can change the title, body content, or status (open/closed).
+```
+
+**Safety Features:**
+
+- Only explicitly enabled fields (`status`, `title`, `body`) can be updated
+- Status values are validated (must be "open" or "closed")
+- Empty or invalid field values are rejected
+- Target configuration controls which issues can be updated for security
+- Update count is limited by `max` setting (default: 1)
+- Only GitHub's `issues.update` API endpoint is used
+
+### Push to Branch (`push-to-branch:`)
+
+Adding `push-to-branch:` to the `safe-outputs:` section declares that the workflow should conclude with pushing changes to a specific branch based on the agentic workflow's output. This is useful for applying code changes directly to a designated branch within pull requests.
+
+**Basic Configuration:**
+```yaml
+safe-outputs:
+  push-to-branch:
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  push-to-branch:
+    branch: feature-branch               # Optional: the branch to push changes to (default: "triggering")
+    target: "*"                          # Optional: target for push operations
+                                         # "triggering" (default) - only push in triggering PR context
+                                         # "*" - allow pushes to any pull request (requires pull_request_number in agent output)
+                                         # explicit number - push for specific pull request number
+```
+
+The agentic part of your workflow should describe the changes to be pushed and optionally provide a commit message.
+
+**Example natural language to generate the output:**
+
+```markdown
+# Code Update Agent
+
+Analyze the pull request and make necessary code improvements.
+
+1. Make any file changes directly in the working directory  
+2. Push changes to the feature branch with a descriptive commit message
+```
+
+**Safety Features:**
+
+- Changes are applied via git patches generated from the workflow's modifications
+- Only the specified branch can be modified
+- Target configuration controls which pull requests can trigger pushes for security
+- Push operations are limited to one per workflow execution
+- Requires valid patch content to proceed (empty patches are rejected)
+
 **Safety Features:**
 
 - Empty lines in coding agent output are ignored
 - Lines starting with `-` are rejected (no removal operations allowed)
 - Duplicate labels are automatically removed
 - If `allowed` is provided, all requested labels must be in the `allowed` list or the job fails with a clear error message. If `allowed` is not provided then any labels are allowed (including creating new labels).
-- Label count is limited by `max-count` setting (default: 3) - exceeding this limit causes job failure
+- Label count is limited by `max` setting (default: 3) - exceeding this limit causes job failure
 - Only GitHub's `issues.addLabels` API endpoint is used (no removal endpoints)
+
+When `create-pull-request` or `push-to-branch` are enabled in the `safe-outputs` configuration, the system automatically adds the following additional Claude tools to enable file editing and pull request creation:
+
+## Automatically Added Tools
+
+When `create-pull-request` or `push-to-branch` are configured, these Claude tools are automatically added:
+
+- **Edit**: Allows editing existing files
+- **MultiEdit**: Allows making multiple edits to files in a single operation
+- **Write**: Allows creating new files or overwriting existing files
+- **NotebookEdit**: Allows editing Jupyter notebook files
+
+Along with the file editing tools, these Git commands are also automatically whitelisted:
+
+- `git checkout:*`
+- `git branch:*`
+- `git switch:*`
+- `git add:*`
+- `git rm:*`
+- `git commit:*`
+- `git merge:*`
 
 ## Security and Sanitization
 
@@ -186,5 +301,5 @@ safe-outputs:
 
 - [Frontmatter Options](frontmatter.md) - All configuration options for workflows
 - [Workflow Structure](workflow-structure.md) - Directory layout and organization
-- [Alias Triggers](alias-triggers.md) - Special @mention triggers and context text
+- [Command Triggers](command-triggers.md) - Special /mention triggers and context text
 - [Commands](commands.md) - CLI commands for workflow management

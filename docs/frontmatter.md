@@ -22,6 +22,7 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 - `tools`: Available tools and MCP servers for the AI engine  
 - `cache`: Cache configuration for workflow dependencies
 - `safe-outputs`: [Safe Output Processing](safe-outputs.md) for automatic issue creation and comment posting.
+- `strict`: Enable strict mode to enforce deny-by-default permissions for engine and MCP servers
 
 ## Trigger Events (`on:`)
 
@@ -88,7 +89,7 @@ on:
 - `rocket` (🚀)
 - `eyes` (👀)
 
-**Enhanced functionality**: When using the `reaction:` feature with alias workflows, the system will also automatically edit the triggering comment to include a link to the workflow run. This provides users with immediate feedback and easy access to view the workflow execution. For non-alias workflows, only the reaction is added without comment editing.
+**Enhanced functionality**: When using the `reaction:` feature with command workflows, the system will also automatically edit the triggering comment to include a link to the workflow run. This provides users with immediate feedback and easy access to view the workflow execution. For non-command workflows, only the reaction is added without comment editing.
 
 **Note**: This feature uses inline JavaScript code with `actions/github-script@v7` to add reactions and edit comments, so no additional action files are created in the repository.
 
@@ -110,7 +111,7 @@ on:
   workflow_dispatch:
 ```
 
-An additional kind of trigger called `alias:` is supported, see [Alias Triggers](alias-triggers.md) for special `@mention` triggers and context text functionality.
+An additional kind of trigger called `command:` is supported, see [Command Triggers](command-triggers.md) for special `/mention` triggers and context text functionality.
 
 ## Permissions (`permissions:`)
 
@@ -282,6 +283,58 @@ engine:
            - "trusted-api.com"
            - "*.safe-domain.org"
    ```
+
+## Strict Mode (`strict:`)
+
+Strict mode enforces deny-by-default permissions for both engine and MCP servers even when no explicit permissions are configured. This provides a zero-trust security model that adheres to security best practices.
+
+```yaml
+strict: true  # Enable strict mode (default: false)
+```
+
+### Behavior
+
+When strict mode is enabled:
+
+1. **No explicit network permissions**: Automatically enforces deny-all policy
+   ```yaml
+   strict: true
+   engine: claude
+   # No engine.permissions.network specified
+   # Result: All network access is denied (same as empty allowed list)
+   ```
+
+2. **Explicit network permissions**: Uses the specified permissions normally
+   ```yaml
+   strict: true
+   engine:
+     id: claude
+     permissions:
+       network:
+         allowed: ["api.github.com"]
+   # Result: Only api.github.com is accessible
+   ```
+
+3. **Strict mode disabled**: Maintains backwards-compatible behavior
+   ```yaml
+   strict: false  # or omitted entirely
+   engine: claude
+   # No engine.permissions.network specified
+   # Result: Unrestricted network access (backwards compatible)
+   ```
+
+### Use Cases
+
+- **Security-first workflows**: When you want to ensure no accidental network access
+- **Compliance requirements**: For environments requiring deny-by-default policies
+- **Zero-trust environments**: When explicit permissions should always be required
+- **Migration assistance**: Gradually migrate existing workflows to explicit permissions
+
+### Compatibility
+
+- Only applies to engines that support network permissions (currently Claude)
+- Non-Claude engines ignore strict mode setting
+- Backwards compatible when `strict: false` or omitted
 
 ## Safe Outputs Configuration (`safe-outputs:`)
 
