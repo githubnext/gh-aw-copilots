@@ -2384,6 +2384,11 @@ func (c *Compiler) generateSafetyChecks(yaml *strings.Builder, data *WorkflowDat
 
 // generateMCPSetup generates the MCP server configuration setup
 func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any, engine AgenticEngine) {
+	// Custom engines don't use MCP servers
+	if engine.GetID() == "custom" {
+		return
+	}
+
 	// Collect tools that need MCP server configuration
 	var mcpTools []string
 	var proxyTools []string
@@ -3532,6 +3537,12 @@ func (c *Compiler) convertStepToYAML(stepMap map[string]any) (string, error) {
 // generateEngineExecutionSteps generates the execution steps for the specified agentic engine
 func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine, logFile string) {
 
+	// Handle custom engine (with or without user-defined steps)
+	if engine.GetID() == "custom" {
+		c.generateCustomEngineSteps(yaml, data, logFile)
+		return
+	}
+
 	executionConfig := engine.GetExecutionConfig(data.Name, logFile, data.EngineConfig, data.NetworkPermissions, data.SafeOutputs != nil)
 
 	if executionConfig.Command != "" {
@@ -3649,6 +3660,30 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 		yaml.WriteString("          # Ensure log file exists\n")
 		yaml.WriteString("          touch " + logFile + "\n")
 	}
+}
+
+// generateCustomEngineSteps generates the custom steps defined in the engine configuration
+func (c *Compiler) generateCustomEngineSteps(yaml *strings.Builder, data *WorkflowData, logFile string) {
+	// Generate each custom step if they exist
+	if data.EngineConfig != nil && len(data.EngineConfig.Steps) > 0 {
+		for i, step := range data.EngineConfig.Steps {
+			stepYAML, err := c.convertStepToYAML(step)
+			if err != nil {
+				// Log error but continue with other steps
+				fmt.Printf("Error converting step %d to YAML: %v\n", i+1, err)
+				continue
+			}
+			
+			// The convertStepToYAML already includes proper indentation, just add it directly
+			yaml.WriteString(stepYAML)
+		}
+	}
+
+	// Add a step to ensure the log file exists for consistency with other engines
+	yaml.WriteString("      - name: Ensure log file exists\n")
+	yaml.WriteString("        run: |\n")
+	yaml.WriteString("          echo \"Custom steps execution completed\" >> " + logFile + "\n")
+	yaml.WriteString("          touch " + logFile + "\n")
 }
 
 // generateCreateAwInfo generates a step that creates aw_info.json with agentic run metadata

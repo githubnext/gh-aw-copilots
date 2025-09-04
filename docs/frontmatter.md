@@ -141,6 +141,7 @@ The `engine:` section specifies which AI engine to use to interpret the markdown
 ```yaml
 engine: claude  # Default: Claude Code
 engine: codex   # Experimental: OpenAI Codex CLI with MCP support
+engine: custom  # Custom: Execute user-defined GitHub Actions steps
 ```
 
 **Engine Override**:
@@ -153,7 +154,7 @@ gh aw compile --engine claude
 Simple format:
 
 ```yaml
-engine: claude  # or codex
+engine: claude  # or codex or custom
 ```
 
 Extended format:
@@ -170,16 +171,42 @@ engine:
     DEBUG_MODE: "true"
 ```
 
+**Custom Engine Configuration:**
+
+For the `custom` engine, you can specify GitHub Actions steps to execute instead of AI-based processing:
+
+```yaml
+engine:
+  id: custom
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    - name: Run custom script
+      run: |
+        echo "Running custom workflow logic"
+        npm install
+        npm test
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: ./test-results/
+```
+
 **Fields:**
-- **`id`** (required): Engine identifier (`claude`, `codex`)
+- **`id`** (required): Engine identifier (`claude`, `codex`, `custom`)
 - **`version`** (optional): Action version (`beta`, `stable`)
 - **`model`** (optional): Specific LLM model to use
 - **`max-turns`** (optional): Maximum number of chat iterations per run (cost-control option)
 - **`env`** (optional): Custom environment variables to pass to the agentic engine as key-value pairs
+- **`steps`** (optional): For custom engine - array of GitHub Actions steps to execute
 
 **Model Defaults:**
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)
 - **Codex**: Defaults to `o4-mini` when no model is specified
+- **Custom**: No AI model - executes user-defined steps directly
 
 ## AI Engine (`engine:`)
 
