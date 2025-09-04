@@ -1,8 +1,7 @@
 ---
 name: Test Codex Security Report
 on:
-  issues:
-    types: [opened, reopened]
+  workflow_dispatch:
   reaction: eyes
 
 engine: 
@@ -13,7 +12,9 @@ safe-outputs:
     max: 10
 ---
 
-If the title of the issue #${{ github.event.issue.number }} contains "Security Scan Codex" then analyze the repository codebase for security vulnerabilities and create security reports.
+# Security Analysis with Codex
+
+Analyze the repository codebase for security vulnerabilities and create security reports.
 
 For each security finding you identify, specify:
 - The file path relative to the repository root

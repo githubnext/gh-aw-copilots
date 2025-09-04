@@ -2,19 +2,16 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Codex Create Security Report"
+name: "Security Analysis with Codex"
 "on":
-  issues:
-    types:
-    - opened
-    - reopened
+  workflow_dispatch: null
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
+  group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Test Codex Create Security Report"
+run-name: "Security Analysis with Codex"
 
 jobs:
   add_reaction:
@@ -206,7 +203,7 @@ jobs:
             }
             await main();
 
-  test-codex-create-security-report:
+  security-analysis-with-codex:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -270,7 +267,9 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} contains "Security Scan Codex" then analyze the repository codebase for security vulnerabilities and create security reports.
+          # Security Analysis with Codex
+          
+          Analyze the repository codebase for security vulnerabilities and create security reports.
           
           For each security finding you identify, specify:
           - The file path relative to the repository root
@@ -329,7 +328,7 @@ jobs:
               engine_name: "Codex",
               model: "",
               version: "",
-              workflow_name: "Test Codex Create Security Report",
+              workflow_name: "Security Analysis with Codex",
               experimental: true,
               supports_tools_whitelist: true,
               supports_http_transport: false,
@@ -368,7 +367,7 @@ jobs:
           # Run codex with log capture - pipefail ensures codex exit code is preserved
           codex exec \
             -c model=o4-mini \
-            --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/test-codex-create-security-report.log
+            --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/security-analysis-with-codex.log
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
@@ -1028,7 +1027,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-codex-create-security-report.log
+          AGENT_LOG_FILE: /tmp/security-analysis-with-codex.log
         with:
           script: |
             function main() {
@@ -1285,12 +1284,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-codex-create-security-report.log
-          path: /tmp/test-codex-create-security-report.log
+          name: security-analysis-with-codex.log
+          path: /tmp/security-analysis-with-codex.log
           if-no-files-found: warn
 
   create_security_report:
-    needs: test-codex-create-security-report
+    needs: security-analysis-with-codex
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1307,7 +1306,7 @@ jobs:
         id: create_security_report
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-create-security-report.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.security-analysis-with-codex.outputs.output }}
           GITHUB_AW_SECURITY_REPORT_MAX: 10
           GITHUB_AW_SECURITY_REPORT_DRIVER: Test Codex Security Report
           GITHUB_AW_WORKFLOW_FILENAME: test-codex-create-security-report
