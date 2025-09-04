@@ -57,7 +57,6 @@ This workflow uses the custom engine to execute defined steps.`,
 			shouldNotContain: []string{
 				"claude",
 				"codex",
-				"mcp-servers.json",
 				"ANTHROPIC_API_KEY",
 				"OPENAI_API_KEY",
 			},
@@ -84,7 +83,6 @@ Simple custom workflow with one step.`,
 			shouldNotContain: []string{
 				"ANTHROPIC_API_KEY",
 				"OPENAI_API_KEY",
-				"mcp-config",
 			},
 		},
 	}

@@ -33,8 +33,8 @@ func TestCustomEngine(t *testing.T) {
 		t.Error("Expected custom engine to not support HTTP transport")
 	}
 
-	if engine.SupportsMaxTurns() {
-		t.Error("Expected custom engine to not support max turns")
+	if !engine.SupportsMaxTurns() {
+		t.Error("Expected custom engine to support max turns for consistency with other engines")
 	}
 }
 
@@ -120,12 +120,17 @@ func TestCustomEngineRenderMCPConfig(t *testing.T) {
 	engine := NewCustomEngine()
 	var yaml strings.Builder
 
-	// This should not generate any MCP configuration
+	// This should generate MCP configuration structure like Claude
 	engine.RenderMCPConfig(&yaml, map[string]any{}, []string{})
 
 	output := yaml.String()
-	if output != "" {
-		t.Errorf("Expected empty MCP config for custom engine, got '%s'", output)
+	expectedPrefix := "          cat > /tmp/mcp-config/mcp-servers.json << 'EOF'"
+	if !strings.Contains(output, expectedPrefix) {
+		t.Errorf("Expected MCP config to contain setup prefix, got '%s'", output)
+	}
+
+	if !strings.Contains(output, "\"mcpServers\"") {
+		t.Errorf("Expected MCP config to contain mcpServers section, got '%s'", output)
 	}
 }
 
