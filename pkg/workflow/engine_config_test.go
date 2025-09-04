@@ -380,7 +380,7 @@ This is a test workflow.`,
 func TestEngineConfigurationWithModel(t *testing.T) {
 	tests := []struct {
 		name           string
-		engine         AgenticEngine
+		engine         CodingAgentEngine
 		engineConfig   *EngineConfig
 		expectedModel  string
 		expectedAPIKey string
@@ -409,7 +409,11 @@ func TestEngineConfigurationWithModel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := tt.engine.GetExecutionConfig("test-workflow", "test-log", tt.engineConfig, nil, false)
+			workflowData := &WorkflowData{
+				Name:         "test-workflow",
+				EngineConfig: tt.engineConfig,
+			}
+			config := tt.engine.GetExecutionConfig(workflowData, "test-log")
 
 			switch tt.engine.GetID() {
 			case "claude":
@@ -434,7 +438,7 @@ func TestEngineConfigurationWithModel(t *testing.T) {
 func TestEngineConfigurationWithCustomEnvVars(t *testing.T) {
 	tests := []struct {
 		name         string
-		engine       AgenticEngine
+		engine       CodingAgentEngine
 		engineConfig *EngineConfig
 		hasOutput    bool
 	}{
@@ -478,7 +482,14 @@ func TestEngineConfigurationWithCustomEnvVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := tt.engine.GetExecutionConfig("test-workflow", "test-log", tt.engineConfig, nil, tt.hasOutput)
+			workflowData := &WorkflowData{
+				Name:         "test-workflow",
+				EngineConfig: tt.engineConfig,
+			}
+			if tt.hasOutput {
+				workflowData.SafeOutputs = &SafeOutputsConfig{}
+			}
+			config := tt.engine.GetExecutionConfig(workflowData, "test-log")
 
 			switch tt.engine.GetID() {
 			case "claude":
@@ -511,7 +522,7 @@ func TestEngineConfigurationWithCustomEnvVars(t *testing.T) {
 }
 
 func TestNilEngineConfig(t *testing.T) {
-	engines := []AgenticEngine{
+	engines := []CodingAgentEngine{
 		NewClaudeEngine(),
 		NewCodexEngine(),
 		NewCustomEngine(),
@@ -520,7 +531,10 @@ func TestNilEngineConfig(t *testing.T) {
 	for _, engine := range engines {
 		t.Run(engine.GetID(), func(t *testing.T) {
 			// Should not panic when engineConfig is nil
-			config := engine.GetExecutionConfig("test-workflow", "test-log", nil, nil, false)
+			workflowData := &WorkflowData{
+				Name: "test-workflow",
+			}
+			config := engine.GetExecutionConfig(workflowData, "test-log")
 
 			if config.StepName == "" {
 				t.Errorf("Expected non-empty step name for engine %s", engine.GetID())
