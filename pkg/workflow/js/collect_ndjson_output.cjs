@@ -154,6 +154,8 @@ async function main() {
         return 1;  // Only one issue update allowed
       case 'push-to-branch':
         return 1;  // Only one push to branch allowed
+      case 'create-discussion':
+        return 1;  // Only one discussion allowed
       default:
         return 1;  // Default to single item for unknown types
     }
@@ -348,7 +350,6 @@ async function main() {
             }
           }
           break;
-
         case 'create-pull-request-review-comment':
           // Validate required path field
           if (!item.path || typeof item.path !== 'string') {
@@ -396,6 +397,19 @@ async function main() {
               continue;
             }
           }
+          break;
+        case 'create-discussion':
+          if (!item.title || typeof item.title !== 'string') {
+            errors.push(`Line ${i + 1}: create-discussion requires a 'title' string field`);
+            continue;
+          }
+          if (!item.body || typeof item.body !== 'string') {
+            errors.push(`Line ${i + 1}: create-discussion requires a 'body' string field`);
+            continue;
+          }
+          // Sanitize text content
+          item.title = sanitizeContent(item.title);
+          item.body = sanitizeContent(item.body);
           break;
 
         default:
