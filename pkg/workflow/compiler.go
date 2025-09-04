@@ -3826,6 +3826,21 @@ func (c *Compiler) generateEngineExecutionSteps(yaml *strings.Builder, data *Wor
 
 	executionConfig := engine.GetExecutionConfig(data.Name, logFile, data.EngineConfig, data.NetworkPermissions, data.SafeOutputs != nil)
 
+	// If the execution config contains custom steps, inject them before the main command/action
+	if len(executionConfig.Steps) > 0 {
+		for i, step := range executionConfig.Steps {
+			stepYAML, err := c.convertStepToYAML(step)
+			if err != nil {
+				// Log error but continue with other steps
+				fmt.Printf("Error converting step %d to YAML: %v\n", i+1, err)
+				continue
+			}
+
+			// The convertStepToYAML already includes proper indentation, just add it directly
+			yaml.WriteString(stepYAML)
+		}
+	}
+
 	if executionConfig.Command != "" {
 		// Command-based execution (e.g., Codex)
 		fmt.Fprintf(yaml, "      - name: %s\n", executionConfig.StepName)

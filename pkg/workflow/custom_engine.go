@@ -33,13 +33,20 @@ func (e *CustomEngine) GetInstallationSteps(engineConfig *EngineConfig, networkP
 func (e *CustomEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig, networkPermissions *NetworkPermissions, hasOutput bool) ExecutionConfig {
 	// The custom engine doesn't execute itself - the steps are handled directly by the compiler
 	// This method is called but the actual execution logic is handled in the compiler
-	return ExecutionConfig{
+	config := ExecutionConfig{
 		StepName: "Custom Steps Execution",
 		Command:  "echo \"Custom steps are handled directly by the compiler\"",
 		Environment: map[string]string{
 			"WORKFLOW_NAME": workflowName,
 		},
 	}
+
+	// If the engine configuration has custom steps, include them in the execution config
+	if engineConfig != nil && len(engineConfig.Steps) > 0 {
+		config.Steps = engineConfig.Steps
+	}
+
+	return config
 }
 
 // RenderMCPConfig renders empty MCP configuration since custom engine doesn't use MCP

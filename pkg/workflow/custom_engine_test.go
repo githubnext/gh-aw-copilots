@@ -63,6 +63,57 @@ func TestCustomEngineGetExecutionConfig(t *testing.T) {
 	if config.Environment["WORKFLOW_NAME"] != "test-workflow" {
 		t.Errorf("Expected WORKFLOW_NAME env var to be 'test-workflow', got '%s'", config.Environment["WORKFLOW_NAME"])
 	}
+
+	// Test without engine config - steps should be empty
+	if len(config.Steps) != 0 {
+		t.Errorf("Expected no steps when no engine config provided, got %d", len(config.Steps))
+	}
+}
+
+func TestCustomEngineGetExecutionConfigWithSteps(t *testing.T) {
+	engine := NewCustomEngine()
+
+	// Create engine config with steps
+	engineConfig := &EngineConfig{
+		ID: "custom",
+		Steps: []map[string]any{
+			{
+				"name": "Setup Node.js",
+				"uses": "actions/setup-node@v4",
+				"with": map[string]any{
+					"node-version": "18",
+				},
+			},
+			{
+				"name": "Run tests",
+				"run":  "npm test",
+			},
+		},
+	}
+
+	config := engine.GetExecutionConfig("test-workflow", "/tmp/test.log", engineConfig, nil, false)
+
+	if config.StepName != "Custom Steps Execution" {
+		t.Errorf("Expected step name 'Custom Steps Execution', got '%s'", config.StepName)
+	}
+
+	if config.Environment["WORKFLOW_NAME"] != "test-workflow" {
+		t.Errorf("Expected WORKFLOW_NAME env var to be 'test-workflow', got '%s'", config.Environment["WORKFLOW_NAME"])
+	}
+
+	// Test with engine config - steps should be populated
+	if len(config.Steps) != 2 {
+		t.Errorf("Expected 2 steps when engine config has steps, got %d", len(config.Steps))
+	}
+
+	// Verify the steps are correctly copied
+	if config.Steps[0]["name"] != "Setup Node.js" {
+		t.Errorf("Expected first step name 'Setup Node.js', got '%v'", config.Steps[0]["name"])
+	}
+
+	if config.Steps[1]["name"] != "Run tests" {
+		t.Errorf("Expected second step name 'Run tests', got '%v'", config.Steps[1]["name"])
+	}
 }
 
 func TestCustomEngineRenderMCPConfig(t *testing.T) {

@@ -68,6 +68,9 @@ type ExecutionConfig struct {
 
 	// Environment variables needed for execution
 	Environment map[string]string
+
+	// Steps is an optional list of custom steps to inject before command invocation
+	Steps []map[string]any
 }
 
 // BaseEngine provides common functionality for agentic engines
