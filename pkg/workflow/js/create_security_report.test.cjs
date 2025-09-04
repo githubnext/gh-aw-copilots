@@ -114,9 +114,7 @@ describe("create_security_report.cjs", () => {
 
     it("should handle no security report items", async () => {
       process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-        items: [
-          { type: "create-issue", title: "Test Issue" },
-        ],
+        items: [{ type: "create-issue", title: "Test Issue" }],
       });
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -140,7 +138,7 @@ describe("create_security_report.cjs", () => {
             message: "SQL injection vulnerability detected",
           },
           {
-            type: "create-security-report", 
+            type: "create-security-report",
             file: "src/utils.js",
             line: 15,
             severity: "warning",
@@ -166,17 +164,27 @@ describe("create_security_report.cjs", () => {
 
       // Check first finding
       const firstResult = sarifContent.runs[0].results[0];
-      expect(firstResult.message.text).toBe("SQL injection vulnerability detected");
+      expect(firstResult.message.text).toBe(
+        "SQL injection vulnerability detected"
+      );
       expect(firstResult.level).toBe("error");
-      expect(firstResult.locations[0].physicalLocation.artifactLocation.uri).toBe("src/app.js");
-      expect(firstResult.locations[0].physicalLocation.region.startLine).toBe(42);
+      expect(
+        firstResult.locations[0].physicalLocation.artifactLocation.uri
+      ).toBe("src/app.js");
+      expect(firstResult.locations[0].physicalLocation.region.startLine).toBe(
+        42
+      );
 
-      // Check second finding  
+      // Check second finding
       const secondResult = sarifContent.runs[0].results[1];
       expect(secondResult.message.text).toBe("Potential XSS vulnerability");
       expect(secondResult.level).toBe("warning");
-      expect(secondResult.locations[0].physicalLocation.artifactLocation.uri).toBe("src/utils.js");
-      expect(secondResult.locations[0].physicalLocation.region.startLine).toBe(15);
+      expect(
+        secondResult.locations[0].physicalLocation.artifactLocation.uri
+      ).toBe("src/utils.js");
+      expect(secondResult.locations[0].physicalLocation.region.startLine).toBe(
+        15
+      );
 
       // Check outputs were set
       expect(mockCore.setOutput).toHaveBeenCalledWith("sarif_file", sarifFile);
@@ -196,7 +204,7 @@ describe("create_security_report.cjs", () => {
         items: [
           {
             type: "create-security-report",
-            file: "src/app.js", 
+            file: "src/app.js",
             line: 42,
             severity: "error",
             message: "First finding",
@@ -204,7 +212,7 @@ describe("create_security_report.cjs", () => {
           {
             type: "create-security-report",
             file: "src/utils.js",
-            line: 15, 
+            line: 15,
             severity: "warning",
             message: "Second finding",
           },
@@ -222,7 +230,9 @@ describe("create_security_report.cjs", () => {
 
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
       expect(sarifContent.runs[0].results).toHaveLength(1);
-      expect(sarifContent.runs[0].results[0].message.text).toBe("First finding");
+      expect(sarifContent.runs[0].results[0].message.text).toBe(
+        "First finding"
+      );
 
       // Check output reflects the limit
       expect(mockCore.setOutput).toHaveBeenCalledWith("findings_count", 1);
@@ -237,7 +247,7 @@ describe("create_security_report.cjs", () => {
             type: "create-security-report",
             file: "src/valid.js",
             line: 10,
-            severity: "error", 
+            severity: "error",
             message: "Valid finding",
           },
           {
@@ -256,7 +266,7 @@ describe("create_security_report.cjs", () => {
           },
           {
             type: "create-security-report",
-            file: "src/invalid2.js", 
+            file: "src/invalid2.js",
             line: "not-a-number",
             severity: "error",
             message: "Invalid - bad line",
@@ -282,7 +292,9 @@ describe("create_security_report.cjs", () => {
 
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
       expect(sarifContent.runs[0].results).toHaveLength(1);
-      expect(sarifContent.runs[0].results[0].message.text).toBe("Valid finding");
+      expect(sarifContent.runs[0].results[0].message.text).toBe(
+        "Valid finding"
+      );
 
       // Check outputs
       expect(mockCore.setOutput).toHaveBeenCalledWith("findings_count", 1);

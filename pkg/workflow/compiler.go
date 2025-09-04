@@ -2251,10 +2251,10 @@ func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJo
 
 	// Create outputs for the job
 	outputs := map[string]string{
-		"sarif_file":         "${{ steps.create_security_report.outputs.sarif_file }}",
-		"findings_count":     "${{ steps.create_security_report.outputs.findings_count }}",
-		"artifact_uploaded":  "${{ steps.create_security_report.outputs.artifact_uploaded }}",
-		"codeql_uploaded":    "${{ steps.create_security_report.outputs.codeql_uploaded }}",
+		"sarif_file":        "${{ steps.create_security_report.outputs.sarif_file }}",
+		"findings_count":    "${{ steps.create_security_report.outputs.findings_count }}",
+		"artifact_uploaded": "${{ steps.create_security_report.outputs.artifact_uploaded }}",
+		"codeql_uploaded":   "${{ steps.create_security_report.outputs.codeql_uploaded }}",
 	}
 
 	// Build job condition - security reports can run in any context unlike PR review comments
@@ -2274,7 +2274,7 @@ func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJo
 		If:             jobCondition,
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      security-events: write\n      actions: read", // Need security-events:write for SARIF upload
-		TimeoutMinutes: 10, // 10-minute timeout
+		TimeoutMinutes: 10,                                                                                      // 10-minute timeout
 		Steps:          steps,
 		Outputs:        outputs,
 		Depends:        []string{mainJobName}, // Depend on the main workflow job

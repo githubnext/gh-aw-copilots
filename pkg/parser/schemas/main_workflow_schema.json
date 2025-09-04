@@ -1127,6 +1127,26 @@
             }
           ]
         },
+        "create-security-report": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Configuration for creating security reports (SARIF format) from agentic workflow output",
+              "properties": {
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of security findings to include (default: unlimited)",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Enable security report creation with default configuration (unlimited findings)"
+            }
+          ]
+        },
         "add-issue-label": {
           "oneOf": [
             {

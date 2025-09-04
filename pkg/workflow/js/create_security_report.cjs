@@ -32,25 +32,22 @@ async function main() {
 
   // Find all create-security-report items
   const securityItems = validatedOutput.items.filter(
-    /** @param {any} item */ item =>
-      item.type === "create-security-report"
+    /** @param {any} item */ item => item.type === "create-security-report"
   );
   if (securityItems.length === 0) {
-    console.log(
-      "No create-security-report items found in agent output"
-    );
+    console.log("No create-security-report items found in agent output");
     return;
   }
 
-  console.log(
-    `Found ${securityItems.length} create-security-report item(s)`
-  );
+  console.log(`Found ${securityItems.length} create-security-report item(s)`);
 
   // Get the max configuration from environment variable
-  const maxFindings = process.env.GITHUB_AW_SECURITY_REPORT_MAX 
-    ? parseInt(process.env.GITHUB_AW_SECURITY_REPORT_MAX) 
+  const maxFindings = process.env.GITHUB_AW_SECURITY_REPORT_MAX
+    ? parseInt(process.env.GITHUB_AW_SECURITY_REPORT_MAX)
     : 0; // 0 means unlimited
-  console.log(`Max findings configuration: ${maxFindings === 0 ? 'unlimited' : maxFindings}`);
+  console.log(
+    `Max findings configuration: ${maxFindings === 0 ? "unlimited" : maxFindings}`
+  );
 
   const validFindings = [];
 
@@ -63,7 +60,9 @@ async function main() {
         file: securityItem.file,
         line: securityItem.line,
         severity: securityItem.severity,
-        messageLength: securityItem.message ? securityItem.message.length : "undefined",
+        messageLength: securityItem.message
+          ? securityItem.message.length
+          : "undefined",
       }
     );
 
@@ -73,18 +72,28 @@ async function main() {
       continue;
     }
 
-    if (!securityItem.line || (typeof securityItem.line !== "number" && typeof securityItem.line !== "string")) {
-      console.log('Missing or invalid required field "line" in security report item');
+    if (
+      !securityItem.line ||
+      (typeof securityItem.line !== "number" &&
+        typeof securityItem.line !== "string")
+    ) {
+      console.log(
+        'Missing or invalid required field "line" in security report item'
+      );
       continue;
     }
 
     if (!securityItem.severity || typeof securityItem.severity !== "string") {
-      console.log('Missing or invalid required field "severity" in security report item');
+      console.log(
+        'Missing or invalid required field "severity" in security report item'
+      );
       continue;
     }
 
     if (!securityItem.message || typeof securityItem.message !== "string") {
-      console.log('Missing or invalid required field "message" in security report item');
+      console.log(
+        'Missing or invalid required field "message" in security report item'
+      );
       continue;
     }
 
@@ -97,15 +106,17 @@ async function main() {
 
     // Validate severity level and map to SARIF level
     const severityMap = {
-      'error': 'error',
-      'warning': 'warning', 
-      'info': 'note',
-      'note': 'note'
+      error: "error",
+      warning: "warning",
+      info: "note",
+      note: "note",
     };
-    
+
     const normalizedSeverity = securityItem.severity.toLowerCase();
     if (!severityMap[normalizedSeverity]) {
-      console.log(`Invalid severity level: ${securityItem.severity} (must be error, warning, info, or note)`);
+      console.log(
+        `Invalid severity level: ${securityItem.severity} (must be error, warning, info, or note)`
+      );
       continue;
     }
 
@@ -136,68 +147,73 @@ async function main() {
 
   // Generate SARIF file
   const sarifContent = {
-    "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-    "version": "2.1.0",
-    "runs": [
+    $schema:
+      "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    version: "2.1.0",
+    runs: [
       {
-        "tool": {
-          "driver": {
-            "name": "GitHub Agentic Workflows Security Scanner",
-            "version": "1.0.0",
-            "informationUri": "https://github.com/githubnext/gh-aw-copilots"
-          }
+        tool: {
+          driver: {
+            name: "GitHub Agentic Workflows Security Scanner",
+            version: "1.0.0",
+            informationUri: "https://github.com/githubnext/gh-aw-copilots",
+          },
         },
-        "results": validFindings.map((finding, index) => ({
-          "ruleId": `security-finding-${index + 1}`,
-          "message": { "text": finding.message },
-          "level": finding.sarifLevel,
-          "locations": [
+        results: validFindings.map((finding, index) => ({
+          ruleId: `security-finding-${index + 1}`,
+          message: { text: finding.message },
+          level: finding.sarifLevel,
+          locations: [
             {
-              "physicalLocation": {
-                "artifactLocation": { "uri": finding.file },
-                "region": { 
-                  "startLine": finding.line,
-                  "startColumn": 1
-                }
-              }
-            }
-          ]
-        }))
-      }
-    ]
+              physicalLocation: {
+                artifactLocation: { uri: finding.file },
+                region: {
+                  startLine: finding.line,
+                  startColumn: 1,
+                },
+              },
+            },
+          ],
+        })),
+      },
+    ],
   };
 
   // Write SARIF file to filesystem
-  const fs = require('fs');
-  const path = require('path');
-  const sarifFileName = 'security-report.sarif';
+  const fs = require("fs");
+  const path = require("path");
+  const sarifFileName = "security-report.sarif";
   const sarifFilePath = path.join(process.cwd(), sarifFileName);
-  
+
   try {
     fs.writeFileSync(sarifFilePath, JSON.stringify(sarifContent, null, 2));
     console.log(`✓ Created SARIF file: ${sarifFilePath}`);
     console.log(`SARIF file size: ${fs.statSync(sarifFilePath).size} bytes`);
-    
+
     // Set outputs for the GitHub Action
     core.setOutput("sarif_file", sarifFilePath);
     core.setOutput("findings_count", validFindings.length);
     core.setOutput("artifact_uploaded", "pending");
     core.setOutput("codeql_uploaded", "pending");
-    
+
     // Write summary with findings
     let summaryContent = "\n\n## Security Report\n";
     summaryContent += `Found **${validFindings.length}** security finding(s):\n\n`;
-    
+
     for (const finding of validFindings) {
-      const emoji = finding.severity === 'error' ? '🔴' : finding.severity === 'warning' ? '🟡' : '🔵';
+      const emoji =
+        finding.severity === "error"
+          ? "🔴"
+          : finding.severity === "warning"
+            ? "🟡"
+            : "🔵";
       summaryContent += `${emoji} **${finding.severity.toUpperCase()}** in \`${finding.file}:${finding.line}\`: ${finding.message}\n`;
     }
-    
+
     summaryContent += `\n📄 SARIF file created: \`${sarifFileName}\`\n`;
     summaryContent += `🔍 Findings will be uploaded to GitHub Code Scanning\n`;
-    
+
     await core.summary.addRaw(summaryContent).write();
-    
   } catch (error) {
     console.error(
       `✗ Failed to create SARIF file:`,
@@ -206,11 +222,13 @@ async function main() {
     throw error;
   }
 
-  console.log(`Successfully created security report with ${validFindings.length} finding(s)`);
+  console.log(
+    `Successfully created security report with ${validFindings.length} finding(s)`
+  );
   return {
     sarifFile: sarifFilePath,
     findingsCount: validFindings.length,
-    findings: validFindings
+    findings: validFindings,
   };
 }
 await main();
