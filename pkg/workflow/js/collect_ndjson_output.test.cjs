@@ -362,7 +362,7 @@ describe('collect_ndjson_output.cjs', () => {
     expect(parsedOutput.items).toHaveLength(5); // Only first 5 items should be allowed
     expect(parsedOutput.errors).toHaveLength(7); // 7 items exceeding max
     expect(parsedOutput.errors.every(e => e.includes('Too many items of type \'create-pull-request-review-comment\'. Maximum allowed: 5'))).toBe(true);
-  }));
+  });
   
   describe('JSON repair functionality', () => {
     it('should repair JSON with unescaped quotes in string values', async () => {
