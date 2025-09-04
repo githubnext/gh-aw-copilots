@@ -27,10 +27,11 @@ For example:
 ```yaml
 safe-outputs:
   create-issue:
+  create-discussion:
   add-issue-comment:
 ```
 
-This declares that the workflow should create at most one new issue and add at most one comment to the triggering issue or pull request based on the agentic workflow's output. To create multiple issues or comments, use the `max` parameter.
+This declares that the workflow should create at most one new issue, at most one new discussion, and add at most one comment to the triggering issue or pull request based on the agentic workflow's output. To create multiple issues, discussions, or comments, use the `max` parameter.
 
 ## Available Output Types
 
@@ -65,6 +66,40 @@ Create new issues with your findings. For each issue, provide a title starting w
 ```
 
 The compiled workflow will have additional prompting describing that, to create issues, it should write the issue details to a file.
+
+### New Discussion Creation (`create-discussion:`)
+
+Adding discussion creation to the `safe-outputs:` section declares that the workflow should conclude with the creation of GitHub discussions based on the workflow's output.
+
+**Basic Configuration:**
+```yaml
+safe-outputs:
+  create-discussion:
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  create-discussion:
+    title-prefix: "[ai] "            # Optional: prefix for discussion titles
+    category-id: "DIC_kwDOGFsHUM4BsUn3"  # Optional: specific discussion category ID
+    max: 3                           # Optional: maximum number of discussions (default: 1)
+```
+
+The agentic part of your workflow should describe the discussion(s) it wants created.
+
+**Example markdown to generate the output:**
+
+```yaml
+# Research Discussion Agent
+
+Research the latest developments in AI and create discussions to share findings.
+Create new discussions with your research findings. For each discussion, provide a title starting with "AI Research Update" and detailed summary of the findings.
+```
+
+The compiled workflow will have additional prompting describing that, to create discussions, it should write the discussion details to a file.
+
+**Note:** If no `category-id` is specified, the workflow will use the first available discussion category in the repository.
 
 ### Issue Comment Creation (`add-issue-comment:`)
 
@@ -134,6 +169,54 @@ Analyze the latest commit and suggest improvements.
 1. Make any file changes directly in the working directory
 2. Create a pull request for your improvements, with a descriptive title and detailed description of the changes made
 ```
+
+### Pull Request Review Comment Creation (`create-pull-request-review-comment:`)
+
+Adding `create-pull-request-review-comment:` to the `safe-outputs:` section declares that the workflow should conclude with creating review comments on specific lines of code in the current pull request based on the workflow's output.
+
+**Basic Configuration:**
+```yaml
+safe-outputs:
+  create-pull-request-review-comment:
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  create-pull-request-review-comment:
+    max: 3                          # Optional: maximum number of review comments (default: 1)
+    side: "RIGHT"                   # Optional: side of the diff ("LEFT" or "RIGHT", default: "RIGHT")
+```
+
+The agentic part of your workflow should describe the review comment(s) it wants created with specific file paths and line numbers.
+
+**Example natural language to generate the output:**
+
+```markdown
+# Code Review Agent
+
+Analyze the pull request changes and provide line-specific feedback.
+Create review comments on the pull request with your analysis findings. For each comment, specify:
+- The file path
+- The line number (required)
+- The start line number (optional, for multi-line comments)
+- The comment body with specific feedback
+
+Review comments can target single lines or ranges of lines in the diff.
+```
+
+The compiled workflow will have additional prompting describing that, to create review comments, it should write the comment details to a special file with the following structure:
+- `path`: The file path relative to the repository root
+- `line`: The line number where the comment should be placed
+- `start_line`: (Optional) The starting line number for multi-line comments
+- `side`: (Optional) The side of the diff ("LEFT" for old version, "RIGHT" for new version)
+- `body`: The comment content
+
+**Key Features:**
+- Only works in pull request contexts for security
+- Supports both single-line and multi-line code comments
+- Comments are automatically positioned on the correct side of the diff
+- Maximum comment limits prevent spam
 
 ### Label Addition (`add-issue-label:`)
 
