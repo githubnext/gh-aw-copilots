@@ -5,7 +5,9 @@ import path from 'path';
 // Create standalone test functions by extracting parts of the script
 const createTestableFunction = (scriptContent) => {
   // Extract just the main function content and wrap it properly
-  const mainFunctionMatch = scriptContent.match(/async function main\(\) \{([\s\S]*?)\}\s*[\r\n]*\s*await main\(\);?\s*$/);
+  const mainFunctionMatch = scriptContent.match(
+    /async function main\(\) \{([\s\S]*?)\}\s*[\r\n]*\s*await main\(\);?\s*$/
+  );
   if (!mainFunctionMatch) {
     throw new Error('Could not extract main function from script');
   }
