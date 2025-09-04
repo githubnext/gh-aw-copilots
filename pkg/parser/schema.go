@@ -135,27 +135,20 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 	if filePath != "" {
 		if content, readErr := os.ReadFile(filePath); readErr == nil {
 			lines := strings.Split(string(content), "\n")
-			// Look for frontmatter section
-			if len(lines) > 0 && strings.TrimSpace(lines[0]) == "---" {
-				// Find the end of frontmatter
-				endIdx := 1
-				for i := 1; i < len(lines); i++ {
-					if strings.TrimSpace(lines[i]) == "---" {
-						endIdx = i
-						break
-					}
-				}
-				// Extract frontmatter content for path resolution
-				frontmatterLines := lines[1:endIdx]
-				frontmatterContent = strings.Join(frontmatterLines, "\n")
-				frontmatterStart = 2 // Frontmatter content starts at line 2
 
-				// Use the frontmatter lines as context (first few lines)
-				maxLines := min(5, endIdx)
-				for i := 0; i < maxLines; i++ {
-					if i < len(lines) {
-						contextLines = append(contextLines, lines[i])
-					}
+			// Look for frontmatter section with improved detection
+			frontmatterStartIdx, frontmatterEndIdx, actualFrontmatterContent := findFrontmatterBounds(lines)
+
+			if frontmatterStartIdx >= 0 && frontmatterEndIdx > frontmatterStartIdx {
+				frontmatterContent = actualFrontmatterContent
+				frontmatterStart = frontmatterStartIdx + 2 // +2 because we skip the opening "---" and use 1-based indexing
+
+				// Use the frontmatter section plus a bit of context as context lines
+				contextStart := max(0, frontmatterStartIdx)
+				contextEnd := min(len(lines), frontmatterEndIdx+1)
+
+				for i := contextStart; i < contextEnd; i++ {
+					contextLines = append(contextLines, lines[i])
 				}
 			}
 		}
@@ -175,7 +168,7 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 		if len(jsonPaths) > 0 && frontmatterContent != "" {
 			// Use the first error path for the primary error location
 			primaryPath := jsonPaths[0]
-			location := LocateJSONPathInYAML(frontmatterContent, primaryPath.Path)
+			location := LocateJSONPathInYAMLWithAdditionalProperties(frontmatterContent, primaryPath.Path, primaryPath.Message)
 
 			if location.Found {
 				// Adjust line number to account for frontmatter position in file
@@ -299,4 +292,49 @@ func validateEngineSpecificRules(frontmatter map[string]any) error {
 	}
 
 	return nil
+}
+
+// findFrontmatterBounds finds the start and end indices of frontmatter in file lines
+// Returns: startIdx (-1 if not found), endIdx (-1 if not found), frontmatterContent
+func findFrontmatterBounds(lines []string) (startIdx int, endIdx int, frontmatterContent string) {
+	startIdx = -1
+	endIdx = -1
+
+	// Look for the opening "---"
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			startIdx = i
+			break
+		}
+		// Skip empty lines and comments at the beginning
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			// Found non-empty, non-comment line before "---" - no frontmatter
+			return -1, -1, ""
+		}
+	}
+
+	if startIdx == -1 {
+		return -1, -1, ""
+	}
+
+	// Look for the closing "---"
+	for i := startIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "---" {
+			endIdx = i
+			break
+		}
+	}
+
+	if endIdx == -1 {
+		// No closing "---" found
+		return -1, -1, ""
+	}
+
+	// Extract frontmatter content between the markers
+	frontmatterLines := lines[startIdx+1 : endIdx]
+	frontmatterContent = strings.Join(frontmatterLines, "\n")
+
+	return startIdx, endIdx, frontmatterContent
 }
