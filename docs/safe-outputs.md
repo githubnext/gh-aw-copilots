@@ -12,6 +12,7 @@ One of the primary security features of GitHub Agentic Workflows is "safe output
 | **Label Addition** | `add-issue-label:` | Add labels to issues or pull requests | 3 |
 | **Issue Updates** | `update-issue:` | Update issue status, title, or body | 1 |
 | **Push to Branch** | `push-to-branch:` | Push changes directly to a branch | 1 |
+| **Missing Tool Reporting** | `missing-tool:` | Report missing tools or functionality needed to complete tasks | unlimited |
 
 ## Overview (`safe-outputs:`)
 
@@ -344,6 +345,42 @@ Analyze the pull request and make necessary code improvements.
 - Only GitHub's `issues.addLabels` API endpoint is used (no removal endpoints)
 
 When `create-pull-request` or `push-to-branch` are enabled in the `safe-outputs` configuration, the system automatically adds the following additional Claude tools to enable file editing and pull request creation:
+
+### Missing Tool Reporting (`missing-tool:`)
+
+**Note:** Missing tool reporting is **always enabled** by default and does not need to be explicitly configured in the `safe-outputs:` section. This allows agentic workflows to report when they encounter limitations or need tools that aren't available.
+
+**Basic Configuration (Default):**
+```yaml
+# missing-tool reporting is automatically enabled even with no safe-outputs config
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  missing-tool:
+    max: 10                             # Optional: maximum number of missing tool reports (default: unlimited)
+```
+
+The agentic part of your workflow can report missing tools or functionality that prevents it from completing its task.
+
+**Example natural language to generate the output:**
+
+```markdown
+# Development Task Agent
+
+Analyze the repository and implement the requested feature. If you encounter missing tools, capabilities, or permissions that prevent completion, report them so the user can address these limitations.
+```
+
+The compiled workflow will have additional prompting describing that, to report missing tools, it should write the tool information to a special file.
+
+**Safety Features:**
+
+- No write permissions required - only logs missing functionality
+- Always enabled to help users understand workflow limitations  
+- Reports are structured with tool name, reason, and optional alternatives
+- Maximum count can be configured to prevent excessive reporting
+- All missing tool data is captured in workflow artifacts for review
 
 ## Automatically Added Tools
 
