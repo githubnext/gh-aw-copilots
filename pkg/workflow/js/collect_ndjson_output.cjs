@@ -1,6 +1,6 @@
 async function main() {
   const fs = require("fs");
-  
+
   /**
    * Sanitizes content for safe output in GitHub Actions
    * @param {string} content - The content to sanitize
@@ -125,7 +125,7 @@ async function main() {
         (match, action, ref) => `\`${action} #${ref}\``);
     }
   }
-  
+
   /**
    * Gets the maximum allowed count for a given output type
    * @param {string} itemType - The output item type
@@ -137,7 +137,7 @@ async function main() {
     if (config && config[itemType] && typeof config[itemType] === 'object' && config[itemType].max) {
       return config[itemType].max;
     }
-    
+
     // Use default limits for plural-supported types
     switch (itemType) {
       case 'create-issue':
@@ -158,9 +158,93 @@ async function main() {
         return 1;  // Default to single item for unknown types
     }
   }
+
+  
+  /**
+   * Attempts to repair common JSON syntax issues in LLM-generated content
+   * @param {string} jsonStr - The potentially malformed JSON string
+   * @returns {string} The repaired JSON string
+   */
+  function repairJson(jsonStr) {
+    let repaired = jsonStr.trim();
+
+    // Fix single quotes to double quotes (must be done first)
+    repaired = repaired.replace(/'/g, '"');
+
+    // Fix missing quotes around object keys
+    repaired = repaired.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+
+    // Fix newlines and tabs inside strings by escaping them
+    repaired = repaired.replace(/"([^"\\]*)"/g, (match, content) => {
+      if (content.includes('\n') || content.includes('\r') || content.includes('\t')) {
+        const escaped = content
+          .replace(/\\/g, '\\\\')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t');
+        return `"${escaped}"`;
+      }
+      return match;
+    });
+
+    // Fix unescaped quotes inside string values
+    repaired = repaired.replace(/"([^"]*)"([^":,}\]]*)"([^"]*)"(\s*[,:}\]])/g,
+      (match, p1, p2, p3, p4) => `"${p1}\\"${p2}\\"${p3}"${p4}`);
+
+    // Fix wrong bracket/brace types - arrays should end with ] not }
+    repaired = repaired.replace(/(\[\s*(?:"[^"]*"(?:\s*,\s*"[^"]*")*\s*),?)\s*}/g, '$1]');
+
+    // Fix missing closing braces/brackets
+    const openBraces = (repaired.match(/\{/g) || []).length;
+    const closeBraces = (repaired.match(/\}/g) || []).length;
+
+    if (openBraces > closeBraces) {
+      repaired += '}'.repeat(openBraces - closeBraces);
+    } else if (closeBraces > openBraces) {
+      repaired = '{'.repeat(closeBraces - openBraces) + repaired;
+    }
+
+    // Fix missing closing brackets for arrays
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+    if (openBrackets > closeBrackets) {
+      repaired += ']'.repeat(openBrackets - closeBrackets);
+    } else if (closeBrackets > openBrackets) {
+      repaired = '['.repeat(closeBrackets - openBrackets) + repaired;
+    }
+
+    // Fix trailing commas in objects and arrays (AFTER fixing brackets/braces)
+    repaired = repaired.replace(/,(\s*[}\]])/g, '$1');
+
+    return repaired;
+  }
+
+  /**
+   * Attempts to parse JSON with repair fallback
+   * @param {string} jsonStr - The JSON string to parse
+   * @returns {Object|undefined} The parsed JSON object, or undefined if parsing fails
+   */
+  function parseJsonWithRepair(jsonStr) {
+    try {
+      // First, try normal JSON.parse
+      return JSON.parse(jsonStr);
+    } catch (originalError) {
+      try {
+        // If that fails, try repairing and parsing again
+        const repairedJson = repairJson(jsonStr);
+        return JSON.parse(repairedJson);
+      } catch (repairError) {
+        // If repair also fails, print error to console and return undefined
+        console.log(`JSON parsing failed. Original: ${originalError.message}. After repair: ${repairError.message}`);
+        return undefined;
+      }
+    }
+  }
+  
   const outputFile = process.env.GITHUB_AW_SAFE_OUTPUTS;
   const safeOutputsConfig = process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG;
-  
+
   if (!outputFile) {
     console.log('GITHUB_AW_SAFE_OUTPUTS not set, no output to collect');
     core.setOutput('output', '');
@@ -201,10 +285,16 @@ async function main() {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line === '') continue; // Skip empty lines
-
     try {
-      const item = JSON.parse(line);
-      
+
+      const item = parseJsonWithRepair(line);
+
+      // If item is undefined (failed to parse), add error and process next line
+      if (item === undefined) {
+        errors.push(`Line ${i + 1}: Invalid JSON - JSON parsing failed`);
+        continue;
+      }
+
       // Validate that the item has a 'type' field
       if (!item.type) {
         errors.push(`Line ${i + 1}: Missing required 'type' field`);
@@ -380,7 +470,7 @@ async function main() {
   if (errors.length > 0) {
     console.log('Validation errors found:');
     errors.forEach(error => console.log(`  - ${error}`));
-    
+
     // For now, we'll continue with valid items but log the errors
     // In the future, we might want to fail the workflow for invalid items
   }
