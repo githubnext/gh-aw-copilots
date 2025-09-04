@@ -109,23 +109,9 @@ This workflow has no output configuration.
 		t.Fatalf("Unexpected error parsing workflow without output config: %v", err)
 	}
 
-	// Verify output configuration contains only missing-tool (always enabled)
-	if workflowData.SafeOutputs == nil {
-		t.Error("Expected SafeOutputs to be non-nil since missing-tool is always enabled")
-	} else {
-		// Check that only missing-tool is enabled
-		if workflowData.SafeOutputs.MissingTool == nil {
-			t.Error("Expected MissingTool to be enabled by default")
-		}
-		if workflowData.SafeOutputs.CreateIssues != nil {
-			t.Error("Expected CreateIssues to be nil when not specified")
-		}
-		if workflowData.SafeOutputs.CreatePullRequests != nil {
-			t.Error("Expected CreatePullRequests to be nil when not specified")
-		}
-		if workflowData.SafeOutputs.AddIssueComments != nil {
-			t.Error("Expected AddIssueComments to be nil when not specified")
-		}
+	// Verify output configuration is nil when not specified
+	if workflowData.SafeOutputs != nil {
+		t.Error("Expected SafeOutputs to be nil when not configured")
 	}
 }
 

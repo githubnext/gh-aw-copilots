@@ -152,7 +152,7 @@ type SafeOutputsConfig struct {
 	AddIssueLabels                  *AddIssueLabelsConfig                  `yaml:"add-issue-label,omitempty"`
 	UpdateIssues                    *UpdateIssuesConfig                    `yaml:"update-issue,omitempty"`
 	PushToBranch                    *PushToBranchConfig                    `yaml:"push-to-branch,omitempty"`
-	MissingTool                     *MissingToolConfig                     `yaml:"missing-tool,omitempty"` // Always enabled for reporting missing functionality
+	MissingTool                     *MissingToolConfig                     `yaml:"missing-tool,omitempty"` // Optional for reporting missing functionality
 	AllowedDomains                  []string                               `yaml:"allowed-domains,omitempty"`
 }
 
@@ -2892,19 +2892,21 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			yaml.WriteString("          \n")
 		}
 
-		// Missing-tool instructions are always available
-		yaml.WriteString("          **Reporting Missing Tools or Functionality**\n")
-		yaml.WriteString("          \n")
-		yaml.WriteString("          If you need to use a tool or functionality that is not available to complete your task:\n")
-		yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
-		yaml.WriteString("          ```json\n")
-		yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"tool-name\", \"reason\": \"Why this tool is needed\", \"alternatives\": \"Suggested alternatives or workarounds\"}\n")
-		yaml.WriteString("          ```\n")
-		yaml.WriteString("          2. The `tool` field should specify the name or type of missing functionality\n")
-		yaml.WriteString("          3. The `reason` field should explain why this tool/functionality is required to complete the task\n")
-		yaml.WriteString("          4. The `alternatives` field is optional but can suggest workarounds or alternative approaches\n")
-		yaml.WriteString("          5. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
-		yaml.WriteString("          \n")
+		// Missing-tool instructions are only included when configured
+		if data.SafeOutputs.MissingTool != nil {
+			yaml.WriteString("          **Reporting Missing Tools or Functionality**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          If you need to use a tool or functionality that is not available to complete your task:\n")
+			yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
+			yaml.WriteString("          ```json\n")
+			yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"tool-name\", \"reason\": \"Why this tool is needed\", \"alternatives\": \"Suggested alternatives or workarounds\"}\n")
+			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. The `tool` field should specify the name or type of missing functionality\n")
+			yaml.WriteString("          3. The `reason` field should explain why this tool/functionality is required to complete the task\n")
+			yaml.WriteString("          4. The `alternatives` field is optional but can suggest workarounds or alternative approaches\n")
+			yaml.WriteString("          5. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
+			yaml.WriteString("          \n")
+		}
 
 		yaml.WriteString("          **Example JSONL file content:**\n")
 		yaml.WriteString("          ```\n")
@@ -2932,9 +2934,11 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			exampleCount++
 		}
 
-		// Always include missing-tool example since it's always enabled
-		yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"docker\", \"reason\": \"Need Docker to build container images\", \"alternatives\": \"Could use GitHub Actions build instead\"}\n")
-		exampleCount++
+		// Include missing-tool example only when configured
+		if data.SafeOutputs.MissingTool != nil {
+			yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"docker\", \"reason\": \"Need Docker to build container images\", \"alternatives\": \"Could use GitHub Actions build instead\"}\n")
+			exampleCount++
+		}
 
 		// If no SafeOutputs are enabled, show a generic example
 		if exampleCount == 0 {
@@ -3109,14 +3113,6 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				config.MissingTool = missingToolConfig
 			}
 		}
-	}
-
-	// Always enable missing-tool output (create config if it doesn't exist)
-	if config == nil {
-		config = &SafeOutputsConfig{}
-	}
-	if config.MissingTool == nil {
-		config.MissingTool = &MissingToolConfig{} // Default: no max limit
 	}
 
 	return config

@@ -14,11 +14,11 @@ func TestMissingToolSafeOutput(t *testing.T) {
 		expectMax    int
 	}{
 		{
-			name:         "No safe-outputs config should still enable missing-tool",
+			name:         "No safe-outputs config should NOT enable missing-tool by default",
 			frontmatter:  map[string]any{"name": "Test"},
-			expectConfig: true,
-			expectJob:    true,
-			expectMax:    0, // Default: no max limit
+			expectConfig: false,
+			expectJob:    false,
+			expectMax:    0,
 		},
 		{
 			name: "Explicit missing-tool config with max",
@@ -86,22 +86,26 @@ func TestMissingToolSafeOutput(t *testing.T) {
 			}
 
 			// Test job creation
-			if tt.expectJob && safeOutputs != nil && safeOutputs.MissingTool != nil {
-				job, err := compiler.buildCreateOutputMissingToolJob(&WorkflowData{
-					SafeOutputs: safeOutputs,
-				}, "main-job")
-				if err != nil {
-					t.Errorf("Failed to build missing tool job: %v", err)
-				}
-				if job == nil {
-					t.Error("Expected job to be created, but it was nil")
-				}
-				if job != nil {
-					if job.Name != "missing_tool" {
-						t.Errorf("Expected job name to be 'missing_tool', got '%s'", job.Name)
+			if tt.expectJob {
+				if safeOutputs == nil || safeOutputs.MissingTool == nil {
+					t.Error("Expected SafeOutputs and MissingTool config to exist for job creation test")
+				} else {
+					job, err := compiler.buildCreateOutputMissingToolJob(&WorkflowData{
+						SafeOutputs: safeOutputs,
+					}, "main-job")
+					if err != nil {
+						t.Errorf("Failed to build missing tool job: %v", err)
 					}
-					if len(job.Depends) != 1 || job.Depends[0] != "main-job" {
-						t.Errorf("Expected job to depend on 'main-job', got %v", job.Depends)
+					if job == nil {
+						t.Error("Expected job to be created, but it was nil")
+					}
+					if job != nil {
+						if job.Name != "missing_tool" {
+							t.Errorf("Expected job name to be 'missing_tool', got '%s'", job.Name)
+						}
+						if len(job.Depends) != 1 || job.Depends[0] != "main-job" {
+							t.Errorf("Expected job to depend on 'main-job', got %v", job.Depends)
+						}
 					}
 				}
 			}
@@ -157,18 +161,15 @@ func TestMissingToolPromptGeneration(t *testing.T) {
 	}
 }
 
-func TestMissingToolAlwaysEnabled(t *testing.T) {
+func TestMissingToolNotEnabledByDefault(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
 
 	// Test with completely empty frontmatter
 	emptyFrontmatter := map[string]any{}
 	safeOutputs := compiler.extractSafeOutputsConfig(emptyFrontmatter)
 
-	if safeOutputs == nil {
-		t.Fatal("Expected SafeOutputsConfig to be created even with empty frontmatter")
-	}
-	if safeOutputs.MissingTool == nil {
-		t.Fatal("Expected MissingTool to be enabled by default")
+	if safeOutputs != nil && safeOutputs.MissingTool != nil {
+		t.Error("Expected MissingTool to not be enabled by default with empty frontmatter")
 	}
 
 	// Test with frontmatter that has other content but no safe-outputs
@@ -178,11 +179,8 @@ func TestMissingToolAlwaysEnabled(t *testing.T) {
 	}
 	safeOutputs = compiler.extractSafeOutputsConfig(frontmatterWithoutSafeOutputs)
 
-	if safeOutputs == nil {
-		t.Fatal("Expected SafeOutputsConfig to be created even without safe-outputs section")
-	}
-	if safeOutputs.MissingTool == nil {
-		t.Fatal("Expected MissingTool to be enabled by default")
+	if safeOutputs != nil && safeOutputs.MissingTool != nil {
+		t.Error("Expected MissingTool to not be enabled by default without safe-outputs section")
 	}
 }
 

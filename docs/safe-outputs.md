@@ -348,11 +348,12 @@ When `create-pull-request` or `push-to-branch` are enabled in the `safe-outputs`
 
 ### Missing Tool Reporting (`missing-tool:`)
 
-**Note:** Missing tool reporting is **always enabled** by default and does not need to be explicitly configured in the `safe-outputs:` section. This allows agentic workflows to report when they encounter limitations or need tools that aren't available.
+**Note:** Missing tool reporting is optional and must be explicitly configured in the `safe-outputs:` section if you want workflows to report when they encounter limitations or need tools that aren't available.
 
-**Basic Configuration (Default):**
+**Basic Configuration:**
 ```yaml
-# missing-tool reporting is automatically enabled even with no safe-outputs config
+safe-outputs:
+  missing-tool:                           # Enable missing-tool reporting
 ```
 
 **With Configuration:**
@@ -377,7 +378,7 @@ The compiled workflow will have additional prompting describing that, to report 
 **Safety Features:**
 
 - No write permissions required - only logs missing functionality
-- Always enabled to help users understand workflow limitations  
+- Optional configuration to help users understand workflow limitations when enabled  
 - Reports are structured with tool name, reason, and optional alternatives
 - Maximum count can be configured to prevent excessive reporting
 - All missing tool data is captured in workflow artifacts for review

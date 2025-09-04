@@ -3546,10 +3546,10 @@ Test workflow with reaction.
 		}
 	}
 
-	// Verify three jobs are created (add_reaction, main, missing_tool)
+	// Verify two jobs are created (add_reaction, main) - missing_tool is not auto-created
 	jobCount := strings.Count(yamlContent, "runs-on: ubuntu-latest")
-	if jobCount != 3 {
-		t.Errorf("Expected 3 jobs (add_reaction, main, missing_tool), found %d", jobCount)
+	if jobCount != 2 {
+		t.Errorf("Expected 2 jobs (add_reaction, main), found %d", jobCount)
 	}
 }
 
@@ -3618,10 +3618,10 @@ Test workflow without explicit reaction (should not create reaction action).
 		}
 	}
 
-	// Verify only two jobs are created (main, missing_tool)
+	// Verify only one job is created (main) - missing_tool is not auto-created
 	jobCount := strings.Count(yamlContent, "runs-on: ubuntu-latest")
-	if jobCount != 2 {
-		t.Errorf("Expected 2 jobs (main, missing_tool), found %d", jobCount)
+	if jobCount != 1 {
+		t.Errorf("Expected 1 job (main), found %d", jobCount)
 	}
 }
 
