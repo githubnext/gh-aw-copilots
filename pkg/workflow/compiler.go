@@ -152,6 +152,7 @@ type SafeOutputsConfig struct {
 	AddIssueLabels                  *AddIssueLabelsConfig                  `yaml:"add-issue-label,omitempty"`
 	UpdateIssues                    *UpdateIssuesConfig                    `yaml:"update-issue,omitempty"`
 	PushToBranch                    *PushToBranchConfig                    `yaml:"push-to-branch,omitempty"`
+	MissingTool                     *MissingToolConfig                     `yaml:"missing-tool,omitempty"` // Optional for reporting missing functionality
 	AllowedDomains                  []string                               `yaml:"allowed-domains,omitempty"`
 }
 
@@ -213,6 +214,11 @@ type UpdateIssuesConfig struct {
 type PushToBranchConfig struct {
 	Branch string `yaml:"branch"`           // The branch to push changes to (defaults to "triggering")
 	Target string `yaml:"target,omitempty"` // Target for push-to-branch: like add-issue-comment but for pull requests
+}
+
+// MissingToolConfig holds configuration for reporting missing tools or functionality
+type MissingToolConfig struct {
+	Max int `yaml:"max,omitempty"` // Maximum number of missing tool reports (default: unlimited)
 }
 
 // CompileWorkflow converts a markdown workflow to GitHub Actions YAML
@@ -1799,6 +1805,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 				return fmt.Errorf("failed to add push_to_branch job: %w", err)
 			}
 		}
+
+		// Build missing_tool job (always enabled when SafeOutputs exists)
+		if data.SafeOutputs.MissingTool != nil {
+			missingToolJob, err := c.buildCreateOutputMissingToolJob(data, jobName)
+			if err != nil {
+				return fmt.Errorf("failed to build missing_tool job: %w", err)
+			}
+			if err := c.jobManager.AddJob(missingToolJob); err != nil {
+				return fmt.Errorf("failed to add missing_tool job: %w", err)
+			}
+		}
 	}
 	// Build additional custom jobs from frontmatter jobs section
 	if err := c.buildCustomJobs(data); err != nil {
@@ -2759,7 +2776,15 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 				yaml.WriteString(", ")
 			}
 			yaml.WriteString("Pushing Changes to Branch")
+			written = true
 		}
+
+		// Missing-tool is always available
+		if written {
+			yaml.WriteString(", ")
+		}
+		yaml.WriteString("Reporting Missing Tools or Functionality")
+
 		yaml.WriteString("\n")
 		yaml.WriteString("          \n")
 		yaml.WriteString("          **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.\n")
@@ -2867,6 +2892,22 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 			yaml.WriteString("          \n")
 		}
 
+		// Missing-tool instructions are only included when configured
+		if data.SafeOutputs.MissingTool != nil {
+			yaml.WriteString("          **Reporting Missing Tools or Functionality**\n")
+			yaml.WriteString("          \n")
+			yaml.WriteString("          If you need to use a tool or functionality that is not available to complete your task:\n")
+			yaml.WriteString("          1. Write an entry to \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\":\n")
+			yaml.WriteString("          ```json\n")
+			yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"tool-name\", \"reason\": \"Why this tool is needed\", \"alternatives\": \"Suggested alternatives or workarounds\"}\n")
+			yaml.WriteString("          ```\n")
+			yaml.WriteString("          2. The `tool` field should specify the name or type of missing functionality\n")
+			yaml.WriteString("          3. The `reason` field should explain why this tool/functionality is required to complete the task\n")
+			yaml.WriteString("          4. The `alternatives` field is optional but can suggest workarounds or alternative approaches\n")
+			yaml.WriteString("          5. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up\n")
+			yaml.WriteString("          \n")
+		}
+
 		yaml.WriteString("          **Example JSONL file content:**\n")
 		yaml.WriteString("          ```\n")
 
@@ -2890,6 +2931,12 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 		}
 		if data.SafeOutputs.PushToBranch != nil {
 			yaml.WriteString("          {\"type\": \"push-to-branch\", \"message\": \"Update documentation with latest changes\"}\n")
+			exampleCount++
+		}
+
+		// Include missing-tool example only when configured
+		if data.SafeOutputs.MissingTool != nil {
+			yaml.WriteString("          {\"type\": \"missing-tool\", \"tool\": \"docker\", \"reason\": \"Need Docker to build container images\", \"alternatives\": \"Could use GitHub Actions build instead\"}\n")
 			exampleCount++
 		}
 
@@ -2950,9 +2997,11 @@ func (c *Compiler) extractJobsFromFrontmatter(frontmatter map[string]any) map[st
 
 // extractSafeOutputsConfig extracts output configuration from frontmatter
 func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOutputsConfig {
+	var config *SafeOutputsConfig
+
 	if output, exists := frontmatter["safe-outputs"]; exists {
 		if outputMap, ok := output.(map[string]any); ok {
-			config := &SafeOutputsConfig{}
+			config = &SafeOutputsConfig{}
 
 			// Handle create-issue
 			issuesConfig := c.parseIssuesConfig(outputMap)
@@ -3058,10 +3107,15 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				config.PushToBranch = pushToBranchConfig
 			}
 
-			return config
+			// Handle missing-tool (parse configuration if present)
+			missingToolConfig := c.parseMissingToolConfig(outputMap)
+			if missingToolConfig != nil {
+				config.MissingTool = missingToolConfig
+			}
 		}
 	}
-	return nil
+
+	return config
 }
 
 // parseIssuesConfig handles create-issue configuration
@@ -3330,6 +3384,48 @@ func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBran
 		}
 
 		return pushToBranchConfig
+	}
+
+	return nil
+}
+
+// parseMissingToolConfig handles missing-tool configuration
+func (c *Compiler) parseMissingToolConfig(outputMap map[string]any) *MissingToolConfig {
+	if configData, exists := outputMap["missing-tool"]; exists {
+		missingToolConfig := &MissingToolConfig{} // Default: no max limit
+
+		// Handle the case where configData is nil (missing-tool: with no value)
+		if configData == nil {
+			return missingToolConfig
+		}
+
+		if configMap, ok := configData.(map[string]any); ok {
+			// Parse max (optional)
+			if max, exists := configMap["max"]; exists {
+				// Handle different numeric types that YAML parsers might return
+				var maxInt int
+				var validMax bool
+				switch v := max.(type) {
+				case int:
+					maxInt = v
+					validMax = true
+				case int64:
+					maxInt = int(v)
+					validMax = true
+				case uint64:
+					maxInt = int(v)
+					validMax = true
+				case float64:
+					maxInt = int(v)
+					validMax = true
+				}
+				if validMax {
+					missingToolConfig.Max = maxInt
+				}
+			}
+		}
+
+		return missingToolConfig
 	}
 
 	return nil
@@ -3674,6 +3770,15 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 				pushToBranchConfig["target"] = data.SafeOutputs.PushToBranch.Target
 			}
 			safeOutputsConfig["push-to-branch"] = pushToBranchConfig
+		}
+		if data.SafeOutputs.MissingTool != nil {
+			missingToolConfig := map[string]interface{}{
+				"enabled": true,
+			}
+			if data.SafeOutputs.MissingTool.Max > 0 {
+				missingToolConfig["max"] = data.SafeOutputs.MissingTool.Max
+			}
+			safeOutputsConfig["missing-tool"] = missingToolConfig
 		}
 
 		// Convert to JSON string for environment variable
