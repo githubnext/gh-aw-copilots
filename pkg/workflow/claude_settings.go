@@ -41,7 +41,7 @@ func (g *ClaudeSettingsGenerator) GenerateSettingsJSON() string {
 					Hooks: []HookEntry{
 						{
 							Type:    "command",
-							Command: ".claude/hooks/network_permissions.py",
+							Command: "node .claude/hooks/network_permissions.js",
 						},
 					},
 				},

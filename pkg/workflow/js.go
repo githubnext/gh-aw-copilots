@@ -54,6 +54,9 @@ var parseClaudeLogScript string
 //go:embed js/parse_codex_log.cjs
 var parseCodexLogScript string
 
+//go:embed js/network_permissions_validator.cjs
+var networkPermissionsValidatorScript string
+
 // FormatJavaScriptForYAML formats a JavaScript script with proper indentation for embedding in YAML
 func FormatJavaScriptForYAML(script string) []string {
 	var formattedLines []string
@@ -88,4 +91,9 @@ func GetLogParserScript(name string) string {
 	default:
 		return ""
 	}
+}
+
+// GetNetworkPermissionsValidatorScript returns the JavaScript content for the network permissions validator
+func GetNetworkPermissionsValidatorScript() string {
+	return networkPermissionsValidatorScript
 }

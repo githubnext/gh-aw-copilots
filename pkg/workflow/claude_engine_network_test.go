@@ -40,7 +40,7 @@ func TestClaudeEngineNetworkPermissions(t *testing.T) {
 		if !strings.Contains(hookStepStr, "Generate Network Permissions Hook") {
 			t.Error("First step should generate network permissions hook")
 		}
-		if !strings.Contains(hookStepStr, ".claude/hooks/network_permissions.py") {
+		if !strings.Contains(hookStepStr, "network_permissions.js") {
 			t.Error("First step should create hook file")
 		}
 		if !strings.Contains(hookStepStr, "example.com") {

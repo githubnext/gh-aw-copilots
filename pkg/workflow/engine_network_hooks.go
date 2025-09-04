@@ -104,26 +104,56 @@ except Exception as e:
 `, string(domainsJSON))
 }
 
-// GenerateNetworkHookWorkflowStep generates a GitHub Actions workflow step that creates the network permissions hook
+// GenerateNetworkHookWorkflowStep generates a GitHub Actions workflow step that creates the network permissions hook using JavaScript
 func (g *NetworkHookGenerator) GenerateNetworkHookWorkflowStep(allowedDomains []string) GitHubActionStep {
-	hookScript := g.GenerateNetworkHookScript(allowedDomains)
-
-	// No escaping needed for heredoc with 'EOF' - it's literal
-	runContent := fmt.Sprintf(`mkdir -p .claude/hooks
-cat > .claude/hooks/network_permissions.py << 'EOF'
-%s
-EOF
-chmod +x .claude/hooks/network_permissions.py`, hookScript)
+	// Convert domain list to JSON for embedding in the JavaScript
+	var domainsJSON []byte
+	if allowedDomains == nil {
+		domainsJSON = []byte("[]")
+	} else {
+		domainsJSON, _ = json.Marshal(allowedDomains)
+	}
 
 	var lines []string
 	lines = append(lines, "      - name: Generate Network Permissions Hook")
-	lines = append(lines, "        run: |")
+	lines = append(lines, "        uses: actions/github-script@v7")
+	lines = append(lines, "        with:")
+	lines = append(lines, "          script: |")
+	lines = append(lines, "            const fs = require('fs');")
+	lines = append(lines, "            const path = require('path');")
+	lines = append(lines, "")
+	lines = append(lines, "            // Ensure hooks directory exists")
+	lines = append(lines, "            const hooksDir = '.claude/hooks';")
+	lines = append(lines, "            fs.mkdirSync(hooksDir, { recursive: true });")
+	lines = append(lines, "")
+	lines = append(lines, "            // Network permissions validator script content")
+	lines = append(lines, "            const scriptContent = `")
 
-	// Split the run content into lines and properly indent
-	runLines := strings.Split(runContent, "\n")
-	for _, line := range runLines {
-		lines = append(lines, fmt.Sprintf("          %s", line))
+	// Get the JavaScript script and embed it with the domains replaced
+	script := GetNetworkPermissionsValidatorScript()
+	// Replace the PLACEHOLDER_DOMAINS with the actual domains JSON
+	scriptWithDomains := strings.ReplaceAll(script, "PLACEHOLDER_DOMAINS", string(domainsJSON))
+	
+	// Split script into lines and escape for template literal
+	scriptLines := strings.Split(scriptWithDomains, "\n")
+	for _, line := range scriptLines {
+		// Escape backticks and backslashes for the template literal
+		escapedLine := strings.ReplaceAll(line, "\\", "\\\\")
+		escapedLine = strings.ReplaceAll(escapedLine, "`", "\\`")
+		escapedLine = strings.ReplaceAll(escapedLine, "${", "\\${")
+		lines = append(lines, fmt.Sprintf("            %s", escapedLine))
 	}
+
+	lines = append(lines, "            `;")
+	lines = append(lines, "")
+	lines = append(lines, "            // Write the script file")
+	lines = append(lines, "            const scriptPath = path.join(hooksDir, 'network_permissions.js');")
+	lines = append(lines, "            fs.writeFileSync(scriptPath, scriptContent, 'utf8');")
+	lines = append(lines, "")
+	lines = append(lines, "            // Make the script executable")
+	lines = append(lines, "            fs.chmodSync(scriptPath, 0o755);")
+	lines = append(lines, "")
+	lines = append(lines, "            console.log(`Network permissions hook created at ${scriptPath}`);")
 
 	return GitHubActionStep(lines)
 }

@@ -3040,9 +3040,9 @@ This is a test workflow with empty network permissions (deny all).
 		if !strings.Contains(string(lockContent), "Generate Network Permissions Hook") {
 			t.Error("Should contain network hook setup for network: {}")
 		}
-		// Should have empty ALLOWED_DOMAINS array for deny-all
-		if !strings.Contains(string(lockContent), "ALLOWED_DOMAINS = []") {
-			t.Error("Should have empty ALLOWED_DOMAINS array for deny-all policy")
+		// Should have empty allowed domains array for deny-all
+		if !strings.Contains(string(lockContent), "const ALLOWED_DOMAINS = [];") {
+			t.Error("Should have empty allowed domains array for deny-all policy")
 		}
 	})
 

@@ -90,8 +90,8 @@ func TestClaudeSettingsStructures(t *testing.T) {
 		if entry.Type != "command" {
 			t.Errorf("Expected hook type 'command', got '%s'", entry.Type)
 		}
-		if entry.Command != ".claude/hooks/network_permissions.py" {
-			t.Errorf("Expected command '.claude/hooks/network_permissions.py', got '%s'", entry.Command)
+		if entry.Command != "node .claude/hooks/network_permissions.js" {
+			t.Errorf("Expected command 'node .claude/hooks/network_permissions.js', got '%s'", entry.Command)
 		}
 	})
 }

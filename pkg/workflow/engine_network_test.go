@@ -48,11 +48,11 @@ func TestNetworkHookGenerator(t *testing.T) {
 		if !strings.Contains(stepStr, "name: Generate Network Permissions Hook") {
 			t.Error("Step should have correct name")
 		}
-		if !strings.Contains(stepStr, ".claude/hooks/network_permissions.py") {
+		if !strings.Contains(stepStr, "network_permissions.js") {
 			t.Error("Step should create hook file in correct location")
 		}
-		if !strings.Contains(stepStr, "chmod +x") {
-			t.Error("Step should make hook executable")
+		if !strings.Contains(stepStr, "actions/github-script") {
+			t.Error("Step should use actions/github-script")
 		}
 
 		// Check that domains are included in the hook
