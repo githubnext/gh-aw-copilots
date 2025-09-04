@@ -77,22 +77,8 @@ codex exec \
 
 	// Add custom environment variables from engine config
 	if engineConfig != nil && len(engineConfig.Env) > 0 {
-		for _, envVar := range engineConfig.Env {
-			// Parse environment variable in format "KEY=value" or "KEY: value"
-			parts := strings.SplitN(envVar, "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				env[key] = value
-			} else {
-				// Try "KEY: value" format
-				parts = strings.SplitN(envVar, ":", 2)
-				if len(parts) == 2 {
-					key := strings.TrimSpace(parts[0])
-					value := strings.TrimSpace(parts[1])
-					env[key] = value
-				}
-			}
+		for key, value := range engineConfig.Env {
+			env[key] = value
 		}
 	}
 

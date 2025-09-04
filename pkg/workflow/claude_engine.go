@@ -73,11 +73,11 @@ func (e *ClaudeEngine) GetExecutionConfig(workflowName string, logFile string, e
 
 	// Add custom environment variables from engine config
 	if engineConfig != nil && len(engineConfig.Env) > 0 {
-		for _, envVar := range engineConfig.Env {
+		for key, value := range engineConfig.Env {
 			if claudeEnv != "" {
 				claudeEnv += "\n"
 			}
-			claudeEnv += "            " + envVar
+			claudeEnv += "            " + key + ": " + value
 		}
 	}
 

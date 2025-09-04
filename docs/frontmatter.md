@@ -165,9 +165,9 @@ engine:
   model: claude-3-5-sonnet-20241022 # Optional: specific LLM model
   max-turns: 5                      # Optional: maximum chat iterations per run
   env:                              # Optional: custom environment variables
-    - "AWS_REGION=us-west-2"
-    - "CUSTOM_API_ENDPOINT: https://api.example.com"
-    - "DEBUG_MODE: true"
+    AWS_REGION: us-west-2
+    CUSTOM_API_ENDPOINT: https://api.example.com
+    DEBUG_MODE: "true"
 ```
 
 **Fields:**
@@ -175,7 +175,7 @@ engine:
 - **`version`** (optional): Action version (`beta`, `stable`)
 - **`model`** (optional): Specific LLM model to use
 - **`max-turns`** (optional): Maximum number of chat iterations per run (cost-control option)
-- **`env`** (optional): Custom environment variables to pass to the agentic engine
+- **`env`** (optional): Custom environment variables to pass to the agentic engine as key-value pairs
 
 **Model Defaults:**
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)

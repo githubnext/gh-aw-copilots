@@ -700,11 +700,10 @@
               "description": "Maximum number of chat iterations per run"
             },
             "env": {
-              "type": "array",
+              "type": "object",
               "description": "Custom environment variables to pass to the agentic engine",
-              "items": {
-                "type": "string",
-                "description": "Environment variable in format 'KEY=value' or 'KEY: value'"
+              "additionalProperties": {
+                "type": "string"
               }
             }
           },
