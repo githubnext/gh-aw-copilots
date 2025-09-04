@@ -88,7 +88,7 @@ func TestSecurityReportsConfig(t *testing.T) {
 			if config.CreateSecurityReports.Max != tt.expectedConfig.Max {
 				t.Errorf("Expected Max=%d, got Max=%d", tt.expectedConfig.Max, config.CreateSecurityReports.Max)
 			}
-			
+
 			if config.CreateSecurityReports.Driver != tt.expectedConfig.Driver {
 				t.Errorf("Expected Driver=%s, got Driver=%s", tt.expectedConfig.Driver, config.CreateSecurityReports.Driver)
 			}
@@ -158,6 +158,8 @@ func TestBuildCreateOutputSecurityReportJob(t *testing.T) {
 
 	// Test with driver configuration
 	dataWithDriver := &WorkflowData{
+		Name:            "My Security Workflow",
+		FrontmatterName: "My Security Workflow",
 		SafeOutputs: &SafeOutputsConfig{
 			CreateSecurityReports: &CreateSecurityReportsConfig{Driver: "Custom Scanner"},
 		},
@@ -172,7 +174,45 @@ func TestBuildCreateOutputSecurityReportJob(t *testing.T) {
 	if !strings.Contains(stepsWithDriverStr, "GITHUB_AW_SECURITY_REPORT_DRIVER: Custom Scanner") {
 		t.Errorf("Expected driver configuration in environment variables")
 	}
-	
+
+	// Test with no driver configuration - should default to frontmatter name
+	dataNoDriver := &WorkflowData{
+		Name:            "Security Analysis Workflow",
+		FrontmatterName: "Security Analysis Workflow",
+		SafeOutputs: &SafeOutputsConfig{
+			CreateSecurityReports: &CreateSecurityReportsConfig{Max: 0}, // No driver specified
+		},
+	}
+
+	jobNoDriver, err := compiler.buildCreateOutputSecurityReportJob(dataNoDriver, "main_job", "security-analysis")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	stepsNoDriverStr := strings.Join(jobNoDriver.Steps, "")
+	if !strings.Contains(stepsNoDriverStr, "GITHUB_AW_SECURITY_REPORT_DRIVER: Security Analysis Workflow") {
+		t.Errorf("Expected frontmatter name as default driver in environment variables, got: %s", stepsNoDriverStr)
+	}
+
+	// Test with no driver and no frontmatter name - should fallback to H1 name
+	dataFallback := &WorkflowData{
+		Name:            "Security Analysis",
+		FrontmatterName: "", // No frontmatter name
+		SafeOutputs: &SafeOutputsConfig{
+			CreateSecurityReports: &CreateSecurityReportsConfig{Max: 0}, // No driver specified
+		},
+	}
+
+	jobFallback, err := compiler.buildCreateOutputSecurityReportJob(dataFallback, "main_job", "security-analysis")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	stepsFallbackStr := strings.Join(jobFallback.Steps, "")
+	if !strings.Contains(stepsFallbackStr, "GITHUB_AW_SECURITY_REPORT_DRIVER: Security Analysis") {
+		t.Errorf("Expected H1 name as fallback driver in environment variables, got: %s", stepsFallbackStr)
+	}
+
 	// Check that workflow filename is passed
 	if !strings.Contains(stepsWithDriverStr, "GITHUB_AW_WORKFLOW_FILENAME: my-workflow") {
 		t.Errorf("Expected workflow filename in environment variables")
@@ -270,7 +310,7 @@ func TestParseSecurityReportsConfig(t *testing.T) {
 			if config.Max != tt.expectedMax {
 				t.Errorf("Expected Max=%d, got Max=%d", tt.expectedMax, config.Max)
 			}
-			
+
 			if config.Driver != tt.expectedDriver {
 				t.Errorf("Expected Driver=%s, got Driver=%s", tt.expectedDriver, config.Driver)
 			}

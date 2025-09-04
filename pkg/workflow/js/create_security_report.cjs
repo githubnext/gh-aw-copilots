@@ -50,12 +50,14 @@ async function main() {
   );
 
   // Get the driver configuration from environment variable
-  const driverName = process.env.GITHUB_AW_SECURITY_REPORT_DRIVER
-    || "GitHub Agentic Workflows Security Scanner";
+  const driverName =
+    process.env.GITHUB_AW_SECURITY_REPORT_DRIVER ||
+    "GitHub Agentic Workflows Security Scanner";
   console.log(`Driver name: ${driverName}`);
 
   // Get the workflow filename for rule ID prefix
-  const workflowFilename = process.env.GITHUB_AW_WORKFLOW_FILENAME || "workflow";
+  const workflowFilename =
+    process.env.GITHUB_AW_WORKFLOW_FILENAME || "workflow";
   console.log(`Workflow filename for rule ID prefix: ${workflowFilename}`);
 
   const validFindings = [];

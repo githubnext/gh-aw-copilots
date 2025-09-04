@@ -329,10 +329,14 @@ describe("create_security_report.cjs", () => {
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
 
       // Check driver name
-      expect(sarifContent.runs[0].tool.driver.name).toBe("Custom Security Scanner");
-      
+      expect(sarifContent.runs[0].tool.driver.name).toBe(
+        "Custom Security Scanner"
+      );
+
       // Check rule ID includes workflow filename
-      expect(sarifContent.runs[0].results[0].ruleId).toBe("security-scan-security-finding-1");
+      expect(sarifContent.runs[0].results[0].ruleId).toBe(
+        "security-scan-security-finding-1"
+      );
 
       consoleSpy.mockRestore();
     });
@@ -359,10 +363,14 @@ describe("create_security_report.cjs", () => {
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
 
       // Check default driver name
-      expect(sarifContent.runs[0].tool.driver.name).toBe("GitHub Agentic Workflows Security Scanner");
-      
+      expect(sarifContent.runs[0].tool.driver.name).toBe(
+        "GitHub Agentic Workflows Security Scanner"
+      );
+
       // Check rule ID includes default workflow filename
-      expect(sarifContent.runs[0].results[0].ruleId).toBe("workflow-security-finding-1");
+      expect(sarifContent.runs[0].results[0].ruleId).toBe(
+        "workflow-security-finding-1"
+      );
 
       consoleSpy.mockRestore();
     });
@@ -398,10 +406,16 @@ describe("create_security_report.cjs", () => {
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
 
       // Check first result has custom column
-      expect(sarifContent.runs[0].results[0].locations[0].physicalLocation.region.startColumn).toBe(15);
+      expect(
+        sarifContent.runs[0].results[0].locations[0].physicalLocation.region
+          .startColumn
+      ).toBe(15);
 
       // Check second result has default column
-      expect(sarifContent.runs[0].results[1].locations[0].physicalLocation.region.startColumn).toBe(1);
+      expect(
+        sarifContent.runs[0].results[1].locations[0].physicalLocation.region
+          .startColumn
+      ).toBe(1);
 
       consoleSpy.mockRestore();
     });
@@ -453,8 +467,13 @@ describe("create_security_report.cjs", () => {
       const sarifFile = path.join(process.cwd(), "security-report.sarif");
       const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
       expect(sarifContent.runs[0].results).toHaveLength(1);
-      expect(sarifContent.runs[0].results[0].message.text).toBe("Valid with column");
-      expect(sarifContent.runs[0].results[0].locations[0].physicalLocation.region.startColumn).toBe(5);
+      expect(sarifContent.runs[0].results[0].message.text).toBe(
+        "Valid with column"
+      );
+      expect(
+        sarifContent.runs[0].results[0].locations[0].physicalLocation.region
+          .startColumn
+      ).toBe(5);
 
       consoleSpy.mockRestore();
     });

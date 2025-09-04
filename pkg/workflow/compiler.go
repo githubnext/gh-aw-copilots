@@ -115,6 +115,7 @@ func NewCompilerWithCustomOutput(verbose bool, engineOverride string, customOutp
 // WorkflowData holds all the data needed to generate a GitHub Actions workflow
 type WorkflowData struct {
 	Name               string
+	FrontmatterName    string // name field from frontmatter (for security report driver default)
 	On                 string
 	Permissions        string
 	Network            string // top-level network permissions configuration
@@ -620,6 +621,7 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Build workflow data
 	workflowData := &WorkflowData{
 		Name:               workflowName,
+		FrontmatterName:    c.extractStringValue(result.Frontmatter, "name"),
 		Tools:              tools,
 		MarkdownContent:    markdownContent,
 		AI:                 engineSetting,
@@ -815,6 +817,20 @@ func (c *Compiler) extractTopLevelYAMLSection(frontmatter map[string]any, key st
 	}
 
 	return yamlStr
+}
+
+// extractStringValue extracts a string value from the frontmatter map
+func (c *Compiler) extractStringValue(frontmatter map[string]any, key string) string {
+	value, exists := frontmatter[key]
+	if !exists {
+		return ""
+	}
+
+	if strValue, ok := value.(string); ok {
+		return strValue
+	}
+
+	return ""
 }
 
 // commentOutDraftInOnSection comments out draft fields in pull_request sections within the YAML string
@@ -2229,10 +2245,16 @@ func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJo
 	if data.SafeOutputs.CreateSecurityReports.Max > 0 {
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_MAX: %d\n", data.SafeOutputs.CreateSecurityReports.Max))
 	}
-	// Pass the driver configuration
-	if data.SafeOutputs.CreateSecurityReports.Driver != "" {
-		steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_DRIVER: %s\n", data.SafeOutputs.CreateSecurityReports.Driver))
+	// Pass the driver configuration, defaulting to frontmatter name
+	driverName := data.SafeOutputs.CreateSecurityReports.Driver
+	if driverName == "" {
+		if data.FrontmatterName != "" {
+			driverName = data.FrontmatterName
+		} else {
+			driverName = data.Name // fallback to H1 header name
+		}
 	}
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_DRIVER: %s\n", driverName))
 	// Pass the workflow filename for rule ID prefix
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_WORKFLOW_FILENAME: %s\n", workflowFilename))
 
@@ -3365,7 +3387,7 @@ func (c *Compiler) parseSecurityReportsConfig(outputMap map[string]any) *CreateS
 				securityReportsConfig.Max = maxInt
 			}
 		}
-		
+
 		// Parse driver
 		if driver, exists := configMap["driver"]; exists {
 			if driverStr, ok := driver.(string); ok {
