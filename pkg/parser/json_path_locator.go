@@ -86,7 +86,14 @@ func LocateJSONPathInYAMLWithAdditionalProperties(yamlContent string, jsonPath s
 		return JSONPathLocation{Line: 1, Column: 1, Found: true}
 	}
 
-	// For non-empty paths, use the regular logic
+	// Check if this is an additional properties error even with a non-empty path
+	propertyNames := extractAdditionalPropertyNames(errorMessage)
+	if len(propertyNames) > 0 {
+		// Find the additional property within the nested context
+		return findAdditionalPropertyInNestedContext(yamlContent, jsonPath, propertyNames)
+	}
+
+	// For non-empty paths without additional properties, use the regular logic
 	return LocateJSONPathInYAML(yamlContent, jsonPath)
 }
 
@@ -265,4 +272,162 @@ func findFirstAdditionalProperty(yamlContent string, propertyNames []string) JSO
 
 	// If we can't find any of the properties, return the default location
 	return JSONPathLocation{Line: 1, Column: 1, Found: false}
+}
+
+// findAdditionalPropertyInNestedContext finds additional properties within a specific nested JSON path context
+func findAdditionalPropertyInNestedContext(yamlContent string, jsonPath string, propertyNames []string) JSONPathLocation {
+	// First, locate the base path in the YAML
+	basePath := LocateJSONPathInYAML(yamlContent, jsonPath)
+	if !basePath.Found {
+		// If we can't find the base path, fall back to searching the entire content
+		return findFirstAdditionalProperty(yamlContent, propertyNames)
+	}
+
+	// Parse the path segments to understand the nesting structure
+	pathSegments := parseJSONPath(jsonPath)
+	if len(pathSegments) == 0 {
+		// If no path segments, search globally
+		return findFirstAdditionalProperty(yamlContent, propertyNames)
+	}
+
+	// Find the nested section that corresponds to the JSON path
+	nestedSection := findNestedSection(yamlContent, pathSegments)
+	if nestedSection.startLine == -1 {
+		// If we can't find the nested section, fall back to global search
+		return findFirstAdditionalProperty(yamlContent, propertyNames)
+	}
+
+	// Search for the additional properties within the nested section
+	lines := strings.Split(yamlContent, "\n")
+
+	// Look for additional properties within the identified nested section
+	for lineNum := nestedSection.startLine; lineNum <= nestedSection.endLine; lineNum++ {
+		if lineNum >= len(lines) {
+			break
+		}
+
+		line := lines[lineNum]
+		trimmedLine := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
+		// Check if the line is at the correct indentation level for the nested context
+		// Additional properties should be at the same level as other properties in this context
+		if !isAtCorrectIndentationLevel(line, nestedSection.baseIndentLevel) {
+			continue
+		}
+
+		// Check if this line contains any of the additional properties
+		for _, propName := range propertyNames {
+			// Look for "propName:" pattern at the start of the trimmed line
+			keyPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(propName) + `\s*:`)
+			if keyPattern.MatchString(trimmedLine) {
+				// Found the property - return position of the property name
+				propIndex := strings.Index(line, propName)
+				if propIndex != -1 {
+					return JSONPathLocation{
+						Line:   lineNum + 1,   // 1-based line numbers
+						Column: propIndex + 1, // 1-based column numbers
+						Found:  true,
+					}
+				}
+			}
+		}
+	}
+
+	// If we can't find the additional properties in the nested context,
+	// fall back to a global search
+	return findFirstAdditionalProperty(yamlContent, propertyNames)
+}
+
+// NestedSection represents a section of YAML content that corresponds to a nested object
+type NestedSection struct {
+	startLine       int // 0-based start line
+	endLine         int // 0-based end line (inclusive)
+	baseIndentLevel int // The indentation level of properties within this section
+}
+
+// findNestedSection locates the section of YAML that corresponds to the given JSON path
+func findNestedSection(yamlContent string, pathSegments []PathSegment) NestedSection {
+	lines := strings.Split(yamlContent, "\n")
+
+	// Start from the beginning and traverse the path
+	currentLevel := 0
+	var foundLine = -1
+	var baseIndentLevel = 0
+
+	for lineNum, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
+		// Calculate indentation level
+		lineLevel := (len(line) - len(strings.TrimLeft(line, " \t"))) / 2
+
+		// Check if we're looking for a key at the current path level
+		if currentLevel < len(pathSegments) {
+			segment := pathSegments[currentLevel]
+
+			if segment.Type == "key" {
+				// Look for "key:" pattern
+				keyPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(segment.Value) + `\s*:`)
+				if keyPattern.MatchString(trimmedLine) && lineLevel == currentLevel*2 {
+					// Found a matching key at the correct indentation level
+					if currentLevel == len(pathSegments)-1 {
+						// This is the final segment - we found our target
+						foundLine = lineNum
+						baseIndentLevel = lineLevel + 2 // Properties inside this object should be indented further
+						break
+					} else {
+						// Move to the next level
+						currentLevel++
+					}
+				}
+			}
+		}
+	}
+
+	if foundLine == -1 {
+		return NestedSection{startLine: -1, endLine: -1, baseIndentLevel: 0}
+	}
+
+	// Find the end of this nested section by looking for the next line at the same or lower indentation
+	endLine := len(lines) - 1          // Default to end of file
+	targetLevel := baseIndentLevel - 2 // The level of the key we found
+
+	for lineNum := foundLine + 1; lineNum < len(lines); lineNum++ {
+		line := lines[lineNum]
+		trimmedLine := strings.TrimSpace(line)
+
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
+		lineLevel := (len(line) - len(strings.TrimLeft(line, " \t"))) / 2
+
+		// If we find a line at the same or lower level than our target,
+		// the nested section ends at the previous line
+		if lineLevel <= targetLevel {
+			endLine = lineNum - 1
+			break
+		}
+	}
+
+	return NestedSection{
+		startLine:       foundLine,
+		endLine:         endLine,
+		baseIndentLevel: baseIndentLevel,
+	}
+}
+
+// isAtCorrectIndentationLevel checks if a line is at the expected indentation level for properties
+// within the nested context
+func isAtCorrectIndentationLevel(line string, expectedLevel int) bool {
+	actualLevel := (len(line) - len(strings.TrimLeft(line, " \t"))) / 2
+	return actualLevel == expectedLevel
 }

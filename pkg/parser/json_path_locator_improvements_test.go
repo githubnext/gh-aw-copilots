@@ -202,6 +202,98 @@ another_invalid: value2`
 	}
 }
 
+// TestLocateJSONPathInYAMLWithAdditionalPropertiesNested tests the new functionality for nested additional properties
+func TestLocateJSONPathInYAMLWithAdditionalPropertiesNested(t *testing.T) {
+	yamlContent := `name: Test Workflow
+on:
+  push: 
+    branches: [main]
+  foobar: invalid
+permissions:
+  contents: read
+  invalid_perm: write
+nested:
+  deeply:
+    more_nested: true
+    bad_prop: invalid`
+
+	tests := []struct {
+		name         string
+		jsonPath     string
+		errorMessage string
+		expectedLine int
+		expectedCol  int
+		shouldFind   bool
+	}{
+		{
+			name:         "nested additional property under 'on'",
+			jsonPath:     "/on",
+			errorMessage: "at '/on': additional properties 'foobar' not allowed",
+			expectedLine: 5,
+			expectedCol:  3, // Position of 'foobar'
+			shouldFind:   true,
+		},
+		{
+			name:         "nested additional property under 'permissions'",
+			jsonPath:     "/permissions",
+			errorMessage: "at '/permissions': additional properties 'invalid_perm' not allowed",
+			expectedLine: 8,
+			expectedCol:  3, // Position of 'invalid_perm'
+			shouldFind:   true,
+		},
+		{
+			name:         "deeply nested additional property",
+			jsonPath:     "/nested/deeply",
+			errorMessage: "at '/nested/deeply': additional properties 'bad_prop' not allowed",
+			expectedLine: 12,
+			expectedCol:  5, // Position of 'bad_prop' (indented further)
+			shouldFind:   true,
+		},
+		{
+			name:         "multiple additional properties - should find first",
+			jsonPath:     "/on",
+			errorMessage: "at '/on': additional properties 'foobar', 'another_prop' not allowed",
+			expectedLine: 5,
+			expectedCol:  3, // Position of 'foobar' (first one found)
+			shouldFind:   true,
+		},
+		{
+			name:         "non-existent path with additional properties",
+			jsonPath:     "/nonexistent",
+			errorMessage: "at '/nonexistent': additional properties 'some_prop' not allowed",
+			expectedLine: 1, // Falls back to global search, which won't find 'some_prop'
+			expectedCol:  1,
+			shouldFind:   false,
+		},
+		{
+			name:         "nested path without additional properties error",
+			jsonPath:     "/on/push",
+			errorMessage: "at '/on/push': some other validation error",
+			expectedLine: 3, // Should find the 'push' key location using regular logic
+			expectedCol:  8, // After "push:"
+			shouldFind:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			location := LocateJSONPathInYAMLWithAdditionalProperties(yamlContent, tt.jsonPath, tt.errorMessage)
+
+			if location.Found != tt.shouldFind {
+				t.Errorf("Expected Found=%v, got Found=%v", tt.shouldFind, location.Found)
+			}
+
+			if location.Line != tt.expectedLine {
+				t.Errorf("Expected Line=%d, got Line=%d", tt.expectedLine, location.Line)
+			}
+
+			if location.Column != tt.expectedCol {
+				t.Errorf("Expected Column=%d, got Column=%d", tt.expectedCol, location.Column)
+			}
+		})
+	}
+}
+
 func TestFindFrontmatterBounds(t *testing.T) {
 	tests := []struct {
 		name                     string
