@@ -6200,3 +6200,383 @@ This workflow tests that fork fields are properly commented out in the on sectio
 		})
 	}
 }
+
+// TestPullRequestForksArrayFilter tests the pull_request forks: []string filter functionality with glob support
+func TestPullRequestForksArrayFilter(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "forks-array-filter-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name               string
+		frontmatter        string
+		expectedConditions []string // Expected substrings in the generated condition
+		shouldHaveIf       bool     // Whether an if condition should be present
+	}{
+		{
+			name: "pull_request with forks array (exact matches)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks:
+      - "githubnext/test-repo"
+      - "octocat/hello-world"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+				"github.event.pull_request.head.repo.full_name == 'githubnext/test-repo'",
+				"github.event.pull_request.head.repo.full_name == 'octocat/hello-world'",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with forks array (glob patterns)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks:
+      - "githubnext/*"
+      - "octocat/*"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+				"startsWith(github.event.pull_request.head.repo.full_name, 'githubnext/')",
+				"startsWith(github.event.pull_request.head.repo.full_name, 'octocat/')",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with forks array (mixed exact and glob)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks:
+      - "githubnext/test-repo"
+      - "octocat/*"
+      - "microsoft/vscode"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+				"github.event.pull_request.head.repo.full_name == 'githubnext/test-repo'",
+				"startsWith(github.event.pull_request.head.repo.full_name, 'octocat/')",
+				"github.event.pull_request.head.repo.full_name == 'microsoft/vscode'",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with empty forks array",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks: []
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with forks array and existing if condition",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks:
+      - "trusted-org/*"
+
+if: github.actor != 'dependabot[bot]'
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.actor != 'dependabot[bot]'",
+				"startsWith(github.event.pull_request.head.repo.full_name, 'trusted-org/')",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "forks array takes precedence over legacy fork boolean",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    fork: true
+    forks:
+      - "specific-org/repo"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == 'specific-org/repo'",
+			},
+			shouldHaveIf: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Forks Array Filter Workflow
+
+This is a test workflow for forks array filtering with glob support.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Failed to compile workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := testFile[:len(testFile)-3] + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+			lockContent := string(content)
+
+			if tt.shouldHaveIf {
+				// Check that each expected condition is present
+				for _, expectedCondition := range tt.expectedConditions {
+					if !strings.Contains(lockContent, expectedCondition) {
+						t.Errorf("Expected lock file to contain '%s' but it didn't.\nContent:\n%s", expectedCondition, lockContent)
+					}
+				}
+			} else {
+				// Check that no fork-related if condition is present in the main job
+				for _, condition := range tt.expectedConditions {
+					if strings.Contains(lockContent, condition) {
+						t.Errorf("Expected no fork filter condition but found '%s' in lock file.\nContent:\n%s", condition, lockContent)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestForksArrayFieldCommentingInOnSection specifically tests that the forks array field is commented out in the on section
+func TestForksArrayFieldCommentingInOnSection(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "forks-array-commenting-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name         string
+		frontmatter  string
+		expectedYAML string // Expected YAML structure with commented forks
+		description  string
+	}{
+		{
+			name: "pull_request with forks array and types",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened]
+    paths: ["src/**"]
+    forks:
+      - "org/repo"
+      - "trusted/*"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # forks: # Fork filtering applied via job conditions
+    # - org/repo # Fork filtering applied via job conditions
+    # - trusted/* # Fork filtering applied via job conditions
+    paths:
+    - src/**
+    types:
+    - opened`,
+			description: "Should comment out entire forks array but keep paths and types",
+		},
+		{
+			name: "pull_request with only forks array",
+			frontmatter: `---
+on:
+  pull_request:
+    forks:
+      - "specific/repo"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # forks: # Fork filtering applied via job conditions
+    # - specific/repo # Fork filtering applied via job conditions`,
+			description: "Should comment out forks array even when it's the only field",
+		},
+		{
+			name: "pull_request with both legacy fork and forks array",
+			frontmatter: `---
+on:
+  pull_request:
+    fork: false
+    forks:
+      - "allowed/repo"
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # fork: false # Fork filtering applied via job conditions
+    # forks: # Fork filtering applied via job conditions
+    # - allowed/repo # Fork filtering applied via job conditions
+    types:
+    - opened`,
+			description: "Should comment out both legacy fork and forks array",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Forks Array Field Commenting Workflow
+
+This workflow tests that forks array fields are properly commented out in the on section.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Failed to compile workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := testFile[:len(testFile)-3] + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+			lockContent := string(content)
+
+			// Check that the expected YAML structure is present
+			if !strings.Contains(lockContent, tt.expectedYAML) {
+				t.Errorf("Expected YAML structure not found in lock file.\nExpected:\n%s\nActual content:\n%s", tt.expectedYAML, lockContent)
+			}
+
+			// For test cases with forks field, ensure specific checks
+			if strings.Contains(tt.frontmatter, "forks:") {
+				// Check that the forks field is commented out
+				if !strings.Contains(lockContent, "# forks:") {
+					t.Errorf("Expected commented forks field but not found in lock file.\nContent:\n%s", lockContent)
+				}
+
+				// Check that the comment includes the explanation
+				if !strings.Contains(lockContent, "# Fork filtering applied via job conditions") {
+					t.Errorf("Expected forks comment to include explanation but not found in lock file.\nContent:\n%s", lockContent)
+				}
+
+				// Parse the generated YAML to ensure the forks field is not active in the parsed structure
+				var workflow map[string]interface{}
+				if err := yaml.Unmarshal(content, &workflow); err != nil {
+					t.Fatalf("Failed to parse generated YAML: %v", err)
+				}
+
+				if onSection, exists := workflow["on"]; exists {
+					if onMap, ok := onSection.(map[string]interface{}); ok {
+						if prSection, hasPR := onMap["pull_request"]; hasPR {
+							if prMap, isPRMap := prSection.(map[string]interface{}); isPRMap {
+								// The forks field should NOT be present in the parsed YAML (since it's commented)
+								if _, hasForks := prMap["forks"]; hasForks {
+									t.Errorf("Forks field found in parsed YAML pull_request section (should be commented): %v", prMap)
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Ensure that active forks field is never present in the compiled YAML
+			if strings.Contains(lockContent, "forks:") && !strings.Contains(lockContent, "# forks:") {
+				t.Errorf("Active (non-commented) forks field found in compiled workflow content:\n%s", lockContent)
+			}
+		})
+	}
+}

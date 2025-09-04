@@ -132,6 +132,14 @@
                 "fork": {
                   "type": "boolean",
                   "description": "Filter by fork state. Set to false to ignore PRs from forks"
+                },
+                "forks": {
+                  "type": "array",
+                  "description": "List of allowed fork repositories with glob support (e.g., 'org/repo', 'org/*')",
+                  "items": {
+                    "type": "string",
+                    "description": "Repository pattern with optional glob support"
+                  }
                 }
               },
               "additionalProperties": false

@@ -819,12 +819,13 @@ func (c *Compiler) extractTopLevelYAMLSection(frontmatter map[string]any, key st
 	return yamlStr
 }
 
-// commentOutProcessedFieldsInOnSection comments out draft and fork fields in pull_request sections within the YAML string
+// commentOutProcessedFieldsInOnSection comments out draft, fork, and forks fields in pull_request sections within the YAML string
 // These fields are processed separately by applyPullRequestDraftFilter and applyPullRequestForkFilter and should be commented for documentation
 func (c *Compiler) commentOutProcessedFieldsInOnSection(yamlStr string) string {
 	lines := strings.Split(yamlStr, "\n")
 	var result []string
 	inPullRequest := false
+	inForksArray := false
 
 	for _, line := range lines {
 		// Check if we're entering a pull_request section
@@ -839,24 +840,52 @@ func (c *Compiler) commentOutProcessedFieldsInOnSection(yamlStr string) string {
 			// If line is not indented or is a new top-level key, we're out of pull_request
 			if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "    ") && !strings.HasPrefix(line, "\t") {
 				inPullRequest = false
+				inForksArray = false
 			}
 		}
 
-		// If we're in pull_request section and this line contains draft: or fork:, comment it out
 		trimmedLine := strings.TrimSpace(line)
-		if inPullRequest && (strings.Contains(trimmedLine, "draft:") || strings.Contains(trimmedLine, "fork:")) {
+
+		// Check if we're entering the forks array
+		if inPullRequest && strings.HasPrefix(trimmedLine, "forks:") {
+			inForksArray = true
+		}
+
+		// Check if we're leaving the forks array by encountering another top-level field at the same level
+		if inForksArray && inPullRequest && strings.TrimSpace(line) != "" {
+			// Get the indentation of the current line
+			lineIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+
+			// If this is a non-dash line at the same level as the forks field (4 spaces), we're out of the array
+			if lineIndent == 4 && !strings.HasPrefix(trimmedLine, "-") && !strings.HasPrefix(trimmedLine, "forks:") {
+				inForksArray = false
+			}
+		}
+
+		// Determine if we should comment out this line
+		shouldComment := false
+		var commentReason string
+
+		if inPullRequest && strings.Contains(trimmedLine, "draft:") {
+			shouldComment = true
+			commentReason = " # Draft filtering applied via job conditions"
+		} else if inPullRequest && strings.Contains(trimmedLine, "fork:") && !strings.HasPrefix(trimmedLine, "forks:") {
+			shouldComment = true
+			commentReason = " # Fork filtering applied via job conditions"
+		} else if inPullRequest && strings.HasPrefix(trimmedLine, "forks:") {
+			shouldComment = true
+			commentReason = " # Fork filtering applied via job conditions"
+		} else if inForksArray && strings.HasPrefix(trimmedLine, "-") {
+			shouldComment = true
+			commentReason = " # Fork filtering applied via job conditions"
+		}
+
+		if shouldComment {
 			// Preserve the original indentation and comment out the line
 			indentation := ""
 			trimmed := strings.TrimLeft(line, " \t")
 			if len(line) > len(trimmed) {
 				indentation = line[:len(line)-len(trimmed)]
-			}
-
-			var commentReason string
-			if strings.Contains(trimmedLine, "draft:") {
-				commentReason = " # Draft filtering applied via job conditions"
-			} else if strings.Contains(trimmedLine, "fork:") {
-				commentReason = " # Fork filtering applied via job conditions"
 			}
 
 			commentedLine := indentation + "# " + trimmed + commentReason
@@ -1184,6 +1213,7 @@ func (c *Compiler) applyPullRequestDraftFilter(data *WorkflowData, frontmatter m
 }
 
 // applyPullRequestForkFilter applies fork filter conditions for pull_request triggers
+// Supports both legacy "fork: boolean" and new "forks: []string" with glob patterns
 func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter map[string]any) {
 	// Check if there's an "on" section in the frontmatter
 	onValue, hasOn := frontmatter["on"]
@@ -1209,35 +1239,66 @@ func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter ma
 		return
 	}
 
-	// Check if fork is specified
+	// Check for legacy "fork" boolean field
 	forkValue, hasFork := prMap["fork"]
-	if !hasFork {
+	forksValue, hasForks := prMap["forks"]
+
+	if !hasFork && !hasForks {
 		return
 	}
 
-	// Check if fork is a boolean
-	forkBool, isForkBool := forkValue.(bool)
-	if !isForkBool {
-		// If fork is not a boolean, don't add filter
-		return
-	}
-
-	// Generate conditional logic based on fork value using expression nodes
 	var forkCondition ConditionNode
-	if forkBool {
-		// fork: true - allow PRs from forks (no condition needed, just return)
-		return
-	} else {
-		// fork: false (default) - exclude PRs from forks
-		// The condition should be true for non-pull_request events or for non-fork pull_requests
+
+	// Handle new "forks" array field (takes precedence over legacy "fork")
+	if hasForks {
+		forksArray, isForksArray := forksValue.([]any)
+		if !isForksArray {
+			// Invalid forks format, skip
+			return
+		}
+
+		// Convert []any to []string
+		var allowedForks []string
+		for _, fork := range forksArray {
+			if forkStr, isForkStr := fork.(string); isForkStr {
+				allowedForks = append(allowedForks, forkStr)
+			}
+		}
+
+		// Build condition for allowed forks with glob support
 		notPullRequestEvent := BuildNotEquals(
 			BuildPropertyAccess("github.event_name"),
 			BuildStringLiteral("pull_request"),
 		)
-		isNotFromFork := BuildNotFromFork()
+		allowedForksCondition := BuildFromAllowedForks(allowedForks)
+
 		forkCondition = &OrNode{
 			Left:  notPullRequestEvent,
-			Right: isNotFromFork,
+			Right: allowedForksCondition,
+		}
+	} else if hasFork {
+		// Handle legacy "fork" boolean field
+		forkBool, isForkBool := forkValue.(bool)
+		if !isForkBool {
+			// If fork is not a boolean, don't add filter
+			return
+		}
+
+		if forkBool {
+			// fork: true - allow PRs from forks (no condition needed, just return)
+			return
+		} else {
+			// fork: false (default) - exclude PRs from forks
+			// The condition should be true for non-pull_request events or for non-fork pull_requests
+			notPullRequestEvent := BuildNotEquals(
+				BuildPropertyAccess("github.event_name"),
+				BuildStringLiteral("pull_request"),
+			)
+			isNotFromFork := BuildNotFromFork()
+			forkCondition = &OrNode{
+				Left:  notPullRequestEvent,
+				Right: isNotFromFork,
+			}
 		}
 	}
 
