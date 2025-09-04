@@ -3976,55 +3976,41 @@ func (c *Compiler) generateCustomEngineSteps(yaml *strings.Builder, data *Workfl
 			// Check if this step needs environment variables injected
 			stepStr := stepYAML
 			if hasEnvSection && strings.Contains(stepYAML, "run:") {
-				// Add environment variables to run steps
-				lines := strings.Split(stepYAML, "\n")
-				var modifiedStep strings.Builder
-				foundRun := false
+				// Add environment variables to run steps after the entire run block
+				// Find the end of the run block and add env section at step level
+				stepStr = strings.TrimRight(stepYAML, "\n")
+				stepStr += "\n        env:\n"
 
-				for j, line := range lines {
-					modifiedStep.WriteString(line)
-					if j < len(lines)-1 {
-						modifiedStep.WriteString("\n")
-					}
+				// Add GITHUB_AW_SAFE_OUTPUTS if safe-outputs feature is used
+				if data.SafeOutputs != nil {
+					stepStr += "          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n"
+				}
 
-					// After the "run:" line, add environment section if needed
-					if strings.Contains(line, "run:") && !foundRun {
-						foundRun = true
-						modifiedStep.WriteString("        env:\n")
+				// Add GITHUB_AW_MAX_TURNS if max-turns is configured
+				if data.EngineConfig != nil && data.EngineConfig.MaxTurns != "" {
+					stepStr += fmt.Sprintf("          GITHUB_AW_MAX_TURNS: %s\n", data.EngineConfig.MaxTurns)
+				}
 
-						// Add GITHUB_AW_SAFE_OUTPUTS if safe-outputs feature is used
-						if data.SafeOutputs != nil {
-							modifiedStep.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
-						}
-
-						// Add GITHUB_AW_MAX_TURNS if max-turns is configured
-						if data.EngineConfig != nil && data.EngineConfig.MaxTurns != "" {
-							fmt.Fprintf(&modifiedStep, "          GITHUB_AW_MAX_TURNS: %s\n", data.EngineConfig.MaxTurns)
-						}
-
-						// Add custom environment variables from engine config
-						if data.EngineConfig != nil && len(data.EngineConfig.Env) > 0 {
-							for _, envVar := range data.EngineConfig.Env {
-								// Parse environment variable in format "KEY=value" or "KEY: value"
-								parts := strings.SplitN(envVar, "=", 2)
-								if len(parts) == 2 {
-									key := strings.TrimSpace(parts[0])
-									value := strings.TrimSpace(parts[1])
-									fmt.Fprintf(&modifiedStep, "          %s: %s\n", key, value)
-								} else {
-									// Try "KEY: value" format
-									parts = strings.SplitN(envVar, ":", 2)
-									if len(parts) == 2 {
-										key := strings.TrimSpace(parts[0])
-										value := strings.TrimSpace(parts[1])
-										fmt.Fprintf(&modifiedStep, "          %s: %s\n", key, value)
-									}
-								}
+				// Add custom environment variables from engine config
+				if data.EngineConfig != nil && len(data.EngineConfig.Env) > 0 {
+					for _, envVar := range data.EngineConfig.Env {
+						// Parse environment variable in format "KEY=value" or "KEY: value"
+						parts := strings.SplitN(envVar, "=", 2)
+						if len(parts) == 2 {
+							key := strings.TrimSpace(parts[0])
+							value := strings.TrimSpace(parts[1])
+							stepStr += fmt.Sprintf("          %s: %s\n", key, value)
+						} else {
+							// Try "KEY: value" format
+							parts = strings.SplitN(envVar, ":", 2)
+							if len(parts) == 2 {
+								key := strings.TrimSpace(parts[0])
+								value := strings.TrimSpace(parts[1])
+								stepStr += fmt.Sprintf("          %s: %s\n", key, value)
 							}
 						}
 					}
 				}
-				stepStr = modifiedStep.String()
 			}
 
 			// The convertStepToYAML already includes proper indentation, just add it directly
