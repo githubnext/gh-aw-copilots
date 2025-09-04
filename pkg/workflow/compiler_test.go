@@ -5816,7 +5816,6 @@ func TestAccessLogUploadConditional(t *testing.T) {
 	}
 }
 
-
 // TestPullRequestForksArrayFilter tests the pull_request forks: []string filter functionality with glob support
 func TestPullRequestForksArrayFilter(t *testing.T) {
 	// Create temporary directory for test files
@@ -5957,6 +5956,90 @@ tools:
 			},
 			shouldHaveIf: true,
 		},
+		{
+			name: "pull_request with forks single string (exact match)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks: "githubnext/test-repo"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+				"github.event.pull_request.head.repo.full_name == 'githubnext/test-repo'",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with forks single string (glob pattern)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks: "githubnext/*"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{
+				"github.event.pull_request.head.repo.full_name == github.repository",
+				"startsWith(github.event.pull_request.head.repo.full_name, 'githubnext/')",
+			},
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with forks wildcard string (allow all forks)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks: "*"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{},
+			shouldHaveIf:       false, // No fork filtering should be applied
+		},
+		{
+			name: "pull_request with forks array containing wildcard",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    forks:
+      - "*"
+      - "githubnext/test-repo"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedConditions: []string{},
+			shouldHaveIf:       false, // No fork filtering should be applied due to "*"
+		},
 	}
 
 	for _, tt := range tests {
@@ -6072,6 +6155,44 @@ tools:
     # forks: # Fork filtering applied via job conditions
     # - specific/repo # Fork filtering applied via job conditions`,
 			description: "Should comment out forks array even when it's the only field",
+		},
+		{
+			name: "pull_request with forks single string",
+			frontmatter: `---
+on:
+  pull_request:
+    forks: "specific/repo"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # forks: specific/repo # Fork filtering applied via job conditions`,
+			description: "Should comment out forks single string",
+		},
+		{
+			name: "pull_request with forks wildcard string",
+			frontmatter: `---
+on:
+  pull_request:
+    forks: "*"
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # forks: "*" # Fork filtering applied via job conditions`,
+			description: "Should comment out forks wildcard string",
 		},
 	}
 

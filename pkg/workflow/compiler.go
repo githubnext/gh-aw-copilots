@@ -1236,24 +1236,35 @@ func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter ma
 		return
 	}
 
-	// Check for "forks" array field
+	// Check for "forks" field (string or array)
 	forksValue, hasForks := prMap["forks"]
 
 	if !hasForks {
 		return
 	}
 
-	forksArray, isForksArray := forksValue.([]any)
-	if !isForksArray {
+	// Convert forks value to []string, handling both string and array formats
+	var allowedForks []string
+
+	// Handle string format (e.g., forks: "*" or forks: "org/*")
+	if forksStr, isForksStr := forksValue.(string); isForksStr {
+		allowedForks = []string{forksStr}
+	} else if forksArray, isForksArray := forksValue.([]any); isForksArray {
+		// Handle array format (e.g., forks: ["*", "org/repo"])
+		for _, fork := range forksArray {
+			if forkStr, isForkStr := fork.(string); isForkStr {
+				allowedForks = append(allowedForks, forkStr)
+			}
+		}
+	} else {
 		// Invalid forks format, skip
 		return
 	}
 
-	// Convert []any to []string
-	var allowedForks []string
-	for _, fork := range forksArray {
-		if forkStr, isForkStr := fork.(string); isForkStr {
-			allowedForks = append(allowedForks, forkStr)
+	// If "*" wildcard is present, skip fork filtering (allow all forks)
+	for _, pattern := range allowedForks {
+		if pattern == "*" {
+			return // No fork filtering needed
 		}
 	}
 
