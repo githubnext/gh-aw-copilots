@@ -33,11 +33,7 @@ run-name: "Test Safe Outputs - Custom Engine"
 jobs:
   test-safe-outputs-custom-engine:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      discussions: write
-      issues: write
-      pull-requests: write
+    permissions: read-all
     outputs:
       output: ${{ steps.collect_output.outputs.output }}
     steps:

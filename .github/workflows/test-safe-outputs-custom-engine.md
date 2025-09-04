@@ -201,11 +201,7 @@ safe-outputs:
     max: 1
     side: "RIGHT"
 
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-  discussions: write
+permissions: read-all
 ---
 
 # Test Safe Outputs - Custom Engine
