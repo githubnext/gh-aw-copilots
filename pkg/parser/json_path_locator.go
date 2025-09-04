@@ -67,11 +67,27 @@ func LocateJSONPathInYAML(yamlContent string, jsonPath string) JSONPathLocation 
 		return JSONPathLocation{Line: 1, Column: 1, Found: true}
 	}
 
-	// For now, use a simple line-by-line approach to find the path
-	// This is less precise than using the YAML parser's position info,
-	// but will work as a starting point
+	// Use a more sophisticated line-by-line approach to find the path
 	location := findPathInYAMLLines(yamlContent, pathSegments)
 	return location
+}
+
+// LocateJSONPathInYAMLWithAdditionalProperties finds the line/column position of a JSON path in YAML source
+// with special handling for additional properties errors
+func LocateJSONPathInYAMLWithAdditionalProperties(yamlContent string, jsonPath string, errorMessage string) JSONPathLocation {
+	if jsonPath == "" {
+		// This might be an additional properties error - try to extract property names
+		propertyNames := extractAdditionalPropertyNames(errorMessage)
+		if len(propertyNames) > 0 {
+			// Find the first additional property in the YAML
+			return findFirstAdditionalProperty(yamlContent, propertyNames)
+		}
+		// Fallback to root level error
+		return JSONPathLocation{Line: 1, Column: 1, Found: true}
+	}
+
+	// For non-empty paths, use the regular logic
+	return LocateJSONPathInYAML(yamlContent, jsonPath)
 }
 
 // findPathInYAMLLines finds a JSON path in YAML content using line-by-line analysis
@@ -186,4 +202,67 @@ type PathSegment struct {
 	Type  string // "key" or "index"
 	Value string // The raw value
 	Index int    // Parsed index for array elements
+}
+
+// extractAdditionalPropertyNames extracts property names from additional properties error messages
+// Example: "additional properties 'invalid_prop', 'another_invalid' not allowed" -> ["invalid_prop", "another_invalid"]
+func extractAdditionalPropertyNames(errorMessage string) []string {
+	// Look for the pattern: additional properties ... not allowed
+	// Use regex to match the full property list section
+	re := regexp.MustCompile(`additional propert(?:y|ies) (.+?) not allowed`)
+	match := re.FindStringSubmatch(errorMessage)
+
+	if len(match) < 2 {
+		return []string{}
+	}
+
+	// Extract all quoted property names from the matched string
+	propPattern := regexp.MustCompile(`'([^']+)'`)
+	propMatches := propPattern.FindAllStringSubmatch(match[1], -1)
+
+	var properties []string
+	for _, propMatch := range propMatches {
+		if len(propMatch) > 1 {
+			prop := strings.TrimSpace(propMatch[1])
+			if prop != "" {
+				properties = append(properties, prop)
+			}
+		}
+	}
+
+	return properties
+}
+
+// findFirstAdditionalProperty finds the first occurrence of any of the given property names in YAML
+func findFirstAdditionalProperty(yamlContent string, propertyNames []string) JSONPathLocation {
+	lines := strings.Split(yamlContent, "\n")
+
+	for lineNum, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
+		// Check if this line contains any of the additional properties
+		for _, propName := range propertyNames {
+			// Look for "propName:" pattern at the start of the trimmed line
+			keyPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(propName) + `\s*:`)
+			if keyPattern.MatchString(trimmedLine) {
+				// Found the property - return position of the property name
+				propIndex := strings.Index(line, propName)
+				if propIndex != -1 {
+					return JSONPathLocation{
+						Line:   lineNum + 1,   // 1-based line numbers
+						Column: propIndex + 1, // 1-based column numbers
+						Found:  true,
+					}
+				}
+			}
+		}
+	}
+
+	// If we can't find any of the properties, return the default location
+	return JSONPathLocation{Line: 1, Column: 1, Found: false}
 }
