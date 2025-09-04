@@ -18,7 +18,7 @@ The YAML frontmatter supports standard GitHub Actions properties plus additional
 - `steps`: Custom steps for the job
 
 **Properties specific to GitHub Agentic Workflows:**
-- `engine`: AI engine configuration (claude/codex) with optional max-turns setting
+- `engine`: AI engine configuration (claude/codex/genaiscript) with optional max-turns setting
 - `network`: Network access control for AI engines (supports `defaults`, `{}`, or `{ allowed: [...] }`)
 - `tools`: Available tools and MCP servers for the AI engine  
 - `cache`: Cache configuration for workflow dependencies
@@ -139,8 +139,9 @@ If you specify any permission, unspecified ones are set to `none`.
 The `engine:` section specifies which AI engine to use to interpret the markdown section of the workflow, and controls options about how this execution proceeds. Defaults to `claude`.
 
 ```yaml
-engine: claude  # Default: Claude Code
-engine: codex   # Experimental: OpenAI Codex CLI with MCP support
+engine: claude      # Default: Claude Code
+engine: codex       # Experimental: OpenAI Codex CLI with MCP support
+engine: genaiscript  # Experimental: GenAIScript with markdown script support
 ```
 
 **Engine Override**:
@@ -153,7 +154,7 @@ gh aw compile --engine claude
 Simple format:
 
 ```yaml
-engine: claude  # or codex
+engine: claude      # claude, codex, or genaiscript
 ```
 
 Extended format:
@@ -167,7 +168,7 @@ engine:
 ```
 
 **Fields:**
-- **`id`** (required): Engine identifier (`claude`, `codex`)
+- **`id`** (required): Engine identifier (`claude`, `codex`, `genaiscript`)
 - **`version`** (optional): Action version (`beta`, `stable`)
 - **`model`** (optional): Specific LLM model to use
 - **`max-turns`** (optional): Maximum number of chat iterations per run (cost-control option)
@@ -175,6 +176,12 @@ engine:
 **Model Defaults:**
 - **Claude**: Uses the default model from the claude-code-base-action (typically latest Claude model)
 - **Codex**: Defaults to `o4-mini` when no model is specified
+- **GenAIScript**: Defaults to `gpt-4o-mini` when no model is specified
+
+**Engine Features:**
+- **Claude**: Full MCP tool support, network permissions, max-turns support
+- **Codex**: MCP tool support via configuration file, experimental status
+- **GenAIScript**: Uses its own tool system, supports markdown-based scripts, experimental status
 
 ## AI Engine (`engine:`)
 

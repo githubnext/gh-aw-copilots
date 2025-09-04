@@ -9,8 +9,8 @@ func TestEngineRegistry(t *testing.T) {
 
 	// Test that built-in engines are registered
 	supportedEngines := registry.GetSupportedEngines()
-	if len(supportedEngines) != 2 {
-		t.Errorf("Expected 2 supported engines, got %d", len(supportedEngines))
+	if len(supportedEngines) != 3 {
+		t.Errorf("Expected 3 supported engines, got %d", len(supportedEngines))
 	}
 
 	// Test getting engines by ID
@@ -104,7 +104,7 @@ func TestEngineRegistryCustomEngine(t *testing.T) {
 
 	// Test that supported engines list is updated
 	supportedEngines := registry.GetSupportedEngines()
-	if len(supportedEngines) != 3 {
-		t.Errorf("Expected 3 supported engines after adding custom, got %d", len(supportedEngines))
+	if len(supportedEngines) != 4 {
+		t.Errorf("Expected 4 supported engines after adding custom, got %d", len(supportedEngines))
 	}
 }

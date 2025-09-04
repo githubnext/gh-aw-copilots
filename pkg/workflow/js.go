@@ -54,6 +54,9 @@ var parseClaudeLogScript string
 //go:embed js/parse_codex_log.cjs
 var parseCodexLogScript string
 
+//go:embed js/parse_genaiscript_log.cjs
+var parseGenAIScriptLogScript string
+
 // FormatJavaScriptForYAML formats a JavaScript script with proper indentation for embedding in YAML
 func FormatJavaScriptForYAML(script string) []string {
 	var formattedLines []string
@@ -85,6 +88,8 @@ func GetLogParserScript(name string) string {
 		return parseClaudeLogScript
 	case "parse_codex_log":
 		return parseCodexLogScript
+	case "parse_genaiscript_log":
+		return parseGenAIScriptLogScript
 	default:
 		return ""
 	}
