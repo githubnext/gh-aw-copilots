@@ -2,32 +2,208 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Proxy"
-on:
-  pull_request:
-    branches:
-    - main
-    # forks: [] # Fork filtering applied via job conditions
+name: "Security Analysis with Claude"
+"on":
   workflow_dispatch: null
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
-  cancel-in-progress: true
+  group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Test Proxy"
+run-name: "Security Analysis with Claude"
 
 jobs:
-  task:
-    if: (github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository)
+  add_reaction:
+    if: github.event_name == 'issues' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'pull_request') && (github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.react.outputs.reaction-id }}
     steps:
-      - name: Task job condition barrier
-        run: echo "Task job executed - conditions satisfied"
+      - name: Add eyes reaction to the triggering item
+        id: react
+        uses: actions/github-script@v7
+        env:
+          GITHUB_AW_REACTION: eyes
+        with:
+          script: |
+            async function main() {
+              // Read inputs from environment variables
+              const reaction = process.env.GITHUB_AW_REACTION || "eyes";
+              const alias = process.env.GITHUB_AW_ALIAS; // Only present for alias workflows
+              const runId = context.runId;
+              const runUrl = context.payload.repository
+                ? `${context.payload.repository.html_url}/actions/runs/${runId}`
+                : `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+              console.log("Reaction type:", reaction);
+              console.log("Alias name:", alias || "none");
+              console.log("Run ID:", runId);
+              console.log("Run URL:", runUrl);
+              // Validate reaction type
+              const validReactions = [
+                "+1",
+                "-1",
+                "laugh",
+                "confused",
+                "heart",
+                "hooray",
+                "rocket",
+                "eyes",
+              ];
+              if (!validReactions.includes(reaction)) {
+                core.setFailed(
+                  `Invalid reaction type: ${reaction}. Valid reactions are: ${validReactions.join(", ")}`
+                );
+                return;
+              }
+              // Determine the API endpoint based on the event type
+              let reactionEndpoint;
+              let commentUpdateEndpoint;
+              let shouldEditComment = false;
+              const eventName = context.eventName;
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              try {
+                switch (eventName) {
+                  case "issues":
+                    const issueNumber = context.payload?.issue?.number;
+                    if (!issueNumber) {
+                      core.setFailed("Issue number not found in event payload");
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${issueNumber}/reactions`;
+                    // Don't edit issue bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case "issue_comment":
+                    const commentId = context.payload?.comment?.id;
+                    if (!commentId) {
+                      core.setFailed("Comment ID not found in event payload");
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  case "pull_request":
+                    const prNumber = context.payload?.pull_request?.number;
+                    if (!prNumber) {
+                      core.setFailed("Pull request number not found in event payload");
+                      return;
+                    }
+                    // PRs are "issues" for the reactions endpoint
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${prNumber}/reactions`;
+                    // Don't edit PR bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case "pull_request_review_comment":
+                    const reviewCommentId = context.payload?.comment?.id;
+                    if (!reviewCommentId) {
+                      core.setFailed("Review comment ID not found in event payload");
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  default:
+                    core.setFailed(`Unsupported event type: ${eventName}`);
+                    return;
+                }
+                console.log("Reaction API endpoint:", reactionEndpoint);
+                // Add reaction first
+                await addReaction(reactionEndpoint, reaction);
+                // Then edit comment if applicable and if it's a comment event
+                if (shouldEditComment && commentUpdateEndpoint) {
+                  console.log("Comment update endpoint:", commentUpdateEndpoint);
+                  await editCommentWithWorkflowLink(commentUpdateEndpoint, runUrl);
+                } else {
+                  if (!alias && commentUpdateEndpoint) {
+                    console.log(
+                      "Skipping comment edit - only available for alias workflows"
+                    );
+                  } else {
+                    console.log("Skipping comment edit for event type:", eventName);
+                  }
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error("Failed to process reaction and comment edit:", errorMessage);
+                core.setFailed(
+                  `Failed to process reaction and comment edit: ${errorMessage}`
+                );
+              }
+            }
+            /**
+             * Add a reaction to a GitHub issue, PR, or comment
+             * @param {string} endpoint - The GitHub API endpoint to add the reaction to
+             * @param {string} reaction - The reaction type to add
+             */
+            async function addReaction(endpoint, reaction) {
+              const response = await github.request("POST " + endpoint, {
+                content: reaction,
+                headers: {
+                  Accept: "application/vnd.github+json",
+                },
+              });
+              const reactionId = response.data?.id;
+              if (reactionId) {
+                console.log(`Successfully added reaction: ${reaction} (id: ${reactionId})`);
+                core.setOutput("reaction-id", reactionId.toString());
+              } else {
+                console.log(`Successfully added reaction: ${reaction}`);
+                core.setOutput("reaction-id", "");
+              }
+            }
+            /**
+             * Edit a comment to add a workflow run link
+             * @param {string} endpoint - The GitHub API endpoint to update the comment
+             * @param {string} runUrl - The URL of the workflow run
+             */
+            async function editCommentWithWorkflowLink(endpoint, runUrl) {
+              try {
+                // First, get the current comment content
+                const getResponse = await github.request("GET " + endpoint, {
+                  headers: {
+                    Accept: "application/vnd.github+json",
+                  },
+                });
+                const originalBody = getResponse.data.body || "";
+                const workflowLinkText = `\n\n---\n*🤖 [Workflow run](${runUrl}) triggered by this comment*`;
+                // Check if we've already added a workflow link to avoid duplicates
+                if (originalBody.includes("*🤖 [Workflow run](")) {
+                  console.log(
+                    "Comment already contains a workflow run link, skipping edit"
+                  );
+                  return;
+                }
+                const updatedBody = originalBody + workflowLinkText;
+                // Update the comment
+                const updateResponse = await github.request("PATCH " + endpoint, {
+                  body: updatedBody,
+                  headers: {
+                    Accept: "application/vnd.github+json",
+                  },
+                });
+                console.log(`Successfully updated comment with workflow link`);
+                console.log(`Comment ID: ${updateResponse.data.id}`);
+              } catch (error) {
+                // Don't fail the entire job if comment editing fails - just log it
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn("Failed to edit comment with workflow link:", errorMessage);
+                console.warn(
+                  "This is not critical - the reaction was still added successfully"
+                );
+              }
+            }
+            await main();
 
-  test-proxy:
-    needs: task
+  security-analysis-with-claude:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -167,155 +343,12 @@ jobs:
               core.setOutput("output_file", outputFile);
             }
             main();
-      - name: Setup Proxy Configuration for MCP Network Restrictions
-        run: |
-          echo "Generating proxy configuration files for MCP tools with network restrictions..."
-          
-          # Generate Squid proxy configuration
-          cat > squid.conf << 'EOF'
-          # Squid configuration for egress traffic control
-          # This configuration implements a whitelist-based proxy
-          
-          # Access log and cache configuration
-          access_log /var/log/squid/access.log squid
-          cache_log /var/log/squid/cache.log
-          cache deny all
-          
-          # Port configuration
-          http_port 3128
-          
-          # ACL definitions for allowed domains
-          acl allowed_domains dstdomain "/etc/squid/allowed_domains.txt"
-          acl localnet src 10.0.0.0/8
-          acl localnet src 172.16.0.0/12
-          acl localnet src 192.168.0.0/16
-          acl SSL_ports port 443
-          acl Safe_ports port 80
-          acl Safe_ports port 443
-          acl CONNECT method CONNECT
-          
-          # Access rules
-          # Deny requests to unknown domains (not in whitelist)
-          http_access deny !allowed_domains
-          http_access deny !Safe_ports
-          http_access deny CONNECT !SSL_ports
-          http_access allow localnet
-          http_access deny all
-          
-          # Disable caching
-          cache deny all
-          
-          # DNS settings
-          dns_nameservers 8.8.8.8 8.8.4.4
-          
-          # Forwarded headers
-          forwarded_for delete
-          via off
-          
-          # Error page customization
-          error_directory /usr/share/squid/errors/English
-          
-          # Logging
-          logformat combined %>a %[ui %[un [%tl] "%rm %ru HTTP/%rv" %>Hs %<st "%{Referer}>h" "%{User-Agent}>h" %Ss:%Sh
-          access_log /var/log/squid/access.log combined
-          
-          # Memory and file descriptor limits
-          cache_mem 64 MB
-          maximum_object_size 0 KB
-          
-          EOF
-          
-          # Generate allowed domains file
-          cat > allowed_domains.txt << 'EOF'
-          # Allowed domains for egress traffic
-          # Add one domain per line
-          example.com
-          
-          EOF
-          
-          # Generate Docker Compose configuration for fetch
-          cat > docker-compose-fetch.yml << 'EOF'
-          services:
-            squid-proxy:
-              image: ubuntu/squid:latest
-              container_name: squid-proxy-fetch
-              ports:
-                - "3128:3128"
-              volumes:
-                - ./squid.conf:/etc/squid/squid.conf:ro
-                - ./allowed_domains.txt:/etc/squid/allowed_domains.txt:ro
-                - squid-logs:/var/log/squid
-              healthcheck:
-                test: ["CMD", "squid", "-k", "check"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-              restart: unless-stopped
-              networks:
-                awproxy-fetch:
-                  ipv4_address: 172.28.179.10
-          
-            fetch:
-              image: mcp/fetch
-              container_name: fetch-mcp
-              stdin_open: true
-              tty: true
-              environment:
-                - PROXY_HOST=squid-proxy
-                - PROXY_PORT=3128
-                - HTTP_PROXY=http://squid-proxy:3128
-                - HTTPS_PROXY=http://squid-proxy:3128
-              networks:
-                - awproxy-fetch
-              depends_on:
-                squid-proxy:
-                  condition: service_healthy
-          
-          volumes:
-            squid-logs:
-          
-          networks:
-            awproxy-fetch:
-              driver: bridge
-              ipam:
-                config:
-                  - subnet: 172.28.179.0/24
-          
-          EOF
-          
-          echo "Proxy configuration files generated."
-      - name: Pre-pull images and start Squid proxy
-        run: |
-          set -e
-          echo 'Pre-pulling Docker images for proxy-enabled MCP tools...'
-          docker pull ubuntu/squid:latest
-          echo 'Pulling mcp/fetch for tool fetch'
-          docker pull mcp/fetch
-          echo 'Starting squid-proxy service for fetch'
-          docker compose -f docker-compose-fetch.yml up -d squid-proxy
-          echo 'Enforcing egress to proxy for fetch (subnet 172.28.179.0/24, squid 172.28.179.10)'
-          if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
-          $SUDO iptables -C DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 1 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-          $SUDO iptables -C DOCKER-USER -s 172.28.179.10 -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 2 -s 172.28.179.10 -j ACCEPT
-          $SUDO iptables -C DOCKER-USER -s 172.28.179.0/24 -d 172.28.179.10 -p tcp --dport 3128 -j ACCEPT 2>/dev/null || $SUDO iptables -I DOCKER-USER 3 -s 172.28.179.0/24 -d 172.28.179.10 -p tcp --dport 3128 -j ACCEPT
-          $SUDO iptables -C DOCKER-USER -s 172.28.179.0/24 -j REJECT 2>/dev/null || $SUDO iptables -A DOCKER-USER -s 172.28.179.0/24 -j REJECT
       - name: Setup MCPs
         run: |
           mkdir -p /tmp/mcp-config
           cat > /tmp/mcp-config/mcp-servers.json << 'EOF'
           {
             "mcpServers": {
-              "fetch": {
-                "command": "docker",
-                "args": [
-                  "compose",
-                  "-f",
-                  "docker-compose-fetch.yml",
-                  "run",
-                  "--rm",
-                  "fetch"
-                ]
-              },
               "github": {
                 "command": "docker",
                 "args": [
@@ -339,35 +372,30 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          ## Task Description
+          # Security Analysis with Claude
           
-          Test the MCP network permissions feature to validate that domain restrictions are properly enforced.
+          Analyze the repository codebase for security vulnerabilities and create security reports.
           
-          - Use the fetch tool to successfully retrieve content from `https://example.com/` (the only allowed domain)
-          - Attempt to access blocked domains and verify they fail with network errors:
-            - `https://httpbin.org/json` 
-            - `https://api.github.com/user`
-            - `https://www.google.com/`
-            - `http://malicious-example.com/`
-          - Verify that all blocked requests fail at the network level (proxy enforcement)
-          - Confirm that only example.com is accessible through the Squid proxy
+          For each security finding you identify, specify:
+          - The file path relative to the repository root
+          - The line number where the issue occurs
+          - Optional column number for precise location
+          - The severity level (error, warning, info, or note)
+          - A detailed description of the security issue
+          - Optionally, a custom rule ID suffix for meaningful SARIF rule identifiers
           
-          ## Reporting Instructions
-          
-          If there are any failures, security issues, or unexpected behaviors:
-          
-          - Write a detailed report documenting:
-            - Which domains were successfully accessed vs blocked
-            - Error messages received for blocked domains  
-            - Any security observations or recommendations
-            - Specific failure details that need attention
-          
-          Post the test results as an issue comment on PR #${{ github.event.pull_request.number }}.
+          Focus on common security issues like:
+          - Hardcoded secrets or credentials
+          - SQL injection vulnerabilities
+          - Cross-site scripting (XSS) issues
+          - Insecure file operations
+          - Authentication bypasses
+          - Input validation problems
           
           
           ---
           
-          ## Adding a Comment to an Issue or Pull Request, Reporting Missing Tools or Functionality
+          ## Reporting Missing Tools or Functionality
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -375,18 +403,9 @@ jobs:
           
           ### Available Output Types:
           
-          **Adding a Comment to an Issue or Pull Request**
-          
-          To add a comment to an issue or pull request:
-          1. Write an entry to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
-          ```json
-          {"type": "add-issue-comment", "body": "Your comment content in markdown"}
-          ```
-          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
-          
           **Example JSONL file content:**
           ```
-          {"type": "add-issue-comment", "body": "This is related to the issue above."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -414,7 +433,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Proxy",
+              workflow_name: "Security Analysis with Claude",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -455,9 +474,6 @@ jobs:
           # - Task
           # - TodoWrite
           # - Write
-          # - mcp__fetch__fetch
-          # - mcp__github__create_comment
-          # - mcp__github__create_issue
           # - mcp__github__download_workflow_run_artifact
           # - mcp__github__get_code_scanning_alert
           # - mcp__github__get_commit
@@ -502,7 +518,7 @@ jobs:
           # - mcp__github__search_pull_requests
           # - mcp__github__search_repositories
           # - mcp__github__search_users
-          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__fetch__fetch,mcp__github__create_comment,mcp__github__create_issue,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
+          allowed_tools: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__download_workflow_run_artifact,mcp__github__get_code_scanning_alert,mcp__github__get_commit,mcp__github__get_dependabot_alert,mcp__github__get_discussion,mcp__github__get_discussion_comments,mcp__github__get_file_contents,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__get_job_logs,mcp__github__get_me,mcp__github__get_notification_details,mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__get_pull_request_diff,mcp__github__get_pull_request_files,mcp__github__get_pull_request_reviews,mcp__github__get_pull_request_status,mcp__github__get_secret_scanning_alert,mcp__github__get_tag,mcp__github__get_workflow_run,mcp__github__get_workflow_run_logs,mcp__github__get_workflow_run_usage,mcp__github__list_branches,mcp__github__list_code_scanning_alerts,mcp__github__list_commits,mcp__github__list_dependabot_alerts,mcp__github__list_discussion_categories,mcp__github__list_discussions,mcp__github__list_issues,mcp__github__list_notifications,mcp__github__list_pull_requests,mcp__github__list_secret_scanning_alerts,mcp__github__list_tags,mcp__github__list_workflow_jobs,mcp__github__list_workflow_run_artifacts,mcp__github__list_workflow_runs,mcp__github__list_workflows,mcp__github__search_code,mcp__github__search_issues,mcp__github__search_orgs,mcp__github__search_pull_requests,mcp__github__search_repositories,mcp__github__search_users"
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_env: |
             GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
@@ -517,13 +533,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-proxy.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/security-analysis-with-claude.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-proxy.log
+            echo "No execution file output found from Agentic Action" >> /tmp/security-analysis-with-claude.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-proxy.log
+          touch /tmp/security-analysis-with-claude.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -545,7 +561,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"add-issue-comment\":{\"enabled\":true}}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{}"
         with:
           script: |
             async function main() {
@@ -1185,28 +1201,11 @@ jobs:
       - name: Clean up engine output files
         run: |
           rm -f output.txt
-      - name: Extract squid access logs
-        if: always()
-        run: |
-          mkdir -p /tmp/access-logs
-          echo 'Extracting access.log from squid-proxy-fetch container'
-          if docker ps -a --format '{{.Names}}' | grep -q '^squid-proxy-fetch$'; then
-            docker cp squid-proxy-fetch:/var/log/squid/access.log /tmp/access-logs/access-fetch.log 2>/dev/null || echo 'No access.log found for fetch'
-          else
-            echo 'Container squid-proxy-fetch not found'
-          fi
-      - name: Upload squid access logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: access.log
-          path: /tmp/access-logs/
-          if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-proxy.log
+          AGENT_LOG_FILE: /tmp/security-analysis-with-claude.log
         with:
           script: |
             function main() {
@@ -1523,28 +1522,32 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-proxy.log
-          path: /tmp/test-proxy.log
+          name: security-analysis-with-claude.log
+          path: /tmp/security-analysis-with-claude.log
           if-no-files-found: warn
 
-  create_issue_comment:
-    needs: test-proxy
-    if: github.event.issue.number || github.event.pull_request.number
+  create_security_report:
+    needs: security-analysis-with-claude
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
+      security-events: write
+      actions: read
     timeout-minutes: 10
     outputs:
-      comment_id: ${{ steps.create_comment.outputs.comment_id }}
-      comment_url: ${{ steps.create_comment.outputs.comment_url }}
+      artifact_uploaded: ${{ steps.create_security_report.outputs.artifact_uploaded }}
+      codeql_uploaded: ${{ steps.create_security_report.outputs.codeql_uploaded }}
+      findings_count: ${{ steps.create_security_report.outputs.findings_count }}
+      sarif_file: ${{ steps.create_security_report.outputs.sarif_file }}
     steps:
-      - name: Add Issue Comment
-        id: create_comment
+      - name: Create Security Report
+        id: create_security_report
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-proxy.outputs.output }}
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.security-analysis-with-claude.outputs.output }}
+          GITHUB_AW_SECURITY_REPORT_MAX: 10
+          GITHUB_AW_SECURITY_REPORT_DRIVER: Test Claude Security Report
+          GITHUB_AW_WORKFLOW_FILENAME: test-claude-create-security-report
         with:
           script: |
             async function main() {
@@ -1574,139 +1577,251 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find all add-issue-comment items
-              const commentItems = validatedOutput.items.filter(
-                /** @param {any} item */ item => item.type === "add-issue-comment"
+              // Find all create-security-report items
+              const securityItems = validatedOutput.items.filter(
+                /** @param {any} item */ item => item.type === "create-security-report"
               );
-              if (commentItems.length === 0) {
-                console.log("No add-issue-comment items found in agent output");
+              if (securityItems.length === 0) {
+                console.log("No create-security-report items found in agent output");
                 return;
               }
-              console.log(`Found ${commentItems.length} add-issue-comment item(s)`);
-              // Get the target configuration from environment variable
-              const commentTarget = process.env.GITHUB_AW_COMMENT_TARGET || "triggering";
-              console.log(`Comment target configuration: ${commentTarget}`);
-              // Check if we're in an issue or pull request context
-              const isIssueContext =
-                context.eventName === "issues" || context.eventName === "issue_comment";
-              const isPRContext =
-                context.eventName === "pull_request" ||
-                context.eventName === "pull_request_review" ||
-                context.eventName === "pull_request_review_comment";
-              // Validate context based on target configuration
-              if (commentTarget === "triggering" && !isIssueContext && !isPRContext) {
+              console.log(`Found ${securityItems.length} create-security-report item(s)`);
+              // Get the max configuration from environment variable
+              const maxFindings = process.env.GITHUB_AW_SECURITY_REPORT_MAX
+                ? parseInt(process.env.GITHUB_AW_SECURITY_REPORT_MAX)
+                : 0; // 0 means unlimited
+              console.log(
+                `Max findings configuration: ${maxFindings === 0 ? "unlimited" : maxFindings}`
+              );
+              // Get the driver configuration from environment variable
+              const driverName =
+                process.env.GITHUB_AW_SECURITY_REPORT_DRIVER ||
+                "GitHub Agentic Workflows Security Scanner";
+              console.log(`Driver name: ${driverName}`);
+              // Get the workflow filename for rule ID prefix
+              const workflowFilename =
+                process.env.GITHUB_AW_WORKFLOW_FILENAME || "workflow";
+              console.log(`Workflow filename for rule ID prefix: ${workflowFilename}`);
+              const validFindings = [];
+              // Process each security item and validate the findings
+              for (let i = 0; i < securityItems.length; i++) {
+                const securityItem = securityItems[i];
                 console.log(
-                  'Target is "triggering" but not running in issue or pull request context, skipping comment creation'
+                  `Processing create-security-report item ${i + 1}/${securityItems.length}:`,
+                  {
+                    file: securityItem.file,
+                    line: securityItem.line,
+                    severity: securityItem.severity,
+                    messageLength: securityItem.message
+                      ? securityItem.message.length
+                      : "undefined",
+                    ruleIdSuffix: securityItem.ruleIdSuffix || "not specified",
+                  }
                 );
-                return;
-              }
-              const createdComments = [];
-              // Process each comment item
-              for (let i = 0; i < commentItems.length; i++) {
-                const commentItem = commentItems[i];
-                console.log(
-                  `Processing add-issue-comment item ${i + 1}/${commentItems.length}:`,
-                  { bodyLength: commentItem.body.length }
-                );
-                // Determine the issue/PR number and comment endpoint for this comment
-                let issueNumber;
-                let commentEndpoint;
-                if (commentTarget === "*") {
-                  // For target "*", we need an explicit issue number from the comment item
-                  if (commentItem.issue_number) {
-                    issueNumber = parseInt(commentItem.issue_number, 10);
-                    if (isNaN(issueNumber) || issueNumber <= 0) {
-                      console.log(
-                        `Invalid issue number specified: ${commentItem.issue_number}`
-                      );
-                      continue;
-                    }
-                    commentEndpoint = "issues";
-                  } else {
-                    console.log(
-                      'Target is "*" but no issue_number specified in comment item'
-                    );
-                    continue;
-                  }
-                } else if (commentTarget && commentTarget !== "triggering") {
-                  // Explicit issue number specified in target
-                  issueNumber = parseInt(commentTarget, 10);
-                  if (isNaN(issueNumber) || issueNumber <= 0) {
-                    console.log(
-                      `Invalid issue number in target configuration: ${commentTarget}`
-                    );
-                    continue;
-                  }
-                  commentEndpoint = "issues";
-                } else {
-                  // Default behavior: use triggering issue/PR
-                  if (isIssueContext) {
-                    if (context.payload.issue) {
-                      issueNumber = context.payload.issue.number;
-                      commentEndpoint = "issues";
-                    } else {
-                      console.log("Issue context detected but no issue found in payload");
-                      continue;
-                    }
-                  } else if (isPRContext) {
-                    if (context.payload.pull_request) {
-                      issueNumber = context.payload.pull_request.number;
-                      commentEndpoint = "issues"; // PR comments use the issues API endpoint
-                    } else {
-                      console.log(
-                        "Pull request context detected but no pull request found in payload"
-                      );
-                      continue;
-                    }
-                  }
-                }
-                if (!issueNumber) {
-                  console.log("Could not determine issue or pull request number");
+                // Validate required fields
+                if (!securityItem.file) {
+                  console.log('Missing required field "file" in security report item');
                   continue;
                 }
-                // Extract body from the JSON item
-                let body = commentItem.body.trim();
-                // Add AI disclaimer with run id, run htmlurl
-                const runId = context.runId;
-                const runUrl = context.payload.repository
-                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
-                  : `https://github.com/actions/runs/${runId}`;
-                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
-                console.log(`Creating comment on ${commentEndpoint} #${issueNumber}`);
-                console.log("Comment content length:", body.length);
-                try {
-                  // Create the comment using GitHub API
-                  const { data: comment } = await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issueNumber,
-                    body: body,
-                  });
-                  console.log("Created comment #" + comment.id + ": " + comment.html_url);
-                  createdComments.push(comment);
-                  // Set output for the last created comment (for backward compatibility)
-                  if (i === commentItems.length - 1) {
-                    core.setOutput("comment_id", comment.id);
-                    core.setOutput("comment_url", comment.html_url);
-                  }
-                } catch (error) {
-                  console.error(
-                    `✗ Failed to create comment:`,
-                    error instanceof Error ? error.message : String(error)
+                if (
+                  !securityItem.line ||
+                  (typeof securityItem.line !== "number" &&
+                    typeof securityItem.line !== "string")
+                ) {
+                  console.log(
+                    'Missing or invalid required field "line" in security report item'
                   );
-                  throw error;
+                  continue;
+                }
+                if (!securityItem.severity || typeof securityItem.severity !== "string") {
+                  console.log(
+                    'Missing or invalid required field "severity" in security report item'
+                  );
+                  continue;
+                }
+                if (!securityItem.message || typeof securityItem.message !== "string") {
+                  console.log(
+                    'Missing or invalid required field "message" in security report item'
+                  );
+                  continue;
+                }
+                // Parse line number
+                const line = parseInt(securityItem.line, 10);
+                if (isNaN(line) || line <= 0) {
+                  console.log(`Invalid line number: ${securityItem.line}`);
+                  continue;
+                }
+                // Parse optional column number
+                let column = 1; // Default to column 1
+                if (securityItem.column !== undefined) {
+                  if (
+                    typeof securityItem.column !== "number" &&
+                    typeof securityItem.column !== "string"
+                  ) {
+                    console.log(
+                      'Invalid field "column" in security report item (must be number or string)'
+                    );
+                    continue;
+                  }
+                  const parsedColumn = parseInt(securityItem.column, 10);
+                  if (isNaN(parsedColumn) || parsedColumn <= 0) {
+                    console.log(`Invalid column number: ${securityItem.column}`);
+                    continue;
+                  }
+                  column = parsedColumn;
+                }
+                // Parse optional rule ID suffix
+                let ruleIdSuffix = null;
+                if (securityItem.ruleIdSuffix !== undefined) {
+                  if (typeof securityItem.ruleIdSuffix !== "string") {
+                    console.log(
+                      'Invalid field "ruleIdSuffix" in security report item (must be string)'
+                    );
+                    continue;
+                  }
+                  // Validate that the suffix doesn't contain invalid characters
+                  const trimmedSuffix = securityItem.ruleIdSuffix.trim();
+                  if (trimmedSuffix.length === 0) {
+                    console.log(
+                      'Invalid field "ruleIdSuffix" in security report item (cannot be empty)'
+                    );
+                    continue;
+                  }
+                  // Check for characters that would be problematic in rule IDs
+                  if (!/^[a-zA-Z0-9_-]+$/.test(trimmedSuffix)) {
+                    console.log(
+                      `Invalid ruleIdSuffix "${trimmedSuffix}" (must contain only alphanumeric characters, hyphens, and underscores)`
+                    );
+                    continue;
+                  }
+                  ruleIdSuffix = trimmedSuffix;
+                }
+                // Validate severity level and map to SARIF level
+                const severityMap = {
+                  error: "error",
+                  warning: "warning",
+                  info: "note",
+                  note: "note",
+                };
+                const normalizedSeverity = securityItem.severity.toLowerCase();
+                if (!severityMap[normalizedSeverity]) {
+                  console.log(
+                    `Invalid severity level: ${securityItem.severity} (must be error, warning, info, or note)`
+                  );
+                  continue;
+                }
+                const sarifLevel = severityMap[normalizedSeverity];
+                // Create a valid finding object
+                validFindings.push({
+                  file: securityItem.file.trim(),
+                  line: line,
+                  column: column,
+                  severity: normalizedSeverity,
+                  sarifLevel: sarifLevel,
+                  message: securityItem.message.trim(),
+                  ruleIdSuffix: ruleIdSuffix,
+                });
+                // Check if we've reached the max limit
+                if (maxFindings > 0 && validFindings.length >= maxFindings) {
+                  console.log(`Reached maximum findings limit: ${maxFindings}`);
+                  break;
                 }
               }
-              // Write summary for all created comments
-              if (createdComments.length > 0) {
-                let summaryContent = "\n\n## GitHub Comments\n";
-                for (const comment of createdComments) {
-                  summaryContent += `- Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
+              if (validFindings.length === 0) {
+                console.log("No valid security findings to report");
+                return;
+              }
+              console.log(`Processing ${validFindings.length} valid security finding(s)`);
+              // Generate SARIF file
+              const sarifContent = {
+                $schema:
+                  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+                version: "2.1.0",
+                runs: [
+                  {
+                    tool: {
+                      driver: {
+                        name: driverName,
+                        version: "1.0.0",
+                        informationUri: "https://github.com/githubnext/gh-aw-copilots",
+                      },
+                    },
+                    results: validFindings.map((finding, index) => ({
+                      ruleId: finding.ruleIdSuffix
+                        ? `${workflowFilename}-${finding.ruleIdSuffix}`
+                        : `${workflowFilename}-security-finding-${index + 1}`,
+                      message: { text: finding.message },
+                      level: finding.sarifLevel,
+                      locations: [
+                        {
+                          physicalLocation: {
+                            artifactLocation: { uri: finding.file },
+                            region: {
+                              startLine: finding.line,
+                              startColumn: finding.column,
+                            },
+                          },
+                        },
+                      ],
+                    })),
+                  },
+                ],
+              };
+              // Write SARIF file to filesystem
+              const fs = require("fs");
+              const path = require("path");
+              const sarifFileName = "security-report.sarif";
+              const sarifFilePath = path.join(process.cwd(), sarifFileName);
+              try {
+                fs.writeFileSync(sarifFilePath, JSON.stringify(sarifContent, null, 2));
+                console.log(`✓ Created SARIF file: ${sarifFilePath}`);
+                console.log(`SARIF file size: ${fs.statSync(sarifFilePath).size} bytes`);
+                // Set outputs for the GitHub Action
+                core.setOutput("sarif_file", sarifFilePath);
+                core.setOutput("findings_count", validFindings.length);
+                core.setOutput("artifact_uploaded", "pending");
+                core.setOutput("codeql_uploaded", "pending");
+                // Write summary with findings
+                let summaryContent = "\n\n## Security Report\n";
+                summaryContent += `Found **${validFindings.length}** security finding(s):\n\n`;
+                for (const finding of validFindings) {
+                  const emoji =
+                    finding.severity === "error"
+                      ? "🔴"
+                      : finding.severity === "warning"
+                        ? "🟡"
+                        : "🔵";
+                  summaryContent += `${emoji} **${finding.severity.toUpperCase()}** in \`${finding.file}:${finding.line}\`: ${finding.message}\n`;
                 }
+                summaryContent += `\n📄 SARIF file created: \`${sarifFileName}\`\n`;
+                summaryContent += `🔍 Findings will be uploaded to GitHub Code Scanning\n`;
                 await core.summary.addRaw(summaryContent).write();
+              } catch (error) {
+                console.error(
+                  `✗ Failed to create SARIF file:`,
+                  error instanceof Error ? error.message : String(error)
+                );
+                throw error;
               }
-              console.log(`Successfully created ${createdComments.length} comment(s)`);
-              return createdComments;
+              console.log(
+                `Successfully created security report with ${validFindings.length} finding(s)`
+              );
+              return {
+                sarifFile: sarifFilePath,
+                findingsCount: validFindings.length,
+                findings: validFindings,
+              };
             }
             await main();
+      - name: Upload SARIF artifact
+        if: steps.create_security_report.outputs.sarif_file
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report.sarif
+          path: ${{ steps.create_security_report.outputs.sarif_file }}
+      - name: Upload SARIF to GitHub Security
+        if: steps.create_security_report.outputs.sarif_file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.create_security_report.outputs.sarif_file }}
 
