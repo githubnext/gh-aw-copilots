@@ -961,3 +961,141 @@ func TestBuildNotFromFork(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expected, rendered)
 	}
 }
+
+// TestForkProtectionForSpecificWorkflows tests that fork protection is applied correctly
+func TestForkProtectionForSpecificWorkflows(t *testing.T) {
+	tests := []struct {
+		name                      string
+		workflowName              string
+		onSection                 string
+		expectForkProtection      bool
+		expectedConditionContains string
+	}{
+		{
+			name:                      "test-proxy with pull_request should get fork protection",
+			workflowName:              "Test Proxy",
+			onSection:                 "on:\n  pull_request:\n    branches: [ \"main\" ]\n  workflow_dispatch:",
+			expectForkProtection:      true,
+			expectedConditionContains: "github.event.pull_request.head.repo.full_name == github.repository",
+		},
+		{
+			name:                      "weekly-research without pull_request should not get fork protection",
+			workflowName:              "Weekly Research",
+			onSection:                 "on:\n  schedule:\n    - cron: \"0 9 * * 1\"\n  workflow_dispatch:",
+			expectForkProtection:      false,
+			expectedConditionContains: "",
+		},
+		{
+			name:                      "weekly-research with pull_request should get fork protection",
+			workflowName:              "Weekly Research",
+			onSection:                 "on:\n  schedule:\n    - cron: \"0 9 * * 1\"\n  pull_request:\n    branches: [main]",
+			expectForkProtection:      true,
+			expectedConditionContains: "github.event.pull_request.head.repo.full_name == github.repository",
+		},
+		{
+			name:                      "other workflow with pull_request should not get fork protection",
+			workflowName:              "Some Other Workflow",
+			onSection:                 "on:\n  pull_request:\n    branches: [ \"main\" ]\n  workflow_dispatch:",
+			expectForkProtection:      false,
+			expectedConditionContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compiler := NewCompiler(false, "", "test")
+
+			workflowData := &WorkflowData{
+				Name: tt.workflowName,
+				On:   tt.onSection,
+			}
+
+			condition := compiler.buildForkProtectionCondition(workflowData)
+
+			if tt.expectForkProtection {
+				if condition == "" {
+					t.Errorf("Expected fork protection condition, but got empty string")
+				} else if !strings.Contains(condition, tt.expectedConditionContains) {
+					t.Errorf("Expected condition to contain '%s', but got: %s", tt.expectedConditionContains, condition)
+				}
+			} else {
+				if condition != "" {
+					t.Errorf("Expected no fork protection condition, but got: %s", condition)
+				}
+			}
+		})
+	}
+}
+
+// TestNeedsForkProtection tests the workflow name matching logic
+func TestNeedsForkProtection(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		workflowName string
+		expected     bool
+	}{
+		{"Test Proxy", true},
+		{"Weekly Research", true},
+		{"test proxy", false},      // Case sensitive
+		{"weekly research", false}, // Case sensitive
+		{"Some Other Workflow", false},
+		{"Test Proxy Extended", false}, // Must be exact match
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.workflowName, func(t *testing.T) {
+			result := compiler.needsForkProtection(tt.workflowName)
+			if result != tt.expected {
+				t.Errorf("For workflow '%s', expected %t, got %t", tt.workflowName, tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestHasPullRequestTrigger tests the pull_request trigger detection logic
+func TestHasPullRequestTrigger(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name      string
+		onSection string
+		expected  bool
+	}{
+		{
+			name:      "has pull_request trigger",
+			onSection: "on:\n  pull_request:\n    branches: [main]",
+			expected:  true,
+		},
+		{
+			name:      "has pull_request with other triggers",
+			onSection: "on:\n  schedule:\n    - cron: '0 9 * * 1'\n  pull_request:\n    branches: [main]",
+			expected:  true,
+		},
+		{
+			name:      "only schedule trigger",
+			onSection: "on:\n  schedule:\n    - cron: '0 9 * * 1'",
+			expected:  false,
+		},
+		{
+			name:      "workflow_dispatch only",
+			onSection: "on:\n  workflow_dispatch:",
+			expected:  false,
+		},
+		{
+			name:      "empty section",
+			onSection: "",
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compiler.hasPullRequestTrigger(tt.onSection)
+			if result != tt.expected {
+				t.Errorf("Expected %t, got %t for onSection: %s", tt.expected, result, tt.onSection)
+			}
+		})
+	}
+}

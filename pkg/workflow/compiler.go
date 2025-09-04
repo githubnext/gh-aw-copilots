@@ -2306,9 +2306,12 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 		}
 	}
 
+	// Check if this workflow needs fork protection
+	jobCondition := c.buildForkProtectionCondition(data)
+
 	job := &Job{
 		Name:        jobName,
-		If:          "", // Remove the If condition since task job handles alias checks
+		If:          jobCondition,
 		RunsOn:      c.indentYAMLLines(data.RunsOn, "    "),
 		Permissions: c.indentYAMLLines(data.Permissions, "    "),
 		Steps:       steps,
@@ -2317,6 +2320,57 @@ func (c *Compiler) buildMainJob(data *WorkflowData, jobName string, taskJobCreat
 	}
 
 	return job, nil
+}
+
+// buildForkProtectionCondition builds a condition to prevent specific workflows from running in forked PRs
+func (c *Compiler) buildForkProtectionCondition(data *WorkflowData) string {
+	// Check if this workflow needs fork protection (test-proxy or weekly-research)
+	needsForkProtection := c.needsForkProtection(data.Name)
+	if !needsForkProtection {
+		return "" // No condition needed
+	}
+
+	// Check if the workflow has pull_request triggers
+	hasPullRequestTrigger := c.hasPullRequestTrigger(data.On)
+	if !hasPullRequestTrigger {
+		return "" // No fork protection needed if no pull_request triggers
+	}
+
+	// Build condition: only run if not a pull request from a fork
+	// For pull_request events, check that it's not from a fork
+	// For non-pull_request events, allow execution
+	notPullRequestEvent := BuildNotEquals(
+		BuildPropertyAccess("github.event_name"),
+		BuildStringLiteral("pull_request"),
+	)
+
+	notFromForkCondition := BuildNotFromFork()
+
+	// Combine: (not a PR event) OR (PR but not from fork)
+	condition := &OrNode{
+		Left:  notPullRequestEvent,
+		Right: notFromForkCondition,
+	}
+
+	return fmt.Sprintf("if: %s", condition.Render())
+}
+
+// needsForkProtection checks if a workflow requires fork protection
+func (c *Compiler) needsForkProtection(workflowName string) bool {
+	// Define workflows that need fork protection
+	protectedWorkflows := []string{"Test Proxy", "Weekly Research"}
+
+	for _, protected := range protectedWorkflows {
+		if workflowName == protected {
+			return true
+		}
+	}
+	return false
+}
+
+// hasPullRequestTrigger checks if the workflow has pull_request triggers
+func (c *Compiler) hasPullRequestTrigger(onSection string) bool {
+	return strings.Contains(onSection, "pull_request:")
 }
 
 // generateSafetyChecks generates safety checks for stop-time before executing agentic tools
