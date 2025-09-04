@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -64,6 +63,12 @@ func (e *GenAIScriptEngine) GetExecutionConfig(workflowName string, logFile stri
 		modelArg = fmt.Sprintf(" --model %s", model)
 	}
 
+	// Build max-runs argument if specified
+	maxRunsArg := ""
+	if engineConfig != nil && engineConfig.MaxTurns != "" {
+		maxRunsArg = fmt.Sprintf(" --max-runs %s", engineConfig.MaxTurns)
+	}
+
 	command := fmt.Sprintf(`set -o pipefail
 
 # Create GenAIScript workspace
@@ -87,7 +92,7 @@ EOF
 cd /tmp/genaiscript-workspace
 
 # Run genaiscript with the markdown file - pipefail ensures genaiscript exit code is preserved
-genaiscript run workflow.genai.md%s --out /tmp/genaiscript-output 2>&1 | tee %s`, model, modelArg, logFile)
+genaiscript run workflow.genai.md%s%s --out /tmp/genaiscript-output 2>&1 | tee %s`, model, modelArg, maxRunsArg, logFile)
 
 	env := map[string]string{
 		"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
@@ -118,58 +123,11 @@ func (e *GenAIScriptEngine) RenderMCPConfig(yaml *strings.Builder, tools map[str
 	}
 }
 
-// ParseLogMetrics implements engine-specific log parsing for GenAIScript
+// ParseLogMetrics implements a simple log metrics parser for GenAIScript
+// Returns empty metrics since GenAIScript logs are sent directly to summary
 func (e *GenAIScriptEngine) ParseLogMetrics(logContent string, verbose bool) LogMetrics {
-	var metrics LogMetrics
-	var totalTokenUsage int
-
-	lines := strings.Split(logContent, "\n")
-
-	for _, line := range lines {
-		// Skip empty lines
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		// Extract GenAIScript-specific token usage
-		if tokenUsage := e.extractGenAIScriptTokenUsage(line); tokenUsage > 0 {
-			totalTokenUsage += tokenUsage
-		}
-
-		// Count errors and warnings
-		lowerLine := strings.ToLower(line)
-		if strings.Contains(lowerLine, "error") {
-			metrics.ErrorCount++
-		}
-		if strings.Contains(lowerLine, "warning") {
-			metrics.WarningCount++
-		}
-	}
-
-	metrics.TokenUsage = totalTokenUsage
-
-	return metrics
-}
-
-// extractGenAIScriptTokenUsage extracts token usage from GenAIScript-specific log lines
-func (e *GenAIScriptEngine) extractGenAIScriptTokenUsage(line string) int {
-	// GenAIScript typically logs token usage in formats like:
-	// "tokens: 1234" or "completion_tokens: 567" or "total_tokens: 1801"
-	patterns := []string{
-		`total[_\s]tokens[:\s]+(\d+)`,
-		`tokens[:\s]+(\d+)`,
-		`completion[_\s]tokens[:\s]+(\d+)`,
-	}
-
-	for _, pattern := range patterns {
-		if match := ExtractFirstMatch(line, pattern); match != "" {
-			if count, err := strconv.Atoi(match); err == nil {
-				return count
-			}
-		}
-	}
-
-	return 0
+	// Return empty metrics as GenAIScript logs are sent directly to summary without parsing
+	return LogMetrics{}
 }
 
 // GetLogParserScript returns the JavaScript script name for parsing GenAIScript logs

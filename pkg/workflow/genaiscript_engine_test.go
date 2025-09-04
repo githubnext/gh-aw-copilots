@@ -119,6 +119,40 @@ func TestGenAIScriptEngineWithModel(t *testing.T) {
 	}
 }
 
+func TestGenAIScriptEngineWithMaxTurns(t *testing.T) {
+	engine := NewGenAIScriptEngine()
+
+	engineConfig := &EngineConfig{
+		MaxTurns: "5",
+	}
+
+	config := engine.GetExecutionConfig("test-workflow", "/tmp/test.log", engineConfig, nil, false)
+
+	// Check that the command includes --max-runs argument
+	if !containsStringInCommand(config.Command, "--max-runs 5") {
+		t.Error("Expected execution command to include '--max-runs 5'")
+	}
+}
+
+func TestGenAIScriptEngineWithModelAndMaxTurns(t *testing.T) {
+	engine := NewGenAIScriptEngine()
+
+	engineConfig := &EngineConfig{
+		Model:    "gpt-4o-mini",
+		MaxTurns: "3",
+	}
+
+	config := engine.GetExecutionConfig("test-workflow", "/tmp/test.log", engineConfig, nil, false)
+
+	// Check that the command includes both model and max-runs arguments
+	if !containsStringInCommand(config.Command, "--model gpt-4o-mini") {
+		t.Error("Expected execution command to include '--model gpt-4o-mini'")
+	}
+	if !containsStringInCommand(config.Command, "--max-runs 3") {
+		t.Error("Expected execution command to include '--max-runs 3'")
+	}
+}
+
 func TestGenAIScriptEngineWithOutput(t *testing.T) {
 	engine := NewGenAIScriptEngine()
 
@@ -133,36 +167,36 @@ func TestGenAIScriptEngineWithOutput(t *testing.T) {
 func TestGenAIScriptEngineLogParsing(t *testing.T) {
 	engine := NewGenAIScriptEngine()
 
-	// Test empty log
+	// Test empty log - should return empty metrics since we don't parse logs
 	metrics := engine.ParseLogMetrics("", false)
 	if metrics.TokenUsage != 0 || metrics.ErrorCount != 0 || metrics.WarningCount != 0 {
 		t.Error("Expected empty metrics for empty log")
 	}
 
-	// Test log with token usage
+	// Test log with token usage - should still return empty metrics since we don't parse
 	logWithTokens := `Running GenAIScript...
 total_tokens: 1500
 Completed successfully`
 
 	metrics = engine.ParseLogMetrics(logWithTokens, false)
-	if metrics.TokenUsage != 1500 {
-		t.Errorf("Expected token usage 1500, got %d", metrics.TokenUsage)
+	if metrics.TokenUsage != 0 {
+		t.Errorf("Expected token usage 0 (not parsed), got %d", metrics.TokenUsage)
 	}
 
-	// Test log with errors and warnings
+	// Test log with errors and warnings - should still return empty metrics
 	logWithErrorsWarnings := `Warning: deprecated feature used
 Error: API rate limit exceeded
 tokens: 800`
 
 	metrics = engine.ParseLogMetrics(logWithErrorsWarnings, false)
-	if metrics.ErrorCount != 1 {
-		t.Errorf("Expected 1 error, got %d", metrics.ErrorCount)
+	if metrics.ErrorCount != 0 {
+		t.Errorf("Expected 0 errors (not parsed), got %d", metrics.ErrorCount)
 	}
-	if metrics.WarningCount != 1 {
-		t.Errorf("Expected 1 warning, got %d", metrics.WarningCount)
+	if metrics.WarningCount != 0 {
+		t.Errorf("Expected 0 warnings (not parsed), got %d", metrics.WarningCount)
 	}
-	if metrics.TokenUsage != 800 {
-		t.Errorf("Expected token usage 800, got %d", metrics.TokenUsage)
+	if metrics.TokenUsage != 0 {
+		t.Errorf("Expected token usage 0 (not parsed), got %d", metrics.TokenUsage)
 	}
 }
 
