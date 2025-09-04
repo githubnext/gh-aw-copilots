@@ -10,165 +10,6 @@ on:
   schedule:
     - cron: "0 12 * * 1"  # Weekly on Mondays at noon
 
-engine:
-  id: custom
-  steps:
-    - name: Setup test environment
-      run: |
-        echo "Testing all safe outputs with custom engine"
-        echo "Creating sample outputs for each safe output type..."
-        
-        # Create directory for safe outputs
-        mkdir -p safe-outputs
-        
-    - name: Generate Create Issue Output
-      run: |
-        cat > safe-outputs/create-issue.md << 'EOF'
-        # Test Issue Created by Custom Engine
-        
-        This issue was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-issue safe output functionality.
-        
-        **Test Details:**
-        - Engine: Custom
-        - Trigger: ${{ github.event_name }}
-        - Repository: ${{ github.repository }}
-        - Run ID: ${{ github.run_id }}
-        
-        This is a test issue and can be closed after verification.
-        EOF
-        
-    - name: Generate Add Issue Comment Output
-      run: |
-        cat > safe-outputs/add-issue-comment.md << 'EOF'
-        ## Test Comment from Custom Engine
-        
-        This comment was automatically posted by the test-safe-outputs-custom-engine workflow to validate the add-issue-comment safe output functionality.
-        
-        **Test Information:**
-        - Workflow: test-safe-outputs-custom-engine
-        - Engine Type: Custom (GitHub Actions steps)
-        - Execution Time: $(date)
-        - Event: ${{ github.event_name }}
-        
-        ✅ Safe output testing in progress...
-        EOF
-        
-    - name: Generate Add Issue Labels Output
-      run: |
-        cat > safe-outputs/add-issue-labels.txt << 'EOF'
-        test-safe-outputs
-        automation
-        custom-engine
-        EOF
-        
-    - name: Generate Update Issue Output
-      run: |
-        cat > safe-outputs/update-issue.json << 'EOF'
-        {
-          "title": "[UPDATED] Test Issue - Custom Engine Safe Output Test",
-          "body": "# Updated Issue Body\n\nThis issue has been updated by the test-safe-outputs-custom-engine workflow to validate the update-issue safe output functionality.\n\n**Update Details:**\n- Updated by: Custom Engine\n- Update time: $(date)\n- Original trigger: ${{ github.event_name }}\n\n**Test Status:** ✅ Update functionality verified",
-          "status": "open"
-        }
-        EOF
-        
-    - name: Generate Create Pull Request Output
-      run: |
-        # Create a test file change
-        echo "# Test file created by custom engine safe output test" > test-custom-engine-$(date +%Y%m%d-%H%M%S).md
-        echo "This file was created to test the create-pull-request safe output." >> test-custom-engine-$(date +%Y%m%d-%H%M%S).md
-        echo "Generated at: $(date)" >> test-custom-engine-$(date +%Y%m%d-%H%M%S).md
-        
-        # Create PR description
-        cat > safe-outputs/create-pull-request.md << 'EOF'
-        # Test Pull Request - Custom Engine Safe Output
-        
-        This pull request was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-pull-request safe output functionality.
-        
-        ## Changes Made
-        - Created test file with timestamp
-        - Demonstrates custom engine file creation capabilities
-        
-        ## Test Information
-        - Engine: Custom (GitHub Actions steps)
-        - Workflow: test-safe-outputs-custom-engine
-        - Trigger Event: ${{ github.event_name }}
-        - Run ID: ${{ github.run_id }}
-        
-        This PR can be merged or closed after verification of the safe output functionality.
-        EOF
-        
-    - name: Generate Create Discussion Output
-      run: |
-        cat > safe-outputs/create-discussion.md << 'EOF'
-        # Test Discussion - Custom Engine Safe Output
-        
-        This discussion was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-discussion safe output functionality.
-        
-        ## Purpose
-        This discussion serves as a test of the safe output system's ability to create GitHub discussions through custom engine workflows.
-        
-        ## Test Details
-        - **Engine Type:** Custom (GitHub Actions steps)  
-        - **Workflow:** test-safe-outputs-custom-engine
-        - **Created:** $(date)
-        - **Trigger:** ${{ github.event_name }}
-        - **Repository:** ${{ github.repository }}
-        
-        ## Discussion Points
-        1. Custom engine successfully executed
-        2. Safe output file generation completed
-        3. Discussion creation triggered
-        
-        Feel free to participate in this test discussion or archive it after verification.
-        EOF
-        
-    - name: Generate PR Review Comment Output
-      run: |
-        cat > safe-outputs/create-pull-request-review-comment.json << 'EOF'
-        {
-          "path": "README.md",
-          "line": 1,
-          "body": "## Custom Engine Review Comment Test\n\nThis review comment was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-pull-request-review-comment safe output functionality.\n\n**Review Details:**\n- Generated by: Custom Engine\n- Test time: $(date)\n- Workflow: test-safe-outputs-custom-engine\n\n✅ PR review comment safe output test completed."
-        }
-        EOF
-        
-    - name: Generate Push to Branch Output
-      run: |
-        # Create another test file for branch push
-        echo "# Branch Push Test File" > branch-push-test-$(date +%Y%m%d-%H%M%S).md
-        echo "This file tests the push-to-branch safe output functionality." >> branch-push-test-$(date +%Y%m%d-%H%M%S).md
-        echo "Created by custom engine at: $(date)" >> branch-push-test-$(date +%Y%m%d-%H%M%S).md
-        
-        cat > safe-outputs/push-to-branch.md << 'EOF'
-        Custom engine test: Push to branch functionality
-        
-        This commit was generated by the test-safe-outputs-custom-engine workflow to validate the push-to-branch safe output functionality.
-        
-        Files created:
-        - branch-push-test-[timestamp].md
-        
-        Test executed at: $(date)
-        EOF
-        
-    - name: Generate Missing Tool Output
-      run: |
-        cat > safe-outputs/missing-tool.json << 'EOF'
-        {
-          "tool_name": "example-missing-tool",
-          "reason": "This is a test of the missing-tool safe output functionality. No actual tool is missing.",
-          "alternatives": "This is a simulated missing tool report generated by the custom engine test workflow.",
-          "context": "test-safe-outputs-custom-engine workflow validation"
-        }
-        EOF
-        
-    - name: List generated outputs
-      run: |
-        echo "Generated safe output files:"
-        find safe-outputs -type f -exec echo "- {}" \; -exec head -3 {} \; -exec echo "" \;
-        
-        echo "Additional test files created:"
-        ls -la *.md 2>/dev/null || echo "No additional .md files found"
-
 safe-outputs:
   create-issue:
     title-prefix: "[Custom Engine Test] "
@@ -200,6 +41,68 @@ safe-outputs:
   create-pull-request-review-comment:
     max: 1
     side: "RIGHT"
+
+engine:
+  id: custom
+  steps:
+    - name: Generate Create Issue Output
+      run: |
+        echo '{"type": "create-issue", "title": "[Custom Engine Test] Test Issue Created by Custom Engine", "body": "# Test Issue Created by Custom Engine\n\nThis issue was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-issue safe output functionality.\n\n**Test Details:**\n- Engine: Custom\n- Trigger: ${{ github.event_name }}\n- Repository: ${{ github.repository }}\n- Run ID: ${{ github.run_id }}\n\nThis is a test issue and can be closed after verification.", "labels": ["test-safe-outputs", "automation", "custom-engine"]}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Add Issue Comment Output
+      run: |
+        echo '{"type": "add-issue-comment", "body": "## Test Comment from Custom Engine\n\nThis comment was automatically posted by the test-safe-outputs-custom-engine workflow to validate the add-issue-comment safe output functionality.\n\n**Test Information:**\n- Workflow: test-safe-outputs-custom-engine\n- Engine Type: Custom (GitHub Actions steps)\n- Execution Time: '"$(date)"'\n- Event: ${{ github.event_name }}\n\n✅ Safe output testing in progress..."}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Add Issue Labels Output
+      run: |
+        echo '{"type": "add-issue-label", "labels": ["test-safe-outputs", "automation", "custom-engine"]}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Update Issue Output
+      run: |
+        echo '{"type": "update-issue", "title": "[UPDATED] Test Issue - Custom Engine Safe Output Test", "body": "# Updated Issue Body\n\nThis issue has been updated by the test-safe-outputs-custom-engine workflow to validate the update-issue safe output functionality.\n\n**Update Details:**\n- Updated by: Custom Engine\n- Update time: '"$(date)"'\n- Original trigger: ${{ github.event_name }}\n\n**Test Status:** ✅ Update functionality verified", "status": "open"}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Create Pull Request Output
+      run: |
+        # Create a test file change
+        echo "# Test file created by custom engine safe output test" > test-custom-engine-$(date +%Y%m%d-%H%M%S).md
+        echo "This file was created to test the create-pull-request safe output." >> test-custom-engine-$(date +%Y%m%d-%H%M%S).md
+        echo "Generated at: $(date)" >> test-custom-engine-$(date +%Y%m%d-%H%M%S).md
+        
+        # Create PR output
+        echo '{"type": "create-pull-request", "title": "[Custom Engine Test] Test Pull Request - Custom Engine Safe Output", "body": "# Test Pull Request - Custom Engine Safe Output\n\nThis pull request was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-pull-request safe output functionality.\n\n## Changes Made\n- Created test file with timestamp\n- Demonstrates custom engine file creation capabilities\n\n## Test Information\n- Engine: Custom (GitHub Actions steps)\n- Workflow: test-safe-outputs-custom-engine\n- Trigger Event: ${{ github.event_name }}\n- Run ID: ${{ github.run_id }}\n\nThis PR can be merged or closed after verification of the safe output functionality.", "labels": ["test-safe-outputs", "automation", "custom-engine"], "draft": true}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Create Discussion Output
+      run: |
+        echo '{"type": "create-discussion", "title": "[Custom Engine Test] Test Discussion - Custom Engine Safe Output", "body": "# Test Discussion - Custom Engine Safe Output\n\nThis discussion was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-discussion safe output functionality.\n\n## Purpose\nThis discussion serves as a test of the safe output system'\''s ability to create GitHub discussions through custom engine workflows.\n\n## Test Details\n- **Engine Type:** Custom (GitHub Actions steps)\n- **Workflow:** test-safe-outputs-custom-engine\n- **Created:** '"$(date)"'\n- **Trigger:** ${{ github.event_name }}\n- **Repository:** ${{ github.repository }}\n\n## Discussion Points\n1. Custom engine successfully executed\n2. Safe output file generation completed\n3. Discussion creation triggered\n\nFeel free to participate in this test discussion or archive it after verification."}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate PR Review Comment Output
+      run: |
+        echo '{"type": "create-pull-request-review-comment", "path": "README.md", "line": 1, "body": "## Custom Engine Review Comment Test\n\nThis review comment was automatically created by the test-safe-outputs-custom-engine workflow to validate the create-pull-request-review-comment safe output functionality.\n\n**Review Details:**\n- Generated by: Custom Engine\n- Test time: '"$(date)"'\n- Workflow: test-safe-outputs-custom-engine\n\n✅ PR review comment safe output test completed."}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Push to Branch Output
+      run: |
+        # Create another test file for branch push
+        echo "# Branch Push Test File" > branch-push-test-$(date +%Y%m%d-%H%M%S).md
+        echo "This file tests the push-to-branch safe output functionality." >> branch-push-test-$(date +%Y%m%d-%H%M%S).md
+        echo "Created by custom engine at: $(date)" >> branch-push-test-$(date +%Y%m%d-%H%M%S).md
+        
+        echo '{"type": "push-to-branch", "message": "Custom engine test: Push to branch functionality\n\nThis commit was generated by the test-safe-outputs-custom-engine workflow to validate the push-to-branch safe output functionality.\n\nFiles created:\n- branch-push-test-[timestamp].md\n\nTest executed at: '"$(date)"'"}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: Generate Missing Tool Output
+      run: |
+        echo '{"type": "missing-tool", "tool_name": "example-missing-tool", "reason": "This is a test of the missing-tool safe output functionality. No actual tool is missing.", "alternatives": "This is a simulated missing tool report generated by the custom engine test workflow.", "context": "test-safe-outputs-custom-engine workflow validation"}' >> $GITHUB_AW_SAFE_OUTPUTS
+        
+    - name: List generated outputs
+      run: |
+        echo "Generated safe output entries:"
+        if [ -f "$GITHUB_AW_SAFE_OUTPUTS" ]; then
+          cat "$GITHUB_AW_SAFE_OUTPUTS"
+        else
+          echo "No safe outputs file found"
+        fi
+        
+        echo "Additional test files created:"
+        ls -la *.md 2>/dev/null || echo "No additional .md files found"
 
 permissions: read-all
 ---
