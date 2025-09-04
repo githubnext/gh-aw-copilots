@@ -737,6 +737,9 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 	// Apply pull request draft filter if specified
 	c.applyPullRequestDraftFilter(workflowData, result.Frontmatter)
 
+	// Apply pull request fork filter if specified
+	c.applyPullRequestForkFilter(workflowData, result.Frontmatter)
+
 	// Compute allowed tools
 	workflowData.AllowedTools = c.computeAllowedTools(tools, workflowData.SafeOutputs)
 
@@ -802,17 +805,17 @@ func (c *Compiler) extractTopLevelYAMLSection(frontmatter map[string]any, key st
 	unquotedKey := key + ":"
 	yamlStr = strings.Replace(yamlStr, quotedKeyPattern, unquotedKey, 1)
 
-	// Special handling for "on" section - comment out draft field from pull_request
+	// Special handling for "on" section - comment out draft and fork fields from pull_request
 	if key == "on" {
-		yamlStr = c.commentOutDraftInOnSection(yamlStr)
+		yamlStr = c.commentOutProcessedFieldsInOnSection(yamlStr)
 	}
 
 	return yamlStr
 }
 
-// commentOutDraftInOnSection comments out draft fields in pull_request sections within the YAML string
-// The draft field is processed separately by applyPullRequestDraftFilter and should be commented for documentation
-func (c *Compiler) commentOutDraftInOnSection(yamlStr string) string {
+// commentOutProcessedFieldsInOnSection comments out draft and fork fields in pull_request sections within the YAML string
+// These fields are processed separately by applyPullRequestDraftFilter and applyPullRequestForkFilter and should be commented for documentation
+func (c *Compiler) commentOutProcessedFieldsInOnSection(yamlStr string) string {
 	lines := strings.Split(yamlStr, "\n")
 	var result []string
 	inPullRequest := false
@@ -833,8 +836,9 @@ func (c *Compiler) commentOutDraftInOnSection(yamlStr string) string {
 			}
 		}
 
-		// If we're in pull_request section and this line contains draft:, comment it out
-		if inPullRequest && strings.Contains(strings.TrimSpace(line), "draft:") {
+		// If we're in pull_request section and this line contains draft: or fork:, comment it out
+		trimmedLine := strings.TrimSpace(line)
+		if inPullRequest && (strings.Contains(trimmedLine, "draft:") || strings.Contains(trimmedLine, "fork:")) {
 			// Preserve the original indentation and comment out the line
 			indentation := ""
 			trimmed := strings.TrimLeft(line, " \t")
@@ -842,7 +846,14 @@ func (c *Compiler) commentOutDraftInOnSection(yamlStr string) string {
 				indentation = line[:len(line)-len(trimmed)]
 			}
 
-			commentedLine := indentation + "# " + trimmed + " # Draft filtering applied via job conditions"
+			var commentReason string
+			if strings.Contains(trimmedLine, "draft:") {
+				commentReason = " # Draft filtering applied via job conditions"
+			} else if strings.Contains(trimmedLine, "fork:") {
+				commentReason = " # Fork filtering applied via job conditions"
+			}
+
+			commentedLine := indentation + "# " + trimmed + commentReason
 			result = append(result, commentedLine)
 		} else {
 			result = append(result, line)
@@ -1163,6 +1174,70 @@ func (c *Compiler) applyPullRequestDraftFilter(data *WorkflowData, frontmatter m
 	// Build condition tree and render
 	existingCondition := strings.TrimPrefix(data.If, "if: ")
 	conditionTree := buildConditionTree(existingCondition, draftCondition.Render())
+	data.If = fmt.Sprintf("if: %s", conditionTree.Render())
+}
+
+// applyPullRequestForkFilter applies fork filter conditions for pull_request triggers
+func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter map[string]any) {
+	// Check if there's an "on" section in the frontmatter
+	onValue, hasOn := frontmatter["on"]
+	if !hasOn {
+		return
+	}
+
+	// Check if "on" is an object (not a string)
+	onMap, isOnMap := onValue.(map[string]any)
+	if !isOnMap {
+		return
+	}
+
+	// Check if there's a pull_request section
+	prValue, hasPR := onMap["pull_request"]
+	if !hasPR {
+		return
+	}
+
+	// Check if pull_request is an object with fork settings
+	prMap, isPRMap := prValue.(map[string]any)
+	if !isPRMap {
+		return
+	}
+
+	// Check if fork is specified
+	forkValue, hasFork := prMap["fork"]
+	if !hasFork {
+		return
+	}
+
+	// Check if fork is a boolean
+	forkBool, isForkBool := forkValue.(bool)
+	if !isForkBool {
+		// If fork is not a boolean, don't add filter
+		return
+	}
+
+	// Generate conditional logic based on fork value using expression nodes
+	var forkCondition ConditionNode
+	if forkBool {
+		// fork: true - allow PRs from forks (no condition needed, just return)
+		return
+	} else {
+		// fork: false (default) - exclude PRs from forks
+		// The condition should be true for non-pull_request events or for non-fork pull_requests
+		notPullRequestEvent := BuildNotEquals(
+			BuildPropertyAccess("github.event_name"),
+			BuildStringLiteral("pull_request"),
+		)
+		isNotFromFork := BuildNotFromFork()
+		forkCondition = &OrNode{
+			Left:  notPullRequestEvent,
+			Right: isNotFromFork,
+		}
+	}
+
+	// Build condition tree and render
+	existingCondition := strings.TrimPrefix(data.If, "if: ")
+	conditionTree := buildConditionTree(existingCondition, forkCondition.Render())
 	data.If = fmt.Sprintf("if: %s", conditionTree.Render())
 }
 

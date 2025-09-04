@@ -4448,8 +4448,8 @@ YAML error that demonstrates column position handling.`,
 	}
 }
 
-// TestCommentOutDraftInOnSection tests the commentOutDraftInOnSection function directly
-func TestCommentOutDraftInOnSection(t *testing.T) {
+// TestCommentOutProcessedFieldsInOnSection tests the commentOutProcessedFieldsInOnSection function directly
+func TestCommentOutProcessedFieldsInOnSection(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
 
 	tests := []struct {
@@ -4548,11 +4548,41 @@ func TestCommentOutDraftInOnSection(t *testing.T) {
             - opened`,
 			description: "Should leave unchanged when no draft field in pull_request",
 		},
+		{
+			name: "pull_request with fork field",
+			input: `on:
+    pull_request:
+        fork: false
+        types:
+            - opened`,
+			expected: `on:
+    pull_request:
+        # fork: false # Fork filtering applied via job conditions
+        types:
+            - opened`,
+			description: "Should comment out fork field",
+		},
+		{
+			name: "pull_request with fork and draft fields",
+			input: `on:
+    pull_request:
+        draft: true
+        fork: false
+        types:
+            - opened`,
+			expected: `on:
+    pull_request:
+        # draft: true # Draft filtering applied via job conditions
+        # fork: false # Fork filtering applied via job conditions
+        types:
+            - opened`,
+			description: "Should comment out both draft and fork fields",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := compiler.commentOutDraftInOnSection(tt.input)
+			result := compiler.commentOutProcessedFieldsInOnSection(tt.input)
 
 			if result != tt.expected {
 				t.Errorf("%s\nExpected:\n%s\nGot:\n%s", tt.description, tt.expected, result)
@@ -5811,6 +5841,361 @@ func TestAccessLogUploadConditional(t *testing.T) {
 				if hasUploadStep {
 					t.Errorf("Expected no upload step but one was generated")
 				}
+			}
+		})
+	}
+}
+
+// TestPullRequestForkFilter tests the pull_request fork: true/false filter functionality
+func TestPullRequestForkFilter(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "fork-filter-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name         string
+		frontmatter  string
+		expectedIf   string // Expected if condition in the generated lock file
+		shouldHaveIf bool   // Whether an if condition should be present
+	}{
+		{
+			name: "pull_request with fork: false (default - exclude forks)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    fork: false
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedIf:   "if: (github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository)",
+			shouldHaveIf: true,
+		},
+		{
+			name: "pull_request with fork: true (allow forks)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    fork: true
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			shouldHaveIf: false, // fork: true means no condition should be added
+		},
+		{
+			name: "pull_request without fork field (no filter)",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			shouldHaveIf: false,
+		},
+		{
+			name: "pull_request with fork: false and existing if condition",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    fork: false
+
+if: github.actor != 'dependabot[bot]'
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedIf:   "if: (github.actor != 'dependabot[bot]') && ((github.event_name != 'pull_request') || (github.event.pull_request.head.repo.full_name == github.repository))",
+			shouldHaveIf: true,
+		},
+		{
+			name: "non-pull_request trigger (no filter applied)",
+			frontmatter: `---
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			shouldHaveIf: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Fork Filter Workflow
+
+This is a test workflow for fork filtering.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Unexpected error compiling workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+
+			lockContent := string(content)
+
+			if tt.shouldHaveIf {
+				// Check that the expected if condition is present
+				if !strings.Contains(lockContent, tt.expectedIf) {
+					t.Errorf("Expected lock file to contain '%s' but it didn't.\nContent:\n%s", tt.expectedIf, lockContent)
+				}
+			} else {
+				// Check that no fork-related if condition is present in the main job
+				if strings.Contains(lockContent, "github.event.pull_request.head.repo.full_name == github.repository") {
+					t.Errorf("Expected no fork filter condition but found one in lock file.\nContent:\n%s", lockContent)
+				}
+			}
+		})
+	}
+}
+
+// TestForkFieldCommentingInOnSection specifically tests that the fork field is commented out in the on section
+func TestForkFieldCommentingInOnSection(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "fork-commenting-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	compiler := NewCompiler(false, "", "test")
+
+	tests := []struct {
+		name         string
+		frontmatter  string
+		description  string
+		expectedYAML string
+	}{
+		{
+			name: "pull_request with fork: false and paths",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened]
+    paths: ["src/**"]
+    fork: false
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # fork: false # Fork filtering applied via job conditions
+    paths:
+    - src/**
+    types:
+    - opened`,
+			description: "Should comment out fork but keep paths",
+		},
+		{
+			name: "pull_request with fork: true and types",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened, edited]
+    fork: true
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # fork: true # Fork filtering applied via job conditions
+    types:
+    - opened
+    - edited`,
+			description: "Should comment out fork but keep types",
+		},
+		{
+			name: "pull_request with only fork field",
+			frontmatter: `---
+on:
+  pull_request:
+    fork: false
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # fork: false # Fork filtering applied via job conditions`,
+			description: "Should comment out fork even when it's the only field",
+		},
+		{
+			name: "workflow_dispatch with pull_request having fork",
+			frontmatter: `---
+on:
+  workflow_dispatch:
+  pull_request:
+    fork: false
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    # fork: false # Fork filtering applied via job conditions`,
+			description: "Should comment out fork in pull_request while leaving other sections unchanged",
+		},
+		{
+			name: "pull_request without fork field",
+			frontmatter: `---
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+tools:
+  github:
+    allowed: [get_issue]
+---`,
+			expectedYAML: `  pull_request:
+    types:
+    - opened`,
+			description: "Should leave unchanged when no fork field in pull_request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testContent := tt.frontmatter + `
+
+# Test Fork Field Commenting Workflow
+
+This workflow tests that fork fields are properly commented out in the on section.
+`
+
+			testFile := filepath.Join(tmpDir, tt.name+"-workflow.md")
+			if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Compile the workflow
+			err := compiler.CompileWorkflow(testFile)
+			if err != nil {
+				t.Fatalf("Unexpected error compiling workflow: %v", err)
+			}
+
+			// Read the generated lock file
+			lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+			content, err := os.ReadFile(lockFile)
+			if err != nil {
+				t.Fatalf("Failed to read lock file: %v", err)
+			}
+
+			lockContent := string(content)
+
+			// Check that the expected YAML structure is present
+			if !strings.Contains(lockContent, tt.expectedYAML) {
+				t.Errorf("Expected YAML structure not found in lock file.\nExpected:\n%s\nActual content:\n%s", tt.expectedYAML, lockContent)
+			}
+
+			// For test cases with fork field, ensure specific checks
+			if strings.Contains(tt.frontmatter, "fork:") {
+				// Check that the fork field is commented out
+				if !strings.Contains(lockContent, "# fork:") {
+					t.Errorf("Expected commented fork field but not found in lock file.\nContent:\n%s", lockContent)
+				}
+
+				// Check that the comment includes the explanation
+				if !strings.Contains(lockContent, "# Fork filtering applied via job conditions") {
+					t.Errorf("Expected fork comment to include explanation but not found in lock file.\nContent:\n%s", lockContent)
+				}
+
+				// Parse the generated YAML to ensure the fork field is not active in the parsed structure
+				var workflow map[string]interface{}
+				if err := yaml.Unmarshal(content, &workflow); err != nil {
+					t.Fatalf("Failed to parse generated YAML: %v", err)
+				}
+
+				if onSection, exists := workflow["on"]; exists {
+					if onMap, ok := onSection.(map[string]interface{}); ok {
+						if prSection, hasPR := onMap["pull_request"]; hasPR {
+							if prMap, isPRMap := prSection.(map[string]interface{}); isPRMap {
+								// The fork field should NOT be present in the parsed YAML (since it's commented)
+								if _, hasFork := prMap["fork"]; hasFork {
+									t.Errorf("Fork field found in parsed YAML pull_request section (should be commented): %v", prMap)
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Ensure that active fork field is never present in the compiled YAML
+			if strings.Contains(lockContent, "fork: ") && !strings.Contains(lockContent, "# fork: ") {
+				t.Errorf("Active (non-commented) fork field found in compiled workflow content:\n%s", lockContent)
 			}
 		})
 	}

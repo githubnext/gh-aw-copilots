@@ -128,6 +128,10 @@
                 "draft": {
                   "type": "boolean",
                   "description": "Filter by draft state. Set to false to ignore draft PRs"
+                },
+                "fork": {
+                  "type": "boolean",
+                  "description": "Filter by fork state. Set to false to ignore PRs from forks"
                 }
               },
               "additionalProperties": false
