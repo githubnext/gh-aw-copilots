@@ -2,6 +2,7 @@
 on:
   pull_request:
     branches: [ "main" ]
+    fork: false
   workflow_dispatch:
 
 safe-outputs:
