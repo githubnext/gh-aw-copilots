@@ -257,8 +257,10 @@ Security findings will be formatted as SARIF and uploaded to GitHub Code Scannin
 The compiled workflow will have additional prompting describing that, to create security reports, it should write the security findings to a special file with the following structure:
 - `file`: The file path relative to the repository root
 - `line`: The line number where the security issue occurs
+- `column`: Optional column number where the security issue occurs (defaults to 1)
 - `severity`: The severity level ("error", "warning", "info", or "note")
 - `message`: The detailed description of the security issue
+- `ruleIdSuffix`: Optional custom suffix for the SARIF rule ID (must contain only alphanumeric characters, hyphens, and underscores)
 
 **Key Features:**
 - Generates SARIF (Static Analysis Results Interchange Format) reports
@@ -268,6 +270,9 @@ The compiled workflow will have additional prompting describing that, to create 
 - Works in any workflow context (not limited to pull requests)
 - Maximum findings limit prevents overwhelming reports
 - Validates all required fields before generating SARIF
+- Supports optional column specification for precise location
+- Customizable rule IDs via optional ruleIdSuffix field
+- Rule IDs default to `{workflow-filename}-security-finding-{index}` format when no custom suffix is provided
 
 ### Label Addition (`add-issue-label:`)
 

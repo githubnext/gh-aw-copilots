@@ -477,5 +477,128 @@ describe("create_security_report.cjs", () => {
 
       consoleSpy.mockRestore();
     });
+
+    it("should support optional ruleIdSuffix specification", async () => {
+      process.env.GITHUB_AW_WORKFLOW_FILENAME = "security-scan";
+
+      const securityFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/app.js",
+            line: 42,
+            severity: "error",
+            message: "Custom rule ID finding",
+            ruleIdSuffix: "sql-injection",
+          },
+          {
+            type: "create-security-report",
+            file: "src/utils.js",
+            line: 25,
+            severity: "warning",
+            message: "Another custom rule ID",
+            ruleIdSuffix: "xss-vulnerability",
+          },
+          {
+            type: "create-security-report",
+            file: "src/config.js",
+            line: 10,
+            severity: "info",
+            message: "Standard numbered finding",
+            // No ruleIdSuffix - should use default numbering
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(securityFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+
+      // Check first result has custom rule ID
+      expect(sarifContent.runs[0].results[0].ruleId).toBe(
+        "security-scan-sql-injection"
+      );
+
+      // Check second result has custom rule ID
+      expect(sarifContent.runs[0].results[1].ruleId).toBe(
+        "security-scan-xss-vulnerability"
+      );
+
+      // Check third result uses default numbering
+      expect(sarifContent.runs[0].results[2].ruleId).toBe(
+        "security-scan-security-finding-3"
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should validate ruleIdSuffix values", async () => {
+      const invalidFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/valid.js",
+            line: 10,
+            severity: "error",
+            message: "Valid with valid ruleIdSuffix",
+            ruleIdSuffix: "valid-rule-id_123",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid1.js",
+            line: 20,
+            severity: "error",
+            message: "Invalid ruleIdSuffix - empty string",
+            ruleIdSuffix: "",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid2.js",
+            line: 30,
+            severity: "error",
+            message: "Invalid ruleIdSuffix - whitespace only",
+            ruleIdSuffix: "   ",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid3.js",
+            line: 40,
+            severity: "error",
+            message: "Invalid ruleIdSuffix - special characters",
+            ruleIdSuffix: "rule@id!",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid4.js",
+            line: 50,
+            severity: "error",
+            message: "Invalid ruleIdSuffix - not a string",
+            ruleIdSuffix: 123,
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(invalidFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      // Only the first valid finding should be processed
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+      expect(sarifContent.runs[0].results).toHaveLength(1);
+      expect(sarifContent.runs[0].results[0].message.text).toBe(
+        "Valid with valid ruleIdSuffix"
+      );
+      expect(sarifContent.runs[0].results[0].ruleId).toBe(
+        "workflow-valid-rule-id_123"
+      );
+
+      consoleSpy.mockRestore();
+    });
   });
 });

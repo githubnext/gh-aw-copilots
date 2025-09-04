@@ -74,6 +74,7 @@ async function main() {
         messageLength: securityItem.message
           ? securityItem.message.length
           : "undefined",
+        ruleIdSuffix: securityItem.ruleIdSuffix || "not specified",
       }
     );
 
@@ -135,6 +136,33 @@ async function main() {
       column = parsedColumn;
     }
 
+    // Parse optional rule ID suffix
+    let ruleIdSuffix = null;
+    if (securityItem.ruleIdSuffix !== undefined) {
+      if (typeof securityItem.ruleIdSuffix !== "string") {
+        console.log(
+          'Invalid field "ruleIdSuffix" in security report item (must be string)'
+        );
+        continue;
+      }
+      // Validate that the suffix doesn't contain invalid characters
+      const trimmedSuffix = securityItem.ruleIdSuffix.trim();
+      if (trimmedSuffix.length === 0) {
+        console.log(
+          'Invalid field "ruleIdSuffix" in security report item (cannot be empty)'
+        );
+        continue;
+      }
+      // Check for characters that would be problematic in rule IDs
+      if (!/^[a-zA-Z0-9_-]+$/.test(trimmedSuffix)) {
+        console.log(
+          `Invalid ruleIdSuffix "${trimmedSuffix}" (must contain only alphanumeric characters, hyphens, and underscores)`
+        );
+        continue;
+      }
+      ruleIdSuffix = trimmedSuffix;
+    }
+
     // Validate severity level and map to SARIF level
     const severityMap = {
       error: "error",
@@ -161,6 +189,7 @@ async function main() {
       severity: normalizedSeverity,
       sarifLevel: sarifLevel,
       message: securityItem.message.trim(),
+      ruleIdSuffix: ruleIdSuffix,
     });
 
     // Check if we've reached the max limit
@@ -192,7 +221,9 @@ async function main() {
           },
         },
         results: validFindings.map((finding, index) => ({
-          ruleId: `${workflowFilename}-security-finding-${index + 1}`,
+          ruleId: finding.ruleIdSuffix
+            ? `${workflowFilename}-${finding.ruleIdSuffix}`
+            : `${workflowFilename}-security-finding-${index + 1}`,
           message: { text: finding.message },
           level: finding.sarifLevel,
           locations: [
