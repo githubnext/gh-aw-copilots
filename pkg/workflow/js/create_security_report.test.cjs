@@ -45,6 +45,8 @@ describe("create_security_report.cjs", () => {
     // Set up basic environment
     process.env.GITHUB_AW_AGENT_OUTPUT = "";
     delete process.env.GITHUB_AW_SECURITY_REPORT_MAX;
+    delete process.env.GITHUB_AW_SECURITY_REPORT_DRIVER;
+    delete process.env.GITHUB_AW_WORKFLOW_FILENAME;
   });
 
   afterEach(() => {
@@ -298,6 +300,161 @@ describe("create_security_report.cjs", () => {
 
       // Check outputs
       expect(mockCore.setOutput).toHaveBeenCalledWith("findings_count", 1);
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should use custom driver name when configured", async () => {
+      process.env.GITHUB_AW_SECURITY_REPORT_DRIVER = "Custom Security Scanner";
+      process.env.GITHUB_AW_WORKFLOW_FILENAME = "security-scan";
+
+      const securityFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/app.js",
+            line: 42,
+            severity: "error",
+            message: "Security issue found",
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(securityFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+
+      // Check driver name
+      expect(sarifContent.runs[0].tool.driver.name).toBe("Custom Security Scanner");
+      
+      // Check rule ID includes workflow filename
+      expect(sarifContent.runs[0].results[0].ruleId).toBe("security-scan-security-finding-1");
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should use default driver name when not configured", async () => {
+      const securityFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/app.js",
+            line: 42,
+            severity: "error",
+            message: "Security issue found",
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(securityFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+
+      // Check default driver name
+      expect(sarifContent.runs[0].tool.driver.name).toBe("GitHub Agentic Workflows Security Scanner");
+      
+      // Check rule ID includes default workflow filename
+      expect(sarifContent.runs[0].results[0].ruleId).toBe("workflow-security-finding-1");
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should support optional column specification", async () => {
+      const securityFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/app.js",
+            line: 42,
+            column: 15,
+            severity: "error",
+            message: "Security issue with column info",
+          },
+          {
+            type: "create-security-report",
+            file: "src/utils.js",
+            line: 25,
+            // No column specified - should default to 1
+            severity: "warning",
+            message: "Security issue without column",
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(securityFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+
+      // Check first result has custom column
+      expect(sarifContent.runs[0].results[0].locations[0].physicalLocation.region.startColumn).toBe(15);
+
+      // Check second result has default column
+      expect(sarifContent.runs[0].results[1].locations[0].physicalLocation.region.startColumn).toBe(1);
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should validate column numbers", async () => {
+      const invalidFindings = {
+        items: [
+          {
+            type: "create-security-report",
+            file: "src/valid.js",
+            line: 10,
+            column: 5,
+            severity: "error",
+            message: "Valid with column",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid1.js",
+            line: 20,
+            column: "not-a-number",
+            severity: "error",
+            message: "Invalid column - not a number",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid2.js",
+            line: 30,
+            column: 0,
+            severity: "error",
+            message: "Invalid column - zero",
+          },
+          {
+            type: "create-security-report",
+            file: "src/invalid3.js",
+            line: 40,
+            column: -1,
+            severity: "error",
+            message: "Invalid column - negative",
+          },
+        ],
+      };
+
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(invalidFindings);
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await eval(`(async () => { ${securityReportScript} })()`);
+
+      // Only the first valid finding should be processed
+      const sarifFile = path.join(process.cwd(), "security-report.sarif");
+      const sarifContent = JSON.parse(fs.readFileSync(sarifFile, "utf8"));
+      expect(sarifContent.runs[0].results).toHaveLength(1);
+      expect(sarifContent.runs[0].results[0].message.text).toBe("Valid with column");
+      expect(sarifContent.runs[0].results[0].locations[0].physicalLocation.region.startColumn).toBe(5);
 
       consoleSpy.mockRestore();
     });

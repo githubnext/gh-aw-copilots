@@ -35,6 +35,29 @@ func TestSecurityReportsConfig(t *testing.T) {
 			expectedConfig: &CreateSecurityReportsConfig{Max: 50},
 		},
 		{
+			name: "security report with driver configuration",
+			frontmatter: map[string]any{
+				"safe-outputs": map[string]any{
+					"create-security-report": map[string]any{
+						"driver": "Custom Security Scanner",
+					},
+				},
+			},
+			expectedConfig: &CreateSecurityReportsConfig{Max: 0, Driver: "Custom Security Scanner"},
+		},
+		{
+			name: "security report with max and driver configuration",
+			frontmatter: map[string]any{
+				"safe-outputs": map[string]any{
+					"create-security-report": map[string]any{
+						"max":    25,
+						"driver": "Advanced Scanner",
+					},
+				},
+			},
+			expectedConfig: &CreateSecurityReportsConfig{Max: 25, Driver: "Advanced Scanner"},
+		},
+		{
 			name: "no security report configuration",
 			frontmatter: map[string]any{
 				"safe-outputs": map[string]any{
@@ -65,6 +88,10 @@ func TestSecurityReportsConfig(t *testing.T) {
 			if config.CreateSecurityReports.Max != tt.expectedConfig.Max {
 				t.Errorf("Expected Max=%d, got Max=%d", tt.expectedConfig.Max, config.CreateSecurityReports.Max)
 			}
+			
+			if config.CreateSecurityReports.Driver != tt.expectedConfig.Driver {
+				t.Errorf("Expected Driver=%s, got Driver=%s", tt.expectedConfig.Driver, config.CreateSecurityReports.Driver)
+			}
 		})
 	}
 }
@@ -80,7 +107,7 @@ func TestBuildCreateOutputSecurityReportJob(t *testing.T) {
 		},
 	}
 
-	job, err := compiler.buildCreateOutputSecurityReportJob(data, "main_job")
+	job, err := compiler.buildCreateOutputSecurityReportJob(data, "main_job", "test-workflow")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -119,7 +146,7 @@ func TestBuildCreateOutputSecurityReportJob(t *testing.T) {
 		},
 	}
 
-	jobWithMax, err := compiler.buildCreateOutputSecurityReportJob(dataWithMax, "main_job")
+	jobWithMax, err := compiler.buildCreateOutputSecurityReportJob(dataWithMax, "main_job", "test-workflow")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -129,9 +156,31 @@ func TestBuildCreateOutputSecurityReportJob(t *testing.T) {
 		t.Errorf("Expected max configuration in environment variables")
 	}
 
+	// Test with driver configuration
+	dataWithDriver := &WorkflowData{
+		SafeOutputs: &SafeOutputsConfig{
+			CreateSecurityReports: &CreateSecurityReportsConfig{Driver: "Custom Scanner"},
+		},
+	}
+
+	jobWithDriver, err := compiler.buildCreateOutputSecurityReportJob(dataWithDriver, "main_job", "my-workflow")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	stepsWithDriverStr := strings.Join(jobWithDriver.Steps, "")
+	if !strings.Contains(stepsWithDriverStr, "GITHUB_AW_SECURITY_REPORT_DRIVER: Custom Scanner") {
+		t.Errorf("Expected driver configuration in environment variables")
+	}
+	
+	// Check that workflow filename is passed
+	if !strings.Contains(stepsWithDriverStr, "GITHUB_AW_WORKFLOW_FILENAME: my-workflow") {
+		t.Errorf("Expected workflow filename in environment variables")
+	}
+
 	// Test error case - no configuration
 	dataNoConfig := &WorkflowData{SafeOutputs: nil}
-	_, err = compiler.buildCreateOutputSecurityReportJob(dataNoConfig, "main_job")
+	_, err = compiler.buildCreateOutputSecurityReportJob(dataNoConfig, "main_job", "test-workflow")
 	if err == nil {
 		t.Errorf("Expected error when no SafeOutputs config provided")
 	}
@@ -142,18 +191,20 @@ func TestParseSecurityReportsConfig(t *testing.T) {
 	compiler := NewCompiler(false, "", "test-version")
 
 	tests := []struct {
-		name        string
-		outputMap   map[string]any
-		expectedMax int
-		expectNil   bool
+		name           string
+		outputMap      map[string]any
+		expectedMax    int
+		expectedDriver string
+		expectNil      bool
 	}{
 		{
 			name: "basic configuration",
 			outputMap: map[string]any{
 				"create-security-report": nil,
 			},
-			expectedMax: 0,
-			expectNil:   false,
+			expectedMax:    0,
+			expectedDriver: "",
+			expectNil:      false,
 		},
 		{
 			name: "configuration with max",
@@ -162,16 +213,41 @@ func TestParseSecurityReportsConfig(t *testing.T) {
 					"max": 100,
 				},
 			},
-			expectedMax: 100,
-			expectNil:   false,
+			expectedMax:    100,
+			expectedDriver: "",
+			expectNil:      false,
+		},
+		{
+			name: "configuration with driver",
+			outputMap: map[string]any{
+				"create-security-report": map[string]any{
+					"driver": "Test Security Scanner",
+				},
+			},
+			expectedMax:    0,
+			expectedDriver: "Test Security Scanner",
+			expectNil:      false,
+		},
+		{
+			name: "configuration with max and driver",
+			outputMap: map[string]any{
+				"create-security-report": map[string]any{
+					"max":    50,
+					"driver": "Combined Scanner",
+				},
+			},
+			expectedMax:    50,
+			expectedDriver: "Combined Scanner",
+			expectNil:      false,
 		},
 		{
 			name: "no configuration",
 			outputMap: map[string]any{
 				"other-config": nil,
 			},
-			expectedMax: 0,
-			expectNil:   true,
+			expectedMax:    0,
+			expectedDriver: "",
+			expectNil:      true,
 		},
 	}
 
@@ -193,6 +269,10 @@ func TestParseSecurityReportsConfig(t *testing.T) {
 
 			if config.Max != tt.expectedMax {
 				t.Errorf("Expected Max=%d, got Max=%d", tt.expectedMax, config.Max)
+			}
+			
+			if config.Driver != tt.expectedDriver {
+				t.Errorf("Expected Driver=%s, got Driver=%s", tt.expectedDriver, config.Driver)
 			}
 		})
 	}

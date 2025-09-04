@@ -197,7 +197,8 @@ type CreatePullRequestReviewCommentsConfig struct {
 
 // CreateSecurityReportsConfig holds configuration for creating security reports (SARIF format) from agent output
 type CreateSecurityReportsConfig struct {
-	Max int `yaml:"max,omitempty"` // Maximum number of security findings to include (default: unlimited)
+	Max    int    `yaml:"max,omitempty"`    // Maximum number of security findings to include (default: unlimited)
+	Driver string `yaml:"driver,omitempty"` // Driver name for SARIF tool.driver.name field (default: "GitHub Agentic Workflows Security Scanner")
 }
 
 // AddIssueLabelsConfig holds configuration for adding labels to issues/PRs from agent output
@@ -294,7 +295,7 @@ func (c *Compiler) CompileWorkflow(markdownPath string) error {
 	if c.verbose {
 		fmt.Println(console.FormatInfoMessage("Generating GitHub Actions YAML..."))
 	}
-	yamlContent, err := c.generateYAML(workflowData)
+	yamlContent, err := c.generateYAML(workflowData, markdownPath)
 	if err != nil {
 		formattedErr := console.FormatError(console.CompilerError{
 			Position: console.ErrorPosition{
@@ -1618,12 +1619,12 @@ func (c *Compiler) indentYAMLLines(yamlContent, indent string) string {
 }
 
 // generateYAML generates the complete GitHub Actions YAML content
-func (c *Compiler) generateYAML(data *WorkflowData) (string, error) {
+func (c *Compiler) generateYAML(data *WorkflowData, markdownPath string) (string, error) {
 	// Reset job manager for this compilation
 	c.jobManager = NewJobManager()
 
 	// Build all jobs
-	if err := c.buildJobs(data); err != nil {
+	if err := c.buildJobs(data, markdownPath); err != nil {
 		return "", fmt.Errorf("failed to build jobs: %w", err)
 	}
 
@@ -1680,7 +1681,7 @@ func (c *Compiler) isTaskJobNeeded(data *WorkflowData) bool {
 }
 
 // buildJobs creates all jobs for the workflow and adds them to the job manager
-func (c *Compiler) buildJobs(data *WorkflowData) error {
+func (c *Compiler) buildJobs(data *WorkflowData, markdownPath string) error {
 	// Generate job name from workflow name
 	jobName := c.generateJobName(data.Name)
 
@@ -1764,7 +1765,9 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 
 		// Build create_security_report job if output.create-security-report is configured
 		if data.SafeOutputs.CreateSecurityReports != nil {
-			createSecurityReportJob, err := c.buildCreateOutputSecurityReportJob(data, jobName)
+			// Extract the workflow filename without extension for rule ID prefix
+			workflowFilename := strings.TrimSuffix(filepath.Base(markdownPath), ".md")
+			createSecurityReportJob, err := c.buildCreateOutputSecurityReportJob(data, jobName, workflowFilename)
 			if err != nil {
 				return fmt.Errorf("failed to build create_security_report job: %w", err)
 			}
@@ -2208,7 +2211,7 @@ func (c *Compiler) buildCreateOutputPullRequestReviewCommentJob(data *WorkflowDa
 }
 
 // buildCreateOutputSecurityReportJob creates the create_security_report job
-func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJobName string) (*Job, error) {
+func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJobName string, workflowFilename string) (*Job, error) {
 	if data.SafeOutputs == nil || data.SafeOutputs.CreateSecurityReports == nil {
 		return nil, fmt.Errorf("safe-outputs.create-security-report configuration is required")
 	}
@@ -2226,6 +2229,12 @@ func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJo
 	if data.SafeOutputs.CreateSecurityReports.Max > 0 {
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_MAX: %d\n", data.SafeOutputs.CreateSecurityReports.Max))
 	}
+	// Pass the driver configuration
+	if data.SafeOutputs.CreateSecurityReports.Driver != "" {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_DRIVER: %s\n", data.SafeOutputs.CreateSecurityReports.Driver))
+	}
+	// Pass the workflow filename for rule ID prefix
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_WORKFLOW_FILENAME: %s\n", workflowFilename))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -3354,6 +3363,13 @@ func (c *Compiler) parseSecurityReportsConfig(outputMap map[string]any) *CreateS
 		if max, exists := configMap["max"]; exists {
 			if maxInt, ok := c.parseIntValue(max); ok {
 				securityReportsConfig.Max = maxInt
+			}
+		}
+		
+		// Parse driver
+		if driver, exists := configMap["driver"]; exists {
+			if driverStr, ok := driver.(string); ok {
+				securityReportsConfig.Driver = driverStr
 			}
 		}
 	}

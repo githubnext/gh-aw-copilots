@@ -49,6 +49,15 @@ async function main() {
     `Max findings configuration: ${maxFindings === 0 ? "unlimited" : maxFindings}`
   );
 
+  // Get the driver configuration from environment variable
+  const driverName = process.env.GITHUB_AW_SECURITY_REPORT_DRIVER
+    || "GitHub Agentic Workflows Security Scanner";
+  console.log(`Driver name: ${driverName}`);
+
+  // Get the workflow filename for rule ID prefix
+  const workflowFilename = process.env.GITHUB_AW_WORKFLOW_FILENAME || "workflow";
+  console.log(`Workflow filename for rule ID prefix: ${workflowFilename}`);
+
   const validFindings = [];
 
   // Process each security item and validate the findings
@@ -104,6 +113,26 @@ async function main() {
       continue;
     }
 
+    // Parse optional column number
+    let column = 1; // Default to column 1
+    if (securityItem.column !== undefined) {
+      if (
+        typeof securityItem.column !== "number" &&
+        typeof securityItem.column !== "string"
+      ) {
+        console.log(
+          'Invalid field "column" in security report item (must be number or string)'
+        );
+        continue;
+      }
+      const parsedColumn = parseInt(securityItem.column, 10);
+      if (isNaN(parsedColumn) || parsedColumn <= 0) {
+        console.log(`Invalid column number: ${securityItem.column}`);
+        continue;
+      }
+      column = parsedColumn;
+    }
+
     // Validate severity level and map to SARIF level
     const severityMap = {
       error: "error",
@@ -126,6 +155,7 @@ async function main() {
     validFindings.push({
       file: securityItem.file.trim(),
       line: line,
+      column: column,
       severity: normalizedSeverity,
       sarifLevel: sarifLevel,
       message: securityItem.message.trim(),
@@ -154,13 +184,13 @@ async function main() {
       {
         tool: {
           driver: {
-            name: "GitHub Agentic Workflows Security Scanner",
+            name: driverName,
             version: "1.0.0",
             informationUri: "https://github.com/githubnext/gh-aw-copilots",
           },
         },
         results: validFindings.map((finding, index) => ({
-          ruleId: `security-finding-${index + 1}`,
+          ruleId: `${workflowFilename}-security-finding-${index + 1}`,
           message: { text: finding.message },
           level: finding.sarifLevel,
           locations: [
@@ -169,7 +199,7 @@ async function main() {
                 artifactLocation: { uri: finding.file },
                 region: {
                   startLine: finding.line,
-                  startColumn: 1,
+                  startColumn: finding.column,
                 },
               },
             },
