@@ -869,9 +869,6 @@ func (c *Compiler) commentOutProcessedFieldsInOnSection(yamlStr string) string {
 		if inPullRequest && strings.Contains(trimmedLine, "draft:") {
 			shouldComment = true
 			commentReason = " # Draft filtering applied via job conditions"
-		} else if inPullRequest && strings.Contains(trimmedLine, "fork:") && !strings.HasPrefix(trimmedLine, "forks:") {
-			shouldComment = true
-			commentReason = " # Fork filtering applied via job conditions"
 		} else if inPullRequest && strings.HasPrefix(trimmedLine, "forks:") {
 			shouldComment = true
 			commentReason = " # Fork filtering applied via job conditions"
@@ -1213,7 +1210,7 @@ func (c *Compiler) applyPullRequestDraftFilter(data *WorkflowData, frontmatter m
 }
 
 // applyPullRequestForkFilter applies fork filter conditions for pull_request triggers
-// Supports both legacy "fork: boolean" and new "forks: []string" with glob patterns
+// Supports "forks: []string" with glob patterns
 func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter map[string]any) {
 	// Check if there's an "on" section in the frontmatter
 	onValue, hasOn := frontmatter["on"]
@@ -1239,67 +1236,37 @@ func (c *Compiler) applyPullRequestForkFilter(data *WorkflowData, frontmatter ma
 		return
 	}
 
-	// Check for legacy "fork" boolean field
-	forkValue, hasFork := prMap["fork"]
+	// Check for "forks" array field
 	forksValue, hasForks := prMap["forks"]
 
-	if !hasFork && !hasForks {
+	if !hasForks {
 		return
 	}
 
-	var forkCondition ConditionNode
+	forksArray, isForksArray := forksValue.([]any)
+	if !isForksArray {
+		// Invalid forks format, skip
+		return
+	}
 
-	// Handle new "forks" array field (takes precedence over legacy "fork")
-	if hasForks {
-		forksArray, isForksArray := forksValue.([]any)
-		if !isForksArray {
-			// Invalid forks format, skip
-			return
+	// Convert []any to []string
+	var allowedForks []string
+	for _, fork := range forksArray {
+		if forkStr, isForkStr := fork.(string); isForkStr {
+			allowedForks = append(allowedForks, forkStr)
 		}
+	}
 
-		// Convert []any to []string
-		var allowedForks []string
-		for _, fork := range forksArray {
-			if forkStr, isForkStr := fork.(string); isForkStr {
-				allowedForks = append(allowedForks, forkStr)
-			}
-		}
+	// Build condition for allowed forks with glob support
+	notPullRequestEvent := BuildNotEquals(
+		BuildPropertyAccess("github.event_name"),
+		BuildStringLiteral("pull_request"),
+	)
+	allowedForksCondition := BuildFromAllowedForks(allowedForks)
 
-		// Build condition for allowed forks with glob support
-		notPullRequestEvent := BuildNotEquals(
-			BuildPropertyAccess("github.event_name"),
-			BuildStringLiteral("pull_request"),
-		)
-		allowedForksCondition := BuildFromAllowedForks(allowedForks)
-
-		forkCondition = &OrNode{
-			Left:  notPullRequestEvent,
-			Right: allowedForksCondition,
-		}
-	} else if hasFork {
-		// Handle legacy "fork" boolean field
-		forkBool, isForkBool := forkValue.(bool)
-		if !isForkBool {
-			// If fork is not a boolean, don't add filter
-			return
-		}
-
-		if forkBool {
-			// fork: true - allow PRs from forks (no condition needed, just return)
-			return
-		} else {
-			// fork: false (default) - exclude PRs from forks
-			// The condition should be true for non-pull_request events or for non-fork pull_requests
-			notPullRequestEvent := BuildNotEquals(
-				BuildPropertyAccess("github.event_name"),
-				BuildStringLiteral("pull_request"),
-			)
-			isNotFromFork := BuildNotFromFork()
-			forkCondition = &OrNode{
-				Left:  notPullRequestEvent,
-				Right: isNotFromFork,
-			}
-		}
+	forkCondition := &OrNode{
+		Left:  notPullRequestEvent,
+		Right: allowedForksCondition,
 	}
 
 	// Build condition tree and render

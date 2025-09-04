@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
     - main
-    # fork: false # Fork filtering applied via job conditions
+    # forks: [] # Fork filtering applied via job conditions
   workflow_dispatch: null
 
 permissions: {}
