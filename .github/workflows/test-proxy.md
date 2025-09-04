@@ -8,6 +8,10 @@ on:
 safe-outputs:
   add-issue-comment:
 
+network:
+  allowed:
+    - "example.com"
+
 tools:
   fetch:
     mcp:
@@ -20,11 +24,6 @@ tools:
     allowed: 
       - "fetch"
   
-  github:
-    allowed:
-      - "create_issue"
-      - "create_comment"
-
 engine: claude
 runs-on: ubuntu-latest
 ---

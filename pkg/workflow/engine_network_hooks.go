@@ -31,7 +31,7 @@ import sys
 import urllib.parse
 import re
 
-# Domain whitelist (populated during generation)
+# Domain allow-list (populated during generation)
 ALLOWED_DOMAINS = %s
 
 def extract_domain(url_or_query):
@@ -128,7 +128,8 @@ chmod +x .claude/hooks/network_permissions.py`, hookScript)
 	return GitHubActionStep(lines)
 }
 
-// getDefaultAllowedDomains returns the default whitelist of domains for network: defaults mode
+// getDefaultAllowedDomains returns the basic infrastructure domains for network: defaults mode
+// Includes only essential infrastructure: certs, JSON schema, Ubuntu, common package mirrors, Microsoft sources
 func getDefaultAllowedDomains() []string {
 	return []string{
 		// Certificate Authority and OCSP domains
@@ -156,7 +157,30 @@ func getDefaultAllowedDomains() []string {
 		"s.symcb.com",
 		"s.symcd.com",
 
-		// Container Registries
+		// JSON Schema
+		"json-schema.org",
+		"json.schemastore.org",
+
+		// Ubuntu
+		"archive.ubuntu.com",
+		"security.ubuntu.com",
+		"ppa.launchpad.net",
+		"keyserver.ubuntu.com",
+		"azure.archive.ubuntu.com",
+		"api.snapcraft.io",
+
+		// Common Package Mirrors
+		"packagecloud.io",
+		"packages.cloud.google.com",
+
+		// Microsoft Sources
+		"packages.microsoft.com",
+	}
+}
+
+// getContainerDomains returns container registry domains
+func getContainerDomains() []string {
+	return []string{
 		"ghcr.io",
 		"registry.hub.docker.com",
 		"*.docker.io",
@@ -168,8 +192,12 @@ func getDefaultAllowedDomains() []string {
 		"mcr.microsoft.com",
 		"gcr.io",
 		"auth.docker.io",
+	}
+}
 
-		// .NET and NuGet
+// getDotnetDomains returns .NET and NuGet domains
+func getDotnetDomains() []string {
+	return []string{
 		"nuget.org",
 		"dist.nuget.org",
 		"api.nuget.org",
@@ -186,12 +214,20 @@ func getDefaultAllowedDomains() []string {
 		"ci.dot.net",
 		"www.microsoft.com",
 		"oneocsp.microsoft.com",
+	}
+}
 
-		// Dart/Flutter
+// getDartDomains returns Dart/Flutter domains
+func getDartDomains() []string {
+	return []string{
 		"pub.dev",
 		"pub.dartlang.org",
+	}
+}
 
-		// GitHub
+// getGitHubDomains returns GitHub domains
+func getGitHubDomains() []string {
+	return []string{
 		"*.githubusercontent.com",
 		"raw.githubusercontent.com",
 		"objects.githubusercontent.com",
@@ -199,28 +235,44 @@ func getDefaultAllowedDomains() []string {
 		"github-cloud.githubusercontent.com",
 		"github-cloud.s3.amazonaws.com",
 		"codeload.github.com",
+	}
+}
 
-		// Go
+// getGoDomains returns Go ecosystem domains
+func getGoDomains() []string {
+	return []string{
 		"go.dev",
 		"golang.org",
 		"proxy.golang.org",
 		"sum.golang.org",
 		"pkg.go.dev",
 		"goproxy.io",
+	}
+}
 
-		// HashiCorp
+// getTerraformDomains returns HashiCorp/Terraform domains
+func getTerraformDomains() []string {
+	return []string{
 		"releases.hashicorp.com",
 		"apt.releases.hashicorp.com",
 		"yum.releases.hashicorp.com",
 		"registry.terraform.io",
+	}
+}
 
-		// Haskell
+// getHaskellDomains returns Haskell ecosystem domains
+func getHaskellDomains() []string {
+	return []string{
 		"haskell.org",
 		"*.hackage.haskell.org",
 		"get-ghcup.haskell.org",
 		"downloads.haskell.org",
+	}
+}
 
-		// Java/Maven/Gradle
+// getJavaDomains returns Java/Maven/Gradle domains
+func getJavaDomains() []string {
+	return []string{
 		"www.java.com",
 		"jdk.java.net",
 		"api.adoptium.net",
@@ -239,19 +291,12 @@ func getDefaultAllowedDomains() []string {
 		"download.eclipse.org",
 		"download.oracle.com",
 		"jcenter.bintray.com",
+	}
+}
 
-		// JSON Schema
-		"json-schema.org",
-		"json.schemastore.org",
-
-		// Linux Package Repositories
-		// Ubuntu
-		"archive.ubuntu.com",
-		"security.ubuntu.com",
-		"ppa.launchpad.net",
-		"keyserver.ubuntu.com",
-		"azure.archive.ubuntu.com",
-		"api.snapcraft.io",
+// getLinuxDistrosDomains returns Linux package repository domains
+func getLinuxDistrosDomains() []string {
+	return []string{
 		// Debian
 		"deb.debian.org",
 		"security.debian.org",
@@ -276,13 +321,12 @@ func getDefaultAllowedDomains() []string {
 		"download.opensuse.org",
 		// Red Hat
 		"cdn.redhat.com",
-		// Common Package Mirrors
-		"packagecloud.io",
-		"packages.cloud.google.com",
-		// Microsoft Sources
-		"packages.microsoft.com",
+	}
+}
 
-		// Node.js/NPM/Yarn
+// getNodeDomains returns Node.js/NPM/Yarn domains
+func getNodeDomains() []string {
+	return []string{
 		"npmjs.org",
 		"npmjs.com",
 		"registry.npmjs.com",
@@ -299,23 +343,39 @@ func getDefaultAllowedDomains() []string {
 		"bun.sh",
 		"deno.land",
 		"registry.bower.io",
+	}
+}
 
-		// Perl
+// getPerlDomains returns Perl ecosystem domains
+func getPerlDomains() []string {
+	return []string{
 		"cpan.org",
 		"www.cpan.org",
 		"metacpan.org",
 		"cpan.metacpan.org",
+	}
+}
 
-		// PHP
+// getPhpDomains returns PHP ecosystem domains
+func getPhpDomains() []string {
+	return []string{
 		"repo.packagist.org",
 		"packagist.org",
 		"getcomposer.org",
+	}
+}
 
-		// Playwright
+// getPlaywrightDomains returns Playwright domains
+func getPlaywrightDomains() []string {
+	return []string{
 		"playwright.download.prss.microsoft.com",
 		"cdn.playwright.dev",
+	}
+}
 
-		// Python
+// getPythonDomains returns Python ecosystem domains
+func getPythonDomains() []string {
+	return []string{
 		"pypi.python.org",
 		"pypi.org",
 		"pip.pypa.io",
@@ -328,8 +388,12 @@ func getDefaultAllowedDomains() []string {
 		"anaconda.org",
 		"repo.continuum.io",
 		"repo.anaconda.com",
+	}
+}
 
-		// Ruby
+// getRubyDomains returns Ruby ecosystem domains
+func getRubyDomains() []string {
+	return []string{
 		"rubygems.org",
 		"api.rubygems.org",
 		"rubygems.pkg.github.com",
@@ -339,25 +403,27 @@ func getDefaultAllowedDomains() []string {
 		"index.rubygems.org",
 		"cache.ruby-lang.org",
 		"*.rvm.io",
+	}
+}
 
-		// Rust
+// getRustDomains returns Rust ecosystem domains
+func getRustDomains() []string {
+	return []string{
 		"crates.io",
 		"index.crates.io",
 		"static.crates.io",
 		"sh.rustup.rs",
 		"static.rust-lang.org",
+	}
+}
 
-		// Swift
+// getSwiftDomains returns Swift ecosystem domains
+func getSwiftDomains() []string {
+	return []string{
 		"download.swift.org",
 		"swift.org",
 		"cocoapods.org",
 		"cdn.cocoapods.org",
-
-		// TODO: paths
-		//url: { scheme: ["https"], domain: storage.googleapis.com, path: "/pub-packages/" }
-		//url: { scheme: ["https"], domain: storage.googleapis.com, path: "/proxy-golang-org-prod/" }
-		//url: { scheme: ["https"], domain: uploads.github.com, path: "/copilot/chat/attachments/" }
-
 	}
 }
 
@@ -368,22 +434,40 @@ func ShouldEnforceNetworkPermissions(network *NetworkPermissions) bool {
 		return false // No network config, defaults to full access
 	}
 	if network.Mode == "defaults" {
-		return true // "defaults" mode uses restricted whitelist (enforcement needed)
+		return true // "defaults" mode uses restricted allow-list (enforcement needed)
 	}
 	return true // Object format means some restriction is configured
 }
 
 // GetAllowedDomains returns the allowed domains from network permissions
-// Returns default whitelist if no network permissions configured or in "defaults" mode
+// Returns default allow-list if no network permissions configured or in "defaults" mode
 // Returns empty slice if network permissions configured but no domains allowed (deny all)
 // Returns domain list if network permissions configured with allowed domains
-// If "defaults" appears in the allowed list, it's expanded to the default whitelist
+// Supports ecosystem identifiers:
+//   - "defaults": basic infrastructure (certs, JSON schema, Ubuntu, common package mirrors, Microsoft sources)
+//   - "containers": container registries (Docker, GitHub Container Registry, etc.)
+//   - "dotnet": .NET and NuGet ecosystem
+//   - "dart": Dart/Flutter ecosystem
+//   - "github": GitHub domains
+//   - "go": Go ecosystem
+//   - "terraform": HashiCorp/Terraform
+//   - "haskell": Haskell ecosystem
+//   - "java": Java/Maven/Gradle
+//   - "linux-distros": Linux distribution package repositories
+//   - "node": Node.js/NPM/Yarn
+//   - "perl": Perl/CPAN
+//   - "php": PHP/Composer
+//   - "playwright": Playwright testing framework
+//   - "python": Python/PyPI/Conda
+//   - "ruby": Ruby/RubyGems
+//   - "rust": Rust/Cargo/Crates
+//   - "swift": Swift/CocoaPods
 func GetAllowedDomains(network *NetworkPermissions) []string {
 	if network == nil {
-		return getDefaultAllowedDomains() // Default whitelist for backwards compatibility
+		return getDefaultAllowedDomains() // Default allow-list for backwards compatibility
 	}
 	if network.Mode == "defaults" {
-		return getDefaultAllowedDomains() // Default whitelist for defaults mode
+		return getDefaultAllowedDomains() // Default allow-list for defaults mode
 	}
 
 	// Handle empty allowed list (deny-all case)
@@ -391,19 +475,107 @@ func GetAllowedDomains(network *NetworkPermissions) []string {
 		return []string{} // Return empty slice, not nil
 	}
 
-	// Process the allowed list, expanding "defaults" if present
+	// Process the allowed list, expanding ecosystem identifiers if present
 	var expandedDomains []string
 	for _, domain := range network.Allowed {
-		if domain == "defaults" {
-			// Expand "defaults" to the full default whitelist
+		switch domain {
+		case "defaults":
+			// Expand "defaults" to basic infrastructure domains
 			expandedDomains = append(expandedDomains, getDefaultAllowedDomains()...)
-		} else {
-			// Add the domain as-is
+		case "containers":
+			expandedDomains = append(expandedDomains, getContainerDomains()...)
+		case "dotnet":
+			expandedDomains = append(expandedDomains, getDotnetDomains()...)
+		case "dart":
+			expandedDomains = append(expandedDomains, getDartDomains()...)
+		case "github":
+			expandedDomains = append(expandedDomains, getGitHubDomains()...)
+		case "go":
+			expandedDomains = append(expandedDomains, getGoDomains()...)
+		case "terraform":
+			expandedDomains = append(expandedDomains, getTerraformDomains()...)
+		case "haskell":
+			expandedDomains = append(expandedDomains, getHaskellDomains()...)
+		case "java":
+			expandedDomains = append(expandedDomains, getJavaDomains()...)
+		case "linux-distros":
+			expandedDomains = append(expandedDomains, getLinuxDistrosDomains()...)
+		case "node":
+			expandedDomains = append(expandedDomains, getNodeDomains()...)
+		case "perl":
+			expandedDomains = append(expandedDomains, getPerlDomains()...)
+		case "php":
+			expandedDomains = append(expandedDomains, getPhpDomains()...)
+		case "playwright":
+			expandedDomains = append(expandedDomains, getPlaywrightDomains()...)
+		case "python":
+			expandedDomains = append(expandedDomains, getPythonDomains()...)
+		case "ruby":
+			expandedDomains = append(expandedDomains, getRubyDomains()...)
+		case "rust":
+			expandedDomains = append(expandedDomains, getRustDomains()...)
+		case "swift":
+			expandedDomains = append(expandedDomains, getSwiftDomains()...)
+		default:
+			// Add the domain as-is (regular domain name)
 			expandedDomains = append(expandedDomains, domain)
 		}
 	}
 
 	return expandedDomains
+}
+
+// GetDomainEcosystem returns the ecosystem identifier for a given domain, or empty string if not found
+func GetDomainEcosystem(domain string) string {
+	// Check if domain matches any ecosystem
+	ecosystems := map[string]func() []string{
+		"defaults":      getDefaultAllowedDomains,
+		"containers":    getContainerDomains,
+		"dotnet":        getDotnetDomains,
+		"dart":          getDartDomains,
+		"github":        getGitHubDomains,
+		"go":            getGoDomains,
+		"terraform":     getTerraformDomains,
+		"haskell":       getHaskellDomains,
+		"java":          getJavaDomains,
+		"linux-distros": getLinuxDistrosDomains,
+		"node":          getNodeDomains,
+		"perl":          getPerlDomains,
+		"php":           getPhpDomains,
+		"playwright":    getPlaywrightDomains,
+		"python":        getPythonDomains,
+		"ruby":          getRubyDomains,
+		"rust":          getRustDomains,
+		"swift":         getSwiftDomains,
+	}
+
+	// Check each ecosystem for domain match
+	for ecosystem, getDomainsFunc := range ecosystems {
+		domains := getDomainsFunc()
+		for _, ecosystemDomain := range domains {
+			if matchesDomain(domain, ecosystemDomain) {
+				return ecosystem
+			}
+		}
+	}
+
+	return "" // No ecosystem found
+}
+
+// matchesDomain checks if a domain matches a pattern (supports wildcards)
+func matchesDomain(domain, pattern string) bool {
+	// Exact match
+	if domain == pattern {
+		return true
+	}
+
+	// Wildcard match
+	if strings.HasPrefix(pattern, "*.") {
+		suffix := pattern[2:] // Remove "*."
+		return strings.HasSuffix(domain, "."+suffix) || domain == suffix
+	}
+
+	return false
 }
 
 // HasNetworkPermissions is deprecated - use ShouldEnforceNetworkPermissions instead
