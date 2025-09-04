@@ -1017,6 +1017,35 @@
             }
           ]
         },
+        "create-discussion": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Configuration for creating GitHub discussions from agentic workflow output",
+              "properties": {
+                "title-prefix": {
+                  "type": "string",
+                  "description": "Optional prefix for the discussion title"
+                },
+                "category-id": {
+                  "type": "string",
+                  "description": "Optional discussion category ID. If not specified, uses the first available category"
+                },
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of discussions to create (default: 1)",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Enable discussion creation with default configuration"
+            }
+          ]
+        },
         "add-issue-comment": {
           "oneOf": [
             {
@@ -1069,6 +1098,32 @@
             {
               "type": "null",
               "description": "Enable pull request creation with default configuration"
+            }
+          ]
+        },
+        "create-pull-request-review-comment": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Configuration for creating GitHub pull request review comments from agentic workflow output",
+              "properties": {
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of review comments to create (default: 1)",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "side": {
+                  "type": "string",
+                  "description": "Side of the diff for comments: 'LEFT' or 'RIGHT' (default: 'RIGHT')",
+                  "enum": ["LEFT", "RIGHT"]
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Enable PR review comment creation with default configuration"
             }
           ]
         },

@@ -2,22 +2,32 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Claude Update Issue"
+name: "Test Claude Create Pull Request Review Comment"
 "on":
-  issues:
+  pull_request:
     types:
     - opened
+    - synchronize
     - reopened
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
-run-name: "Test Claude Update Issue"
+run-name: "Test Claude Create Pull Request Review Comment"
 
 jobs:
+  task:
+    if: contains(github.event.pull_request.title, 'prr')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Task job condition barrier
+        run: echo "Task job executed - conditions satisfied"
+
   add_reaction:
+    needs: task
     if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-latest
     permissions:
@@ -206,7 +216,8 @@ jobs:
             }
             await main();
 
-  test-claude-update-issue:
+  test-claude-create-pull-request-review-comment:
+    needs: task
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -375,30 +386,30 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          If the title of the issue #${{ github.event.issue.number }} is exactly "[claude-test] Update Issue Test" then:
+          Analyze the pull request and create a few targeted review comments on the code changes. 
           
-          1. Change the status to "closed"
-          2. Update the title to "[UPDATED] Update Issue Test - Processed by Claude"
-          3. Add a line to the end of the body saying "This issue was automatically updated by the Claude agentic workflow."
+          Create 2-3 review comments focusing on:
+          1. Code quality and best practices
+          2. Potential security issues or improvements  
+          3. Performance optimizations or concerns
+          
+          For each review comment, specify:
+          - The exact file path where the comment should be placed
+          - The specific line number in the diff
+          - A helpful comment body with actionable feedback
+          
+          If you find multi-line issues, use start_line to comment on ranges of lines.
           
           
           ---
           
-          ## Updating Issues
+          ## 
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
           **Format**: Write one JSON object per line. Each object must have a `type` field specifying the action type.
           
           ### Available Output Types:
-          
-          **Updating an Issue**
-          
-          To udpate an issue:
-          ```json
-          {"type": "update-issue", "status": "open" // or "closed", "title": "New issue title", "body": "Updated issue body in markdown"}
-          ```
-          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
           
           **Example JSONL file content:**
           ```
@@ -430,7 +441,7 @@ jobs:
               engine_name: "Claude Code",
               model: "",
               version: "",
-              workflow_name: "Test Claude Update Issue",
+              workflow_name: "Test Claude Create Pull Request Review Comment",
               experimental: false,
               supports_tools_whitelist: true,
               supports_http_transport: true,
@@ -530,13 +541,13 @@ jobs:
         run: |
           # Copy the detailed execution file from Agentic Action if available
           if [ -n "${{ steps.agentic_execution.outputs.execution_file }}" ] && [ -f "${{ steps.agentic_execution.outputs.execution_file }}" ]; then
-            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-update-issue.log
+            cp ${{ steps.agentic_execution.outputs.execution_file }} /tmp/test-claude-create-pull-request-review-comment.log
           else
-            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-update-issue.log
+            echo "No execution file output found from Agentic Action" >> /tmp/test-claude-create-pull-request-review-comment.log
           fi
           
           # Ensure log file exists
-          touch /tmp/test-claude-update-issue.log
+          touch /tmp/test-claude-create-pull-request-review-comment.log
       - name: Check if workflow-complete.txt exists, if so upload it
         id: check_file
         run: |
@@ -558,7 +569,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"update-issue\":true}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{}"
         with:
           script: |
             async function main() {
@@ -1202,7 +1213,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-claude-update-issue.log
+          AGENT_LOG_FILE: /tmp/test-claude-create-pull-request-review-comment.log
         with:
           script: |
             function main() {
@@ -1519,30 +1530,28 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-claude-update-issue.log
-          path: /tmp/test-claude-update-issue.log
+          name: test-claude-create-pull-request-review-comment.log
+          path: /tmp/test-claude-create-pull-request-review-comment.log
           if-no-files-found: warn
 
-  update_issue:
-    needs: test-claude-update-issue
-    if: github.event.issue.number
+  create_pr_review_comment:
+    needs: test-claude-create-pull-request-review-comment
+    if: github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
+      pull-requests: write
     timeout-minutes: 10
     outputs:
-      issue_number: ${{ steps.update_issue.outputs.issue_number }}
-      issue_url: ${{ steps.update_issue.outputs.issue_url }}
+      review_comment_id: ${{ steps.create_pr_review_comment.outputs.review_comment_id }}
+      review_comment_url: ${{ steps.create_pr_review_comment.outputs.review_comment_url }}
     steps:
-      - name: Update Issue
-        id: update_issue
+      - name: Create PR Review Comment
+        id: create_pr_review_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-update-issue.outputs.output }}
-          GITHUB_AW_UPDATE_STATUS: true
-          GITHUB_AW_UPDATE_TITLE: true
-          GITHUB_AW_UPDATE_BODY: true
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-create-pull-request-review-comment.outputs.output }}
+          GITHUB_AW_PR_REVIEW_COMMENT_SIDE: "RIGHT"
         with:
           script: |
             async function main() {
@@ -1572,158 +1581,158 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find all update-issue items
-              const updateItems = validatedOutput.items.filter(
-                /** @param {any} item */ item => item.type === "update-issue"
+              // Find all create-pull-request-review-comment items
+              const reviewCommentItems = validatedOutput.items.filter(
+                /** @param {any} item */ item =>
+                  item.type === "create-pull-request-review-comment"
               );
-              if (updateItems.length === 0) {
-                console.log("No update-issue items found in agent output");
-                return;
-              }
-              console.log(`Found ${updateItems.length} update-issue item(s)`);
-              // Get the configuration from environment variables
-              const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
-              const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === "true";
-              const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === "true";
-              const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === "true";
-              console.log(`Update target configuration: ${updateTarget}`);
-              console.log(
-                `Can update status: ${canUpdateStatus}, title: ${canUpdateTitle}, body: ${canUpdateBody}`
-              );
-              // Check if we're in an issue context
-              const isIssueContext =
-                context.eventName === "issues" || context.eventName === "issue_comment";
-              // Validate context based on target configuration
-              if (updateTarget === "triggering" && !isIssueContext) {
+              if (reviewCommentItems.length === 0) {
                 console.log(
-                  'Target is "triggering" but not running in issue context, skipping issue update'
+                  "No create-pull-request-review-comment items found in agent output"
                 );
                 return;
               }
-              const updatedIssues = [];
-              // Process each update item
-              for (let i = 0; i < updateItems.length; i++) {
-                const updateItem = updateItems[i];
-                console.log(`Processing update-issue item ${i + 1}/${updateItems.length}`);
-                // Determine the issue number for this update
-                let issueNumber;
-                if (updateTarget === "*") {
-                  // For target "*", we need an explicit issue number from the update item
-                  if (updateItem.issue_number) {
-                    issueNumber = parseInt(updateItem.issue_number, 10);
-                    if (isNaN(issueNumber) || issueNumber <= 0) {
-                      console.log(
-                        `Invalid issue number specified: ${updateItem.issue_number}`
-                      );
-                      continue;
-                    }
-                  } else {
-                    console.log(
-                      'Target is "*" but no issue_number specified in update item'
-                    );
-                    continue;
+              console.log(
+                `Found ${reviewCommentItems.length} create-pull-request-review-comment item(s)`
+              );
+              // Get the side configuration from environment variable
+              const defaultSide = process.env.GITHUB_AW_PR_REVIEW_COMMENT_SIDE || "RIGHT";
+              console.log(`Default comment side configuration: ${defaultSide}`);
+              // Check if we're in a pull request context
+              const isPRContext =
+                context.eventName === "pull_request" ||
+                context.eventName === "pull_request_review" ||
+                context.eventName === "pull_request_review_comment";
+              if (!isPRContext) {
+                console.log(
+                  "Not running in pull request context, skipping review comment creation"
+                );
+                return;
+              }
+              if (!context.payload.pull_request) {
+                console.log(
+                  "Pull request context detected but no pull request found in payload"
+                );
+                return;
+              }
+              const pullRequestNumber = context.payload.pull_request.number;
+              console.log(`Creating review comments on PR #${pullRequestNumber}`);
+              const createdComments = [];
+              // Process each review comment item
+              for (let i = 0; i < reviewCommentItems.length; i++) {
+                const commentItem = reviewCommentItems[i];
+                console.log(
+                  `Processing create-pull-request-review-comment item ${i + 1}/${reviewCommentItems.length}:`,
+                  {
+                    bodyLength: commentItem.body ? commentItem.body.length : "undefined",
+                    path: commentItem.path,
+                    line: commentItem.line,
+                    startLine: commentItem.start_line,
                   }
-                } else if (updateTarget && updateTarget !== "triggering") {
-                  // Explicit issue number specified in target
-                  issueNumber = parseInt(updateTarget, 10);
-                  if (isNaN(issueNumber) || issueNumber <= 0) {
-                    console.log(
-                      `Invalid issue number in target configuration: ${updateTarget}`
-                    );
-                    continue;
-                  }
-                } else {
-                  // Default behavior: use triggering issue
-                  if (isIssueContext) {
-                    if (context.payload.issue) {
-                      issueNumber = context.payload.issue.number;
-                    } else {
-                      console.log("Issue context detected but no issue found in payload");
-                      continue;
-                    }
-                  } else {
-                    console.log("Could not determine issue number");
-                    continue;
-                  }
-                }
-                if (!issueNumber) {
-                  console.log("Could not determine issue number");
+                );
+                // Validate required fields
+                if (!commentItem.path) {
+                  console.log('Missing required field "path" in review comment item');
                   continue;
                 }
-                console.log(`Updating issue #${issueNumber}`);
-                // Build the update object based on allowed fields and provided values
-                const updateData = {};
-                let hasUpdates = false;
-                if (canUpdateStatus && updateItem.status !== undefined) {
-                  // Validate status value
-                  if (updateItem.status === "open" || updateItem.status === "closed") {
-                    updateData.state = updateItem.status;
-                    hasUpdates = true;
-                    console.log(`Will update status to: ${updateItem.status}`);
-                  } else {
-                    console.log(
-                      `Invalid status value: ${updateItem.status}. Must be 'open' or 'closed'`
-                    );
-                  }
-                }
-                if (canUpdateTitle && updateItem.title !== undefined) {
-                  if (
-                    typeof updateItem.title === "string" &&
-                    updateItem.title.trim().length > 0
-                  ) {
-                    updateData.title = updateItem.title.trim();
-                    hasUpdates = true;
-                    console.log(`Will update title to: ${updateItem.title.trim()}`);
-                  } else {
-                    console.log("Invalid title value: must be a non-empty string");
-                  }
-                }
-                if (canUpdateBody && updateItem.body !== undefined) {
-                  if (typeof updateItem.body === "string") {
-                    updateData.body = updateItem.body;
-                    hasUpdates = true;
-                    console.log(`Will update body (length: ${updateItem.body.length})`);
-                  } else {
-                    console.log("Invalid body value: must be a string");
-                  }
-                }
-                if (!hasUpdates) {
-                  console.log("No valid updates to apply for this item");
+                if (
+                  !commentItem.line ||
+                  (typeof commentItem.line !== "number" &&
+                    typeof commentItem.line !== "string")
+                ) {
+                  console.log(
+                    'Missing or invalid required field "line" in review comment item'
+                  );
                   continue;
                 }
+                if (!commentItem.body || typeof commentItem.body !== "string") {
+                  console.log(
+                    'Missing or invalid required field "body" in review comment item'
+                  );
+                  continue;
+                }
+                // Parse line numbers
+                const line = parseInt(commentItem.line, 10);
+                if (isNaN(line) || line <= 0) {
+                  console.log(`Invalid line number: ${commentItem.line}`);
+                  continue;
+                }
+                let startLine = undefined;
+                if (commentItem.start_line) {
+                  startLine = parseInt(commentItem.start_line, 10);
+                  if (isNaN(startLine) || startLine <= 0 || startLine > line) {
+                    console.log(
+                      `Invalid start_line number: ${commentItem.start_line} (must be <= line: ${line})`
+                    );
+                    continue;
+                  }
+                }
+                // Determine side (LEFT or RIGHT)
+                const side = commentItem.side || defaultSide;
+                if (side !== "LEFT" && side !== "RIGHT") {
+                  console.log(`Invalid side value: ${side} (must be LEFT or RIGHT)`);
+                  continue;
+                }
+                // Extract body from the JSON item
+                let body = commentItem.body.trim();
+                // Add AI disclaimer with run id, run htmlurl
+                const runId = context.runId;
+                const runUrl = context.payload.repository
+                  ? `${context.payload.repository.html_url}/actions/runs/${runId}`
+                  : `https://github.com/actions/runs/${runId}`;
+                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
+                console.log(
+                  `Creating review comment on PR #${pullRequestNumber} at ${commentItem.path}:${line}${startLine ? ` (lines ${startLine}-${line})` : ""} [${side}]`
+                );
+                console.log("Comment content length:", body.length);
                 try {
-                  // Update the issue using GitHub API
-                  const { data: issue } = await github.rest.issues.update({
+                  // Prepare the request parameters
+                  const requestParams = {
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    issue_number: issueNumber,
-                    ...updateData,
-                  });
-                  console.log("Updated issue #" + issue.number + ": " + issue.html_url);
-                  updatedIssues.push(issue);
-                  // Set output for the last updated issue (for backward compatibility)
-                  if (i === updateItems.length - 1) {
-                    core.setOutput("issue_number", issue.number);
-                    core.setOutput("issue_url", issue.html_url);
+                    pull_number: pullRequestNumber,
+                    body: body,
+                    path: commentItem.path,
+                    line: line,
+                    side: side,
+                  };
+                  // Add start_line for multi-line comments
+                  if (startLine !== undefined) {
+                    requestParams.start_line = startLine;
+                    requestParams.start_side = side; // start_side should match side for consistency
+                  }
+                  // Create the review comment using GitHub API
+                  const { data: comment } =
+                    await github.rest.pulls.createReviewComment(requestParams);
+                  console.log(
+                    "Created review comment #" + comment.id + ": " + comment.html_url
+                  );
+                  createdComments.push(comment);
+                  // Set output for the last created comment (for backward compatibility)
+                  if (i === reviewCommentItems.length - 1) {
+                    core.setOutput("review_comment_id", comment.id);
+                    core.setOutput("review_comment_url", comment.html_url);
                   }
                 } catch (error) {
                   console.error(
-                    `✗ Failed to update issue #${issueNumber}:`,
+                    `✗ Failed to create review comment:`,
                     error instanceof Error ? error.message : String(error)
                   );
                   throw error;
                 }
               }
-              // Write summary for all updated issues
-              if (updatedIssues.length > 0) {
-                let summaryContent = "\n\n## Updated Issues\n";
-                for (const issue of updatedIssues) {
-                  summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
+              // Write summary for all created comments
+              if (createdComments.length > 0) {
+                let summaryContent = "\n\n## GitHub PR Review Comments\n";
+                for (const comment of createdComments) {
+                  summaryContent += `- Review Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully updated ${updatedIssues.length} issue(s)`);
-              return updatedIssues;
+              console.log(
+                `Successfully created ${createdComments.length} review comment(s)`
+              );
+              return createdComments;
             }
             await main();
 
