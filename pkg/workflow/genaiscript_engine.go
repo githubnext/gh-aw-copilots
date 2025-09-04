@@ -17,10 +17,10 @@ func NewGenAIScriptEngine() *GenAIScriptEngine {
 			id:                     "genaiscript",
 			displayName:            "GenAIScript",
 			description:            "Uses GenAIScript to run markdown-based AI scripts with JavaScript/TypeScript",
-			experimental:           true,  // New engine, mark as experimental
-			supportsToolsWhitelist: false, // GenAIScript has its own tool system
-			supportsHTTPTransport:  false, // GenAIScript uses its own transport
-			supportsMaxTurns:       false, // GenAIScript doesn't support max-turns feature
+			experimental:           true, // New engine, mark as experimental
+			supportsToolsWhitelist: true, // GenAIScript has its own tool system
+			supportsHTTPTransport:  true, // GenAIScript supports HTTP transports
+			supportsMaxTurns:       true, // GenAIScript supports max-turns in the front matter
 		},
 	}
 }
@@ -52,51 +52,46 @@ func (e *GenAIScriptEngine) GetDeclaredOutputFiles() []string {
 }
 
 func (e *GenAIScriptEngine) GetExecutionConfig(workflowName string, logFile string, engineConfig *EngineConfig, networkPermissions *NetworkPermissions, hasOutput bool) ExecutionConfig {
-	// Use model from engineConfig if available, otherwise default to gpt-4o-mini
-	model := "gpt-4o-mini"
+	// Leave model empty if not specified - GenAIScript will use its default
+	var model string
 	if engineConfig != nil && engineConfig.Model != "" {
 		model = engineConfig.Model
 	}
 
-	command := fmt.Sprintf(`set -o pipefail
-# Read the instruction/prompt from the aw-prompts file
-INSTRUCTION=$(cat /tmp/aw-prompts/prompt.txt)
-
-# Create a temporary GenAIScript script file that contains the markdown prompt
-mkdir -p /tmp/genaiscript-workspace/genaisrc
-cat > /tmp/genaiscript-workspace/genaisrc/workflow.genai.mts << 'EOF'
-script({
-  title: "GitHub Agentic Workflow",
-  description: "Execute workflow instructions using GenAIScript",
-  model: "%s"
-})
-
-// Use the instruction from the workflow
-$INSTRUCTION = process.env.WORKFLOW_INSTRUCTION || ""
-$`+"`"+`${$INSTRUCTION}`+"`"+`
-EOF
-
-# Set the working directory for GenAIScript
-cd /tmp/genaiscript-workspace
-
-# Configure GenAIScript to work in this directory
-export GENAISCRIPT_VAR_WORKSPACE_INSTRUCTION="$INSTRUCTION"
-
-# Run genaiscript with log capture - pipefail ensures genaiscript exit code is preserved
-genaiscript run workflow \
-  --model %s \
-  --out /tmp/genaiscript-output 2>&1 | tee %s`, model, model, logFile)
-
-	env := map[string]string{
-		"OPENAI_API_KEY":       "${{ secrets.OPENAI_API_KEY }}",
-		"GITHUB_STEP_SUMMARY":  "${{ env.GITHUB_STEP_SUMMARY }}",
-		"WORKFLOW_INSTRUCTION": "$(cat /tmp/aw-prompts/prompt.txt)",
+	// Build model argument for genaiscript command
+	modelArg := ""
+	if model != "" {
+		modelArg = fmt.Sprintf(" --model %s", model)
 	}
 
-	// Add other API keys that GenAIScript might use
-	env["ANTHROPIC_API_KEY"] = "${{ secrets.ANTHROPIC_API_KEY }}"
-	env["AZURE_OPENAI_API_KEY"] = "${{ secrets.AZURE_OPENAI_API_KEY }}"
-	env["GOOGLE_API_KEY"] = "${{ secrets.GOOGLE_API_KEY }}"
+	command := fmt.Sprintf(`set -o pipefail
+
+# Create GenAIScript workspace
+mkdir -p /tmp/genaiscript-workspace
+
+# Read the workflow content 
+WORKFLOW_CONTENT=$(cat /tmp/aw-prompts/prompt.txt)
+
+# Create the GenAIScript markdown file directly
+cat > /tmp/genaiscript-workspace/workflow.genai.md << EOF
+---
+title: GitHub Agentic Workflow
+description: Execute workflow instructions using GenAIScript
+model: %s
+---
+
+$WORKFLOW_CONTENT
+EOF
+
+# Change to workspace directory
+cd /tmp/genaiscript-workspace
+
+# Run genaiscript with the markdown file - pipefail ensures genaiscript exit code is preserved
+genaiscript run workflow.genai.md%s --out /tmp/genaiscript-output 2>&1 | tee %s`, model, modelArg, logFile)
+
+	env := map[string]string{
+		"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
+	}
 
 	// Add GITHUB_AW_SAFE_OUTPUTS if output is needed
 	if hasOutput {
@@ -111,10 +106,16 @@ genaiscript run workflow \
 }
 
 func (e *GenAIScriptEngine) RenderMCPConfig(yaml *strings.Builder, tools map[string]any, mcpTools []string) {
-	// GenAIScript has its own tool/MCP system, so we don't need to configure MCP servers here
-	// For now, we'll just create an empty placeholder in case it's needed
-	yaml.WriteString("          # GenAIScript uses its own tool system\n")
-	yaml.WriteString("          # No MCP configuration needed\n")
+	// GenAIScript supports MCPs - configure MCP servers
+	if len(mcpTools) > 0 {
+		yaml.WriteString("          # GenAIScript MCP configuration\n")
+		yaml.WriteString("          GENAISCRIPT_MCP_SERVERS: |\n")
+		for _, tool := range mcpTools {
+			yaml.WriteString(fmt.Sprintf("            %s\n", tool))
+		}
+	} else {
+		yaml.WriteString("          # No MCP servers configured for GenAIScript\n")
+	}
 }
 
 // ParseLogMetrics implements engine-specific log parsing for GenAIScript

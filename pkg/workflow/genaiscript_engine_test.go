@@ -19,16 +19,16 @@ func TestGenAIScriptEngine(t *testing.T) {
 		t.Error("Expected GenAIScript engine to be experimental")
 	}
 
-	if engine.SupportsToolsWhitelist() {
-		t.Error("Expected GenAIScript engine to not support tools whitelist")
+	if !engine.SupportsToolsWhitelist() {
+		t.Error("Expected GenAIScript engine to support tools whitelist")
 	}
 
-	if engine.SupportsHTTPTransport() {
-		t.Error("Expected GenAIScript engine to not support HTTP transport")
+	if !engine.SupportsHTTPTransport() {
+		t.Error("Expected GenAIScript engine to support HTTP transport")
 	}
 
-	if engine.SupportsMaxTurns() {
-		t.Error("Expected GenAIScript engine to not support max-turns")
+	if !engine.SupportsMaxTurns() {
+		t.Error("Expected GenAIScript engine to support max-turns")
 	}
 }
 
@@ -93,13 +93,14 @@ func TestGenAIScriptEngineExecutionConfig(t *testing.T) {
 		t.Error("Expected execution command to be set")
 	}
 
-	// Check that environment variables include required API keys
-	if config.Environment["OPENAI_API_KEY"] != "${{ secrets.OPENAI_API_KEY }}" {
-		t.Error("Expected OPENAI_API_KEY to be configured")
+	// Check that required environment variables are configured
+	if config.Environment["GITHUB_STEP_SUMMARY"] != "${{ env.GITHUB_STEP_SUMMARY }}" {
+		t.Error("Expected GITHUB_STEP_SUMMARY to be configured")
 	}
 
-	if config.Environment["ANTHROPIC_API_KEY"] != "${{ secrets.ANTHROPIC_API_KEY }}" {
-		t.Error("Expected ANTHROPIC_API_KEY to be configured")
+	// API keys are no longer configured by default in GenAIScript engine
+	if _, exists := config.Environment["OPENAI_API_KEY"]; exists {
+		t.Error("Expected OPENAI_API_KEY to not be configured by default")
 	}
 }
 
