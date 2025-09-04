@@ -142,14 +142,15 @@ type WorkflowData struct {
 
 // SafeOutputsConfig holds configuration for automatic output routes
 type SafeOutputsConfig struct {
-	CreateIssues       *CreateIssuesConfig       `yaml:"create-issue,omitempty"`
-	CreateDiscussions  *CreateDiscussionsConfig  `yaml:"create-discussion,omitempty"`
-	AddIssueComments   *AddIssueCommentsConfig   `yaml:"add-issue-comment,omitempty"`
-	CreatePullRequests *CreatePullRequestsConfig `yaml:"create-pull-request,omitempty"`
-	AddIssueLabels     *AddIssueLabelsConfig     `yaml:"add-issue-label,omitempty"`
-	UpdateIssues       *UpdateIssuesConfig       `yaml:"update-issue,omitempty"`
-	PushToBranch       *PushToBranchConfig       `yaml:"push-to-branch,omitempty"`
-	AllowedDomains     []string                  `yaml:"allowed-domains,omitempty"`
+	CreateIssues                    *CreateIssuesConfig                    `yaml:"create-issue,omitempty"`
+	CreateDiscussions               *CreateDiscussionsConfig               `yaml:"create-discussion,omitempty"`
+	AddIssueComments                *AddIssueCommentsConfig                `yaml:"add-issue-comment,omitempty"`
+	CreatePullRequests              *CreatePullRequestsConfig              `yaml:"create-pull-request,omitempty"`
+	CreatePullRequestReviewComments *CreatePullRequestReviewCommentsConfig `yaml:"create-pull-request-review-comment,omitempty"`
+	AddIssueLabels                  *AddIssueLabelsConfig                  `yaml:"add-issue-label,omitempty"`
+	UpdateIssues                    *UpdateIssuesConfig                    `yaml:"update-issue,omitempty"`
+	PushToBranch                    *PushToBranchConfig                    `yaml:"push-to-branch,omitempty"`
+	AllowedDomains                  []string                               `yaml:"allowed-domains,omitempty"`
 }
 
 // CreateIssuesConfig holds configuration for creating GitHub issues from agent output
@@ -183,6 +184,12 @@ type CreatePullRequestsConfig struct {
 	Labels      []string `yaml:"labels,omitempty"`
 	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
 	Max         int      `yaml:"max,omitempty"`   // Maximum number of pull requests to create
+}
+
+// CreatePullRequestReviewCommentsConfig holds configuration for creating GitHub pull request review comments from agent output
+type CreatePullRequestReviewCommentsConfig struct {
+	Max  int    `yaml:"max,omitempty"`  // Maximum number of review comments to create (default: 1)
+	Side string `yaml:"side,omitempty"` // Side of the diff: "LEFT" or "RIGHT" (default: "RIGHT")
 }
 
 // AddIssueLabelsConfig holds configuration for adding labels to issues/PRs from agent output
@@ -1716,6 +1723,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 		}
 
+		// Build create_pr_review_comment job if output.create-pull-request-review-comment is configured
+		if data.SafeOutputs.CreatePullRequestReviewComments != nil {
+			createPRReviewCommentJob, err := c.buildCreateOutputPullRequestReviewCommentJob(data, jobName)
+			if err != nil {
+				return fmt.Errorf("failed to build create_pr_review_comment job: %w", err)
+			}
+			if err := c.jobManager.AddJob(createPRReviewCommentJob); err != nil {
+				return fmt.Errorf("failed to add create_pr_review_comment job: %w", err)
+			}
+		}
+
 		// Build create_pull_request job if output.create-pull-request is configured
 		if data.SafeOutputs.CreatePullRequests != nil {
 			createPullRequestJob, err := c.buildCreateOutputPullRequestJob(data, jobName)
@@ -2077,6 +2095,70 @@ func (c *Compiler) buildCreateOutputAddIssueCommentJob(data *WorkflowData, mainJ
 		If:             jobCondition,
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      issues: write\n      pull-requests: write",
+		TimeoutMinutes: 10, // 10-minute timeout as required
+		Steps:          steps,
+		Outputs:        outputs,
+		Depends:        []string{mainJobName}, // Depend on the main workflow job
+	}
+
+	return job, nil
+}
+
+// buildCreateOutputPullRequestReviewCommentJob creates the create_pr_review_comment job
+func (c *Compiler) buildCreateOutputPullRequestReviewCommentJob(data *WorkflowData, mainJobName string) (*Job, error) {
+	if data.SafeOutputs == nil || data.SafeOutputs.CreatePullRequestReviewComments == nil {
+		return nil, fmt.Errorf("safe-outputs.create-pull-request-review-comment configuration is required")
+	}
+
+	var steps []string
+	steps = append(steps, "      - name: Create PR Review Comment\n")
+	steps = append(steps, "        id: create_pr_review_comment\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	// Pass the agent output content from the main job
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass the side configuration
+	if data.SafeOutputs.CreatePullRequestReviewComments.Side != "" {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_REVIEW_COMMENT_SIDE: %q\n", data.SafeOutputs.CreatePullRequestReviewComments.Side))
+	}
+
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	formattedScript := FormatJavaScriptForYAML(createPRReviewCommentScript)
+	steps = append(steps, formattedScript...)
+
+	// Create outputs for the job
+	outputs := map[string]string{
+		"review_comment_id":  "${{ steps.create_pr_review_comment.outputs.review_comment_id }}",
+		"review_comment_url": "${{ steps.create_pr_review_comment.outputs.review_comment_url }}",
+	}
+
+	// Only run in pull request context
+	baseCondition := "github.event.pull_request.number"
+
+	// If this is a command workflow, combine the command trigger condition with the base condition
+	var jobCondition string
+	if data.Command != "" {
+		// Build the command trigger condition
+		commandCondition := buildCommandOnlyCondition(data.Command)
+		commandConditionStr := commandCondition.Render()
+
+		// Combine command condition with base condition using AND
+		jobCondition = fmt.Sprintf("if: (%s) && (%s)", commandConditionStr, baseCondition)
+	} else {
+		// No command trigger, just use the base condition
+		jobCondition = fmt.Sprintf("if: %s", baseCondition)
+	}
+
+	job := &Job{
+		Name:           "create_pr_review_comment",
+		If:             jobCondition,
+		RunsOn:         "runs-on: ubuntu-latest",
+		Permissions:    "permissions:\n      contents: read\n      pull-requests: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
 		Steps:          steps,
 		Outputs:        outputs,
@@ -2874,6 +2956,12 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				config.CreatePullRequests = pullRequestsConfig
 			}
 
+			// Handle create-pull-request-review-comment
+			prReviewCommentsConfig := c.parsePullRequestReviewCommentsConfig(outputMap)
+			if prReviewCommentsConfig != nil {
+				config.CreatePullRequestReviewComments = prReviewCommentsConfig
+			}
+
 			// Parse allowed-domains configuration
 			if allowedDomains, exists := outputMap["allowed-domains"]; exists {
 				if domainsArray, ok := allowedDomains.([]any); ok {
@@ -3098,6 +3186,37 @@ func (c *Compiler) parsePullRequestsConfig(outputMap map[string]any) *CreatePull
 	}
 
 	return pullRequestsConfig
+}
+
+// parsePullRequestReviewCommentsConfig handles create-pull-request-review-comment configuration
+func (c *Compiler) parsePullRequestReviewCommentsConfig(outputMap map[string]any) *CreatePullRequestReviewCommentsConfig {
+	if _, exists := outputMap["create-pull-request-review-comment"]; !exists {
+		return nil
+	}
+
+	configData := outputMap["create-pull-request-review-comment"]
+	prReviewCommentsConfig := &CreatePullRequestReviewCommentsConfig{Max: 10, Side: "RIGHT"} // Default max is 10, side is RIGHT
+
+	if configMap, ok := configData.(map[string]any); ok {
+		// Parse max
+		if max, exists := configMap["max"]; exists {
+			if maxInt, ok := c.parseIntValue(max); ok {
+				prReviewCommentsConfig.Max = maxInt
+			}
+		}
+
+		// Parse side
+		if side, exists := configMap["side"]; exists {
+			if sideStr, ok := side.(string); ok {
+				// Validate side value
+				if sideStr == "LEFT" || sideStr == "RIGHT" {
+					prReviewCommentsConfig.Side = sideStr
+				}
+			}
+		}
+	}
+
+	return prReviewCommentsConfig
 }
 
 // parseIntValue safely parses various numeric types to int

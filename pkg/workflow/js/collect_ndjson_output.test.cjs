@@ -286,6 +286,84 @@ describe('collect_ndjson_output.cjs', () => {
     expect(parsedOutput.errors).toHaveLength(0);
   });
 
+  it('should validate required fields for create-pull-request-review-comment type', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    const ndjsonContent = `{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": 10, "body": "Good code"}
+{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": "invalid", "body": "Comment"}
+{"type": "create-pull-request-review-comment", "path": "src/file.js", "body": "Missing line"}
+{"type": "create-pull-request-review-comment", "line": 15}
+{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": 20, "start_line": 25, "body": "Invalid range"}`;
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-pull-request-review-comment": true}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(1); // Only the first valid item
+    expect(parsedOutput.items[0].path).toBe('src/file.js');
+    expect(parsedOutput.items[0].line).toBe(10);
+    expect(parsedOutput.items[0].body).toBeDefined();
+    expect(parsedOutput.errors).toHaveLength(4); // 4 invalid items
+    expect(parsedOutput.errors.some(e => e.includes('line\' must be a positive integer'))).toBe(true);
+    expect(parsedOutput.errors.some(e => e.includes('requires a \'line\' number'))).toBe(true);
+    expect(parsedOutput.errors.some(e => e.includes('requires a \'path\' string'))).toBe(true);
+    expect(parsedOutput.errors.some(e => e.includes('start_line\' must be less than or equal to \'line\''))).toBe(true);
+  });
+
+  it('should validate optional fields for create-pull-request-review-comment type', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    const ndjsonContent = `{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": 20, "start_line": 15, "side": "LEFT", "body": "Multi-line comment"}
+{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": 25, "side": "INVALID", "body": "Invalid side"}`;
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-pull-request-review-comment": true}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(1); // Only the first valid item
+    expect(parsedOutput.items[0].side).toBe('LEFT');
+    expect(parsedOutput.items[0].start_line).toBe(15);
+    expect(parsedOutput.errors).toHaveLength(1); // 1 invalid side
+    expect(parsedOutput.errors[0]).toContain('side\' must be \'LEFT\' or \'RIGHT\'');
+  });
+
+  it('should respect max limits for create-pull-request-review-comment from config', async () => {
+    const testFile = '/tmp/test-ndjson-output.txt';
+    const items = [];
+    for (let i = 1; i <= 12; i++) {
+      items.push(`{"type": "create-pull-request-review-comment", "path": "src/file.js", "line": ${i}, "body": "Comment ${i}"}`);
+    }
+    const ndjsonContent = items.join('\n');
+    
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    // Set max to 5 for create-pull-request-review-comment
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-pull-request-review-comment": {"max": 5}}';
+    
+    await eval(`(async () => { ${collectScript} })()`);
+    
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === 'output');
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(5); // Only first 5 items should be allowed
+    expect(parsedOutput.errors).toHaveLength(7); // 7 items exceeding max
+    expect(parsedOutput.errors.every(e => e.includes('Too many items of type \'create-pull-request-review-comment\'. Maximum allowed: 5'))).toBe(true);
+  });
+  
   describe('JSON repair functionality', () => {
     it('should repair JSON with unescaped quotes in string values', async () => {
       const testFile = '/tmp/test-ndjson-output.txt';

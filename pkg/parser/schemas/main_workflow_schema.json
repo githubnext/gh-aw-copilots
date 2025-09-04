@@ -1103,6 +1103,32 @@
             }
           ]
         },
+        "create-pull-request-review-comment": {
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Configuration for creating GitHub pull request review comments from agentic workflow output",
+              "properties": {
+                "max": {
+                  "type": "integer",
+                  "description": "Maximum number of review comments to create (default: 1)",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "side": {
+                  "type": "string",
+                  "description": "Side of the diff for comments: 'LEFT' or 'RIGHT' (default: 'RIGHT')",
+                  "enum": ["LEFT", "RIGHT"]
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null",
+              "description": "Enable PR review comment creation with default configuration"
+            }
+          ]
+        },
         "add-issue-label": {
           "oneOf": [
             {

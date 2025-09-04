@@ -2,19 +2,194 @@
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
 
-name: "Test Codex Create Issue"
-on:
-  workflow_dispatch: null
+name: "Test Codex Create Pull Request Review Comment"
+"on":
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
 
 permissions: {}
 
 concurrency:
-  group: "gh-aw-${{ github.workflow }}"
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
-run-name: "Test Codex Create Issue"
+run-name: "Test Codex Create Pull Request Review Comment"
 
 jobs:
-  test-codex-create-issue:
+  add_reaction:
+    if: github.event_name == 'issues' || github.event_name == 'pull_request' || github.event_name == 'issue_comment' || github.event_name == 'pull_request_comment' || github.event_name == 'pull_request_review_comment'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      reaction_id: ${{ steps.react.outputs.reaction-id }}
+    steps:
+      - name: Add eyes reaction to the triggering item
+        id: react
+        uses: actions/github-script@v7
+        env:
+          GITHUB_AW_REACTION: eyes
+        with:
+          script: |
+            async function main() {
+              // Read inputs from environment variables  
+              const reaction = process.env.GITHUB_AW_REACTION || 'eyes';
+              const alias = process.env.GITHUB_AW_ALIAS; // Only present for alias workflows
+              const runId = context.runId;
+              const runUrl = context.payload.repository 
+                ? `${context.payload.repository.html_url}/actions/runs/${runId}`
+                : `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+              console.log('Reaction type:', reaction);
+              console.log('Alias name:', alias || 'none');
+              console.log('Run ID:', runId);
+              console.log('Run URL:', runUrl);
+              // Validate reaction type
+              const validReactions = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
+              if (!validReactions.includes(reaction)) {
+                core.setFailed(`Invalid reaction type: ${reaction}. Valid reactions are: ${validReactions.join(', ')}`);
+                return;
+              }
+              // Determine the API endpoint based on the event type
+              let reactionEndpoint;
+              let commentUpdateEndpoint;
+              let shouldEditComment = false;
+              const eventName = context.eventName;
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              try {
+                switch (eventName) {
+                  case 'issues':
+                    const issueNumber = context.payload?.issue?.number;
+                    if (!issueNumber) {
+                      core.setFailed('Issue number not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${issueNumber}/reactions`;
+                    // Don't edit issue bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case 'issue_comment':
+                    const commentId = context.payload?.comment?.id;
+                    if (!commentId) {
+                      core.setFailed('Comment ID not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/issues/comments/${commentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  case 'pull_request':
+                    const prNumber = context.payload?.pull_request?.number;
+                    if (!prNumber) {
+                      core.setFailed('Pull request number not found in event payload');
+                      return;
+                    }
+                    // PRs are "issues" for the reactions endpoint
+                    reactionEndpoint = `/repos/${owner}/${repo}/issues/${prNumber}/reactions`;
+                    // Don't edit PR bodies for now - this might be more complex
+                    shouldEditComment = false;
+                    break;
+                  case 'pull_request_review_comment':
+                    const reviewCommentId = context.payload?.comment?.id;
+                    if (!reviewCommentId) {
+                      core.setFailed('Review comment ID not found in event payload');
+                      return;
+                    }
+                    reactionEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}/reactions`;
+                    commentUpdateEndpoint = `/repos/${owner}/${repo}/pulls/comments/${reviewCommentId}`;
+                    // Only edit comments for alias workflows
+                    shouldEditComment = alias ? true : false;
+                    break;
+                  default:
+                    core.setFailed(`Unsupported event type: ${eventName}`);
+                    return;
+                }
+                console.log('Reaction API endpoint:', reactionEndpoint);
+                // Add reaction first
+                await addReaction(reactionEndpoint, reaction);
+                // Then edit comment if applicable and if it's a comment event
+                if (shouldEditComment && commentUpdateEndpoint) {
+                  console.log('Comment update endpoint:', commentUpdateEndpoint);
+                  await editCommentWithWorkflowLink(commentUpdateEndpoint, runUrl);
+                } else {
+                  if (!alias && commentUpdateEndpoint) {
+                    console.log('Skipping comment edit - only available for alias workflows');
+                  } else {
+                    console.log('Skipping comment edit for event type:', eventName);
+                  }
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('Failed to process reaction and comment edit:', errorMessage);
+                core.setFailed(`Failed to process reaction and comment edit: ${errorMessage}`);
+              }
+            }
+            /**
+             * Add a reaction to a GitHub issue, PR, or comment
+             * @param {string} endpoint - The GitHub API endpoint to add the reaction to
+             * @param {string} reaction - The reaction type to add
+             */
+            async function addReaction(endpoint, reaction) {
+              const response = await github.request('POST ' + endpoint, {
+                content: reaction,
+                headers: {
+                  'Accept': 'application/vnd.github+json'
+                }
+              });
+              const reactionId = response.data?.id;
+              if (reactionId) {
+                console.log(`Successfully added reaction: ${reaction} (id: ${reactionId})`);
+                core.setOutput('reaction-id', reactionId.toString());
+              } else {
+                console.log(`Successfully added reaction: ${reaction}`);
+                core.setOutput('reaction-id', '');
+              }
+            }
+            /**
+             * Edit a comment to add a workflow run link
+             * @param {string} endpoint - The GitHub API endpoint to update the comment
+             * @param {string} runUrl - The URL of the workflow run
+             */
+            async function editCommentWithWorkflowLink(endpoint, runUrl) {
+              try {
+                // First, get the current comment content
+                const getResponse = await github.request('GET ' + endpoint, {
+                  headers: {
+                    'Accept': 'application/vnd.github+json'
+                  }
+                });
+                const originalBody = getResponse.data.body || '';
+                const workflowLinkText = `\n\n---\n*🤖 [Workflow run](${runUrl}) triggered by this comment*`;
+                // Check if we've already added a workflow link to avoid duplicates
+                if (originalBody.includes('*🤖 [Workflow run](')) {
+                  console.log('Comment already contains a workflow run link, skipping edit');
+                  return;
+                }
+                const updatedBody = originalBody + workflowLinkText;
+                // Update the comment
+                const updateResponse = await github.request('PATCH ' + endpoint, {
+                  body: updatedBody,
+                  headers: {
+                    'Accept': 'application/vnd.github+json'
+                  }
+                });
+                console.log(`Successfully updated comment with workflow link`);
+                console.log(`Comment ID: ${updateResponse.data.id}`);
+              } catch (error) {
+                // Don't fail the entire job if comment editing fails - just log it
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn('Failed to edit comment with workflow link:', errorMessage);
+                console.warn('This is not critical - the reaction was still added successfully');
+              }
+            }
+            await main();
+
+  test-codex-create-pull-request-review-comment:
     runs-on: ubuntu-latest
     permissions: read-all
     outputs:
@@ -78,14 +253,24 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
-          Create an issue with title "Hello from Codex" and body "World"
+          Analyze the pull request and create a few targeted review comments on the code changes.
           
-          Add a haiku about GitHub Actions and AI to the issue body.
+          Create 2-3 review comments focusing on:
+          1. Code quality and best practices
+          2. Potential security issues or improvements
+          3. Performance optimizations or concerns
+          
+          For each review comment, specify:
+          - The exact file path where the comment should be placed
+          - The specific line number in the diff
+          - A helpful comment body with actionable feedback
+          
+          If you find multi-line issues, use start_line to comment on ranges of lines.
           
           
           ---
           
-          ## Creating an Issue
+          ## 
           
           **IMPORTANT**: To do the actions mentioned in the header of this section, do NOT attempt to use MCP tools, do NOT attempt to use `gh`, do NOT attempt to use the GitHub API. You don't have write access to the GitHub repo. Instead write JSON objects to the file "${{ env.GITHUB_AW_SAFE_OUTPUTS }}". Each line should contain a single JSON object (JSONL format). You can write them one by one as you do them.
           
@@ -93,18 +278,9 @@ jobs:
           
           ### Available Output Types:
           
-          **Creating an Issue**
-          
-          To create an issue:
-          1. Write an entry to "${{ env.GITHUB_AW_SAFE_OUTPUTS }}":
-          ```json
-          {"type": "create-issue", "title": "Issue title", "body": "Issue body in markdown", "labels": ["optional", "labels"]}
-          ```
-          2. After you write to that file, read it as JSONL and check it is valid. If it isn't, make any necessary corrections to it to fix it up
-          
           **Example JSONL file content:**
           ```
-          {"type": "create-issue", "title": "Bug Report", "body": "Found an issue with..."}
+          # No safe outputs configured for this workflow
           ```
           
           **Important Notes:**
@@ -132,7 +308,7 @@ jobs:
               engine_name: "Codex",
               model: "",
               version: "",
-              workflow_name: "Test Codex Create Issue",
+              workflow_name: "Test Codex Create Pull Request Review Comment",
               experimental: true,
               supports_tools_whitelist: true,
               supports_http_transport: false,
@@ -170,7 +346,7 @@ jobs:
           # Run codex with log capture
           codex exec \
             -c model=o4-mini \
-            --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/test-codex-create-issue.log
+            --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/test-codex-create-pull-request-review-comment.log
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
@@ -196,7 +372,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
-          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{\"create-issue\":true}"
+          GITHUB_AW_SAFE_OUTPUTS_CONFIG: "{}"
         with:
           script: |
             async function main() {
@@ -699,7 +875,7 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          AGENT_LOG_FILE: /tmp/test-codex-create-issue.log
+          AGENT_LOG_FILE: /tmp/test-codex-create-pull-request-review-comment.log
         with:
           script: |
             function main() {
@@ -929,28 +1105,28 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-codex-create-issue.log
-          path: /tmp/test-codex-create-issue.log
+          name: test-codex-create-pull-request-review-comment.log
+          path: /tmp/test-codex-create-pull-request-review-comment.log
           if-no-files-found: warn
 
-  create_issue:
-    needs: test-codex-create-issue
+  create_pr_review_comment:
+    needs: test-codex-create-pull-request-review-comment
+    if: github.event.pull_request.number
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
+      pull-requests: write
     timeout-minutes: 10
     outputs:
-      issue_number: ${{ steps.create_issue.outputs.issue_number }}
-      issue_url: ${{ steps.create_issue.outputs.issue_url }}
+      review_comment_id: ${{ steps.create_pr_review_comment.outputs.review_comment_id }}
+      review_comment_url: ${{ steps.create_pr_review_comment.outputs.review_comment_url }}
     steps:
-      - name: Create Output Issue
-        id: create_issue
+      - name: Create PR Review Comment
+        id: create_pr_review_comment
         uses: actions/github-script@v7
         env:
-          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-create-issue.outputs.output }}
-          GITHUB_AW_ISSUE_TITLE_PREFIX: "[codex-test] "
-          GITHUB_AW_ISSUE_LABELS: "codex,automation,haiku"
+          GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-codex-create-pull-request-review-comment.outputs.output }}
+          GITHUB_AW_PR_REVIEW_COMMENT_SIDE: "RIGHT"
         with:
           script: |
             async function main() {
@@ -977,101 +1153,121 @@ jobs:
                 console.log('No valid items found in agent output');
                 return;
               }
-              // Find all create-issue items
-              const createIssueItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'create-issue');
-              if (createIssueItems.length === 0) {
-                console.log('No create-issue items found in agent output');
+              // Find all create-pull-request-review-comment items
+              const reviewCommentItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'create-pull-request-review-comment');
+              if (reviewCommentItems.length === 0) {
+                console.log('No create-pull-request-review-comment items found in agent output');
                 return;
               }
-              console.log(`Found ${createIssueItems.length} create-issue item(s)`);
-              // Check if we're in an issue context (triggered by an issue event)
-              const parentIssueNumber = context.payload?.issue?.number;
-              // Parse labels from environment variable (comma-separated string)
-              const labelsEnv = process.env.GITHUB_AW_ISSUE_LABELS;
-              let envLabels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
-              const createdIssues = [];
-              // Process each create-issue item
-              for (let i = 0; i < createIssueItems.length; i++) {
-                const createIssueItem = createIssueItems[i];
-                console.log(`Processing create-issue item ${i + 1}/${createIssueItems.length}:`, { title: createIssueItem.title, bodyLength: createIssueItem.body.length });
-                // Merge environment labels with item-specific labels
-                let labels = [...envLabels];
-                if (createIssueItem.labels && Array.isArray(createIssueItem.labels)) {
-                  labels = [...labels, ...createIssueItem.labels].filter(Boolean);
+              console.log(`Found ${reviewCommentItems.length} create-pull-request-review-comment item(s)`);
+              // Get the side configuration from environment variable
+              const defaultSide = process.env.GITHUB_AW_PR_REVIEW_COMMENT_SIDE || "RIGHT";
+              console.log(`Default comment side configuration: ${defaultSide}`);
+              // Check if we're in a pull request context
+              const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
+              if (!isPRContext) {
+                console.log('Not running in pull request context, skipping review comment creation');
+                return;
+              }
+              if (!context.payload.pull_request) {
+                console.log('Pull request context detected but no pull request found in payload');
+                return;
+              }
+              const pullRequestNumber = context.payload.pull_request.number;
+              console.log(`Creating review comments on PR #${pullRequestNumber}`);
+              const createdComments = [];
+              // Process each review comment item
+              for (let i = 0; i < reviewCommentItems.length; i++) {
+                const commentItem = reviewCommentItems[i];
+                console.log(`Processing create-pull-request-review-comment item ${i + 1}/${reviewCommentItems.length}:`, { 
+                  bodyLength: commentItem.body ? commentItem.body.length : 'undefined',
+                  path: commentItem.path,
+                  line: commentItem.line,
+                  startLine: commentItem.start_line
+                });
+                // Validate required fields
+                if (!commentItem.path) {
+                  console.log('Missing required field "path" in review comment item');
+                  continue;
                 }
-                // Extract title and body from the JSON item
-                let title = createIssueItem.title ? createIssueItem.title.trim() : '';
-                let bodyLines = createIssueItem.body.split('\n');
-                // If no title was found, use the body content as title (or a default)
-                if (!title) {
-                  title = createIssueItem.body || 'Agent Output';
+                if (!commentItem.line || (typeof commentItem.line !== 'number' && typeof commentItem.line !== 'string')) {
+                  console.log('Missing or invalid required field "line" in review comment item');
+                  continue;
                 }
-                // Apply title prefix if provided via environment variable
-                const titlePrefix = process.env.GITHUB_AW_ISSUE_TITLE_PREFIX;
-                if (titlePrefix && !title.startsWith(titlePrefix)) {
-                  title = titlePrefix + title;
+                if (!commentItem.body || typeof commentItem.body !== 'string') {
+                  console.log('Missing or invalid required field "body" in review comment item');
+                  continue;
                 }
-                if (parentIssueNumber) {
-                  console.log('Detected issue context, parent issue #' + parentIssueNumber);
-                  // Add reference to parent issue in the child issue body
-                  bodyLines.push(`Related to #${parentIssueNumber}`);
+                // Parse line numbers
+                const line = parseInt(commentItem.line, 10);
+                if (isNaN(line) || line <= 0) {
+                  console.log(`Invalid line number: ${commentItem.line}`);
+                  continue;
                 }
+                let startLine = undefined;
+                if (commentItem.start_line) {
+                  startLine = parseInt(commentItem.start_line, 10);
+                  if (isNaN(startLine) || startLine <= 0 || startLine > line) {
+                    console.log(`Invalid start_line number: ${commentItem.start_line} (must be <= line: ${line})`);
+                    continue;
+                  }
+                }
+                // Determine side (LEFT or RIGHT)
+                const side = commentItem.side || defaultSide;
+                if (side !== "LEFT" && side !== "RIGHT") {
+                  console.log(`Invalid side value: ${side} (must be LEFT or RIGHT)`);
+                  continue;
+                }
+                // Extract body from the JSON item
+                let body = commentItem.body.trim();
                 // Add AI disclaimer with run id, run htmlurl
-                // Add AI disclaimer with workflow run information
                 const runId = context.runId;
                 const runUrl = context.payload.repository 
                   ? `${context.payload.repository.html_url}/actions/runs/${runId}`
                   : `https://github.com/actions/runs/${runId}`;  
-                bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
-                // Prepare the body content
-                const body = bodyLines.join('\n').trim();
-                console.log('Creating issue with title:', title);
-                console.log('Labels:', labels);
-                console.log('Body length:', body.length);
+                body += `\n\n> Generated by Agentic Workflow Run [${runId}](${runUrl})\n`;
+                console.log(`Creating review comment on PR #${pullRequestNumber} at ${commentItem.path}:${line}${startLine ? ` (lines ${startLine}-${line})` : ''} [${side}]`);
+                console.log('Comment content length:', body.length);
                 try {
-                  // Create the issue using GitHub API
-                  const { data: issue } = await github.rest.issues.create({
+                  // Prepare the request parameters
+                  const requestParams = {
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    title: title,
+                    pull_number: pullRequestNumber,
                     body: body,
-                    labels: labels
-                  });
-                  console.log('Created issue #' + issue.number + ': ' + issue.html_url);
-                  createdIssues.push(issue);
-                  // If we have a parent issue, add a comment to it referencing the new child issue
-                  if (parentIssueNumber) {
-                    try {
-                      await github.rest.issues.createComment({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        issue_number: parentIssueNumber,
-                        body: `Created related issue: #${issue.number}`
-                      });
-                      console.log('Added comment to parent issue #' + parentIssueNumber);
-                    } catch (error) {
-                      console.log('Warning: Could not add comment to parent issue:', error instanceof Error ? error.message : String(error));
-                    }
+                    path: commentItem.path,
+                    line: line,
+                    side: side
+                  };
+                  // Add start_line for multi-line comments
+                  if (startLine !== undefined) {
+                    requestParams.start_line = startLine;
+                    requestParams.start_side = side; // start_side should match side for consistency
                   }
-                  // Set output for the last created issue (for backward compatibility)
-                  if (i === createIssueItems.length - 1) {
-                    core.setOutput('issue_number', issue.number);
-                    core.setOutput('issue_url', issue.html_url);
+                  // Create the review comment using GitHub API
+                  const { data: comment } = await github.rest.pulls.createReviewComment(requestParams);
+                  console.log('Created review comment #' + comment.id + ': ' + comment.html_url);
+                  createdComments.push(comment);
+                  // Set output for the last created comment (for backward compatibility)
+                  if (i === reviewCommentItems.length - 1) {
+                    core.setOutput('review_comment_id', comment.id);
+                    core.setOutput('review_comment_url', comment.html_url);
                   }
                 } catch (error) {
-                  console.error(`✗ Failed to create issue "${title}":`, error instanceof Error ? error.message : String(error));
+                  console.error(`✗ Failed to create review comment:`, error instanceof Error ? error.message : String(error));
                   throw error;
                 }
               }
-              // Write summary for all created issues
-              if (createdIssues.length > 0) {
-                let summaryContent = '\n\n## GitHub Issues\n';
-                for (const issue of createdIssues) {
-                  summaryContent += `- Issue #${issue.number}: [${issue.title}](${issue.html_url})\n`;
+              // Write summary for all created comments
+              if (createdComments.length > 0) {
+                let summaryContent = '\n\n## GitHub PR Review Comments\n';
+                for (const comment of createdComments) {
+                  summaryContent += `- Review Comment #${comment.id}: [View Comment](${comment.html_url})\n`;
                 }
                 await core.summary.addRaw(summaryContent).write();
               }
-              console.log(`Successfully created ${createdIssues.length} issue(s)`);
+              console.log(`Successfully created ${createdComments.length} review comment(s)`);
+              return createdComments;
             }
             await main();
 

@@ -146,6 +146,8 @@ async function main() {
         return 1; // Only one comment allowed
       case 'create-pull-request':
         return 1;  // Only one pull request allowed
+      case 'create-pull-request-review-comment':
+        return 10; // Default to 10 review comments allowed
       case 'add-issue-label':
         return 5;  // Only one labels operation allowed
       case 'update-issue':
@@ -438,7 +440,54 @@ async function main() {
             }
           }
           break;
-
+        case 'create-pull-request-review-comment':
+          // Validate required path field
+          if (!item.path || typeof item.path !== 'string') {
+            errors.push(`Line ${i + 1}: create-pull-request-review-comment requires a 'path' string field`);
+            continue;
+          }
+          // Validate required line field
+          if (item.line === undefined || (typeof item.line !== 'number' && typeof item.line !== 'string')) {
+            errors.push(`Line ${i + 1}: create-pull-request-review-comment requires a 'line' number or string field`);
+            continue;
+          }
+          // Validate line is a positive integer
+          const lineNumber = typeof item.line === 'string' ? parseInt(item.line, 10) : item.line;
+          if (isNaN(lineNumber) || lineNumber <= 0 || !Number.isInteger(lineNumber)) {
+            errors.push(`Line ${i + 1}: create-pull-request-review-comment 'line' must be a positive integer`);
+            continue;
+          }
+          // Validate required body field
+          if (!item.body || typeof item.body !== 'string') {
+            errors.push(`Line ${i + 1}: create-pull-request-review-comment requires a 'body' string field`);
+            continue;
+          }
+          // Sanitize required text content
+          item.body = sanitizeContent(item.body);
+          // Validate optional start_line field
+          if (item.start_line !== undefined) {
+            if (typeof item.start_line !== 'number' && typeof item.start_line !== 'string') {
+              errors.push(`Line ${i + 1}: create-pull-request-review-comment 'start_line' must be a number or string`);
+              continue;
+            }
+            const startLineNumber = typeof item.start_line === 'string' ? parseInt(item.start_line, 10) : item.start_line;
+            if (isNaN(startLineNumber) || startLineNumber <= 0 || !Number.isInteger(startLineNumber)) {
+              errors.push(`Line ${i + 1}: create-pull-request-review-comment 'start_line' must be a positive integer`);
+              continue;
+            }
+            if (startLineNumber > lineNumber) {
+              errors.push(`Line ${i + 1}: create-pull-request-review-comment 'start_line' must be less than or equal to 'line'`);
+              continue;
+            }
+          }
+          // Validate optional side field
+          if (item.side !== undefined) {
+            if (typeof item.side !== 'string' || (item.side !== 'LEFT' && item.side !== 'RIGHT')) {
+              errors.push(`Line ${i + 1}: create-pull-request-review-comment 'side' must be 'LEFT' or 'RIGHT'`);
+              continue;
+            }
+          }
+          break;
         case 'create-discussion':
           if (!item.title || typeof item.title !== 'string') {
             errors.push(`Line ${i + 1}: create-discussion requires a 'title' string field`);

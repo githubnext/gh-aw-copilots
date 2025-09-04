@@ -170,6 +170,54 @@ Analyze the latest commit and suggest improvements.
 2. Create a pull request for your improvements, with a descriptive title and detailed description of the changes made
 ```
 
+### Pull Request Review Comment Creation (`create-pull-request-review-comment:`)
+
+Adding `create-pull-request-review-comment:` to the `safe-outputs:` section declares that the workflow should conclude with creating review comments on specific lines of code in the current pull request based on the workflow's output.
+
+**Basic Configuration:**
+```yaml
+safe-outputs:
+  create-pull-request-review-comment:
+```
+
+**With Configuration:**
+```yaml
+safe-outputs:
+  create-pull-request-review-comment:
+    max: 3                          # Optional: maximum number of review comments (default: 1)
+    side: "RIGHT"                   # Optional: side of the diff ("LEFT" or "RIGHT", default: "RIGHT")
+```
+
+The agentic part of your workflow should describe the review comment(s) it wants created with specific file paths and line numbers.
+
+**Example natural language to generate the output:**
+
+```markdown
+# Code Review Agent
+
+Analyze the pull request changes and provide line-specific feedback.
+Create review comments on the pull request with your analysis findings. For each comment, specify:
+- The file path
+- The line number (required)
+- The start line number (optional, for multi-line comments)
+- The comment body with specific feedback
+
+Review comments can target single lines or ranges of lines in the diff.
+```
+
+The compiled workflow will have additional prompting describing that, to create review comments, it should write the comment details to a special file with the following structure:
+- `path`: The file path relative to the repository root
+- `line`: The line number where the comment should be placed
+- `start_line`: (Optional) The starting line number for multi-line comments
+- `side`: (Optional) The side of the diff ("LEFT" for old version, "RIGHT" for new version)
+- `body`: The comment content
+
+**Key Features:**
+- Only works in pull request contexts for security
+- Supports both single-line and multi-line code comments
+- Comments are automatically positioned on the correct side of the diff
+- Maximum comment limits prevent spam
+
 ### Label Addition (`add-issue-label:`)
 
 Adding `add-issue-label:` to the `safe-outputs:` section of your workflow declares that the workflow should conclude with adding labels to the current issue or pull request based on the coding agent's analysis.
