@@ -18,7 +18,7 @@ type JSONPathLocation struct {
 // ExtractJSONPathFromValidationError extracts JSON path information from jsonschema validation errors
 func ExtractJSONPathFromValidationError(err error) []JSONPathInfo {
 	var paths []JSONPathInfo
-	
+
 	if validationError, ok := err.(*jsonschema.ValidationError); ok {
 		// Process each cause (individual validation error)
 		for _, cause := range validationError.Causes {
@@ -30,7 +30,7 @@ func ExtractJSONPathFromValidationError(err error) []JSONPathInfo {
 			paths = append(paths, path)
 		}
 	}
-	
+
 	return paths
 }
 
@@ -46,7 +46,7 @@ func convertInstanceLocationToJSONPath(location []string) string {
 	if len(location) == 0 {
 		return ""
 	}
-	
+
 	var parts []string
 	for _, part := range location {
 		parts = append(parts, "/"+part)
@@ -60,13 +60,13 @@ func LocateJSONPathInYAML(yamlContent string, jsonPath string) JSONPathLocation 
 		// Root level error - return start of content
 		return JSONPathLocation{Line: 1, Column: 1, Found: true}
 	}
-	
+
 	// Parse the path segments
 	pathSegments := parseJSONPath(jsonPath)
 	if len(pathSegments) == 0 {
 		return JSONPathLocation{Line: 1, Column: 1, Found: true}
 	}
-	
+
 	// For now, use a simple line-by-line approach to find the path
 	// This is less precise than using the YAML parser's position info,
 	// but will work as a starting point
@@ -77,28 +77,28 @@ func LocateJSONPathInYAML(yamlContent string, jsonPath string) JSONPathLocation 
 // findPathInYAMLLines finds a JSON path in YAML content using line-by-line analysis
 func findPathInYAMLLines(yamlContent string, pathSegments []PathSegment) JSONPathLocation {
 	lines := strings.Split(yamlContent, "\n")
-	
+
 	// Start from the beginning
 	currentLevel := 0
 	arrayContexts := make(map[int]int) // level -> current array index
-	
+
 	for lineNum, line := range lines {
 		lineNumber := lineNum + 1 // 1-based line numbers
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
 			continue
 		}
-		
+
 		// Calculate indentation level
 		lineLevel := (len(line) - len(strings.TrimLeft(line, " \t"))) / 2
-		
+
 		// Check if this line matches our path
 		matches, column := matchesPathAtLevel(line, pathSegments, lineLevel, arrayContexts)
 		if matches {
 			return JSONPathLocation{Line: lineNumber, Column: column, Found: true}
 		}
-		
+
 		// Update array contexts for list items
 		if strings.HasPrefix(trimmedLine, "-") {
 			arrayContexts[lineLevel]++
@@ -108,10 +108,10 @@ func findPathInYAMLLines(yamlContent string, pathSegments []PathSegment) JSONPat
 				delete(arrayContexts, level)
 			}
 		}
-		
+
 		currentLevel = lineLevel
 	}
-	
+
 	return JSONPathLocation{Line: 1, Column: 1, Found: false}
 }
 
@@ -120,16 +120,16 @@ func matchesPathAtLevel(line string, pathSegments []PathSegment, level int, arra
 	if len(pathSegments) == 0 {
 		return false, 0
 	}
-	
+
 	trimmedLine := strings.TrimSpace(line)
-	
+
 	// For now, implement a simple key matching approach
 	// This is a simplified version - in a full implementation we'd need to track
 	// the complete path context as we traverse the YAML
-	
+
 	if level < len(pathSegments) {
 		segment := pathSegments[level]
-		
+
 		if segment.Type == "key" {
 			// Look for "key:" pattern
 			keyPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(segment.Value) + `\s*:`)
@@ -150,7 +150,7 @@ func matchesPathAtLevel(line string, pathSegments []PathSegment, level int, arra
 			}
 		}
 	}
-	
+
 	return false, 0
 }
 
@@ -159,17 +159,17 @@ func parseJSONPath(path string) []PathSegment {
 	if path == "" || path == "/" {
 		return []PathSegment{}
 	}
-	
+
 	// Remove leading slash and split by slash
 	path = strings.TrimPrefix(path, "/")
 	parts := strings.Split(path, "/")
-	
+
 	var segments []PathSegment
 	for _, part := range parts {
 		if part == "" {
 			continue
 		}
-		
+
 		// Check if this is an array index
 		if index, err := strconv.Atoi(part); err == nil {
 			segments = append(segments, PathSegment{Type: "index", Value: part, Index: index})
@@ -177,7 +177,7 @@ func parseJSONPath(path string) []PathSegment {
 			segments = append(segments, PathSegment{Type: "key", Value: part})
 		}
 	}
-	
+
 	return segments
 }
 
@@ -187,4 +187,3 @@ type PathSegment struct {
 	Value string // The raw value
 	Index int    // Parsed index for array elements
 }
-

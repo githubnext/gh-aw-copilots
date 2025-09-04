@@ -30,10 +30,10 @@ timeout_minutes: 30
 
 	// Create frontmatter that will trigger validation errors
 	frontmatter := map[string]any{
-		"on":                "push",
-		"permissions":       "read",
-		"age":               "not-a-number",  // Should trigger error if age field exists in schema
-		"invalid_property":  "value",         // Should trigger additional properties error
+		"on":               "push",
+		"permissions":      "read",
+		"age":              "not-a-number", // Should trigger error if age field exists in schema
+		"invalid_property": "value",        // Should trigger additional properties error
 		"tools": []any{
 			map[string]any{"name": "tool1"},
 			map[string]any{"description": "missing name"}, // Should trigger missing name error
@@ -129,17 +129,17 @@ timeout_minutes: 30`
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			location := LocateJSONPathInYAML(yamlContent, tt.jsonPath)
-			
+
 			if !location.Found {
 				t.Errorf("Path %s should be found", tt.jsonPath)
 			}
-			
+
 			// For this test, we mainly care that we get reasonable line numbers
 			// The exact column positions might vary based on implementation
 			if location.Line != tt.wantLine {
 				t.Errorf("Path %s: expected line %d, got line %d", tt.jsonPath, tt.wantLine, location.Line)
 			}
-			
+
 			// Log the actual results for reference
 			t.Logf("Path %s: Line=%d, Column=%d", tt.jsonPath, location.Line, location.Column)
 		})

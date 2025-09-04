@@ -80,15 +80,15 @@ permissions:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			location := LocateJSONPathInYAML(yamlContent, tt.jsonPath)
-			
+
 			if location.Found != tt.shouldFind {
 				t.Errorf("Expected Found=%v, got Found=%v", tt.shouldFind, location.Found)
 			}
-			
+
 			if location.Line != tt.expectLine {
 				t.Errorf("Expected Line=%d, got Line=%d", tt.expectLine, location.Line)
 			}
-			
+
 			if location.Column != tt.expectCol {
 				t.Errorf("Expected Column=%d, got Column=%d", tt.expectCol, location.Column)
 			}
@@ -137,7 +137,7 @@ func TestExtractJSONPathFromValidationError(t *testing.T) {
 	compiler := jsonschema.NewCompiler()
 	var schemaDoc any
 	json.Unmarshal([]byte(schemaJSON), &schemaDoc)
-	
+
 	schemaURL := "http://example.com/schema.json"
 	compiler.AddResource(schemaURL, schemaDoc)
 	schema, err := compiler.Compile(schemaURL)
@@ -152,7 +152,7 @@ func TestExtractJSONPathFromValidationError(t *testing.T) {
 
 	// Extract JSON path information
 	paths := ExtractJSONPathFromValidationError(err)
-	
+
 	if len(paths) != 3 {
 		t.Errorf("Expected 3 validation errors, got %d", len(paths))
 	}
@@ -227,12 +227,12 @@ func TestParseJSONPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseJSONPath(tt.path)
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d segments, got %d", len(tt.expected), len(result))
 				return
 			}
-			
+
 			for i, expected := range tt.expected {
 				if result[i].Type != expected.Type {
 					t.Errorf("Segment %d: expected Type=%s, got Type=%s", i, expected.Type, result[i].Type)

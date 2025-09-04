@@ -4326,8 +4326,8 @@ engine: claude
 # Test Workflow
 
 Invalid YAML with non-boolean value for permissions.`,
-			expectedErrorLine:   3, // The permissions field is on line 3
-			expectedErrorColumn: 13, // After "permissions:"
+			expectedErrorLine:   3,                                              // The permissions field is on line 3
+			expectedErrorColumn: 13,                                             // After "permissions:"
 			expectedMessagePart: "value must be one of 'read', 'write', 'none'", // Schema validation catches this
 			description:         "invalid boolean values should trigger schema validation error",
 		},
@@ -4388,8 +4388,8 @@ engine: claude
 # Test Workflow
 
 Invalid YAML with invalid number format.`,
-			expectedErrorLine:   3, // The timeout_minutes field is on line 3
-			expectedErrorColumn: 17, // After "timeout_minutes: "
+			expectedErrorLine:   3,                          // The timeout_minutes field is on line 3
+			expectedErrorColumn: 17,                         // After "timeout_minutes: "
 			expectedMessagePart: "got number, want integer", // Schema validation catches this
 			description:         "invalid number format should trigger schema validation error",
 		},

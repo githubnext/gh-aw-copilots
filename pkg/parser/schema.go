@@ -130,8 +130,8 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 	// Try to read the actual file content for better context
 	var contextLines []string
 	var frontmatterContent string
-	var frontmatterStart int = 2 // Default: frontmatter starts at line 2
-	
+	var frontmatterStart = 2 // Default: frontmatter starts at line 2
+
 	if filePath != "" {
 		if content, readErr := os.ReadFile(filePath); readErr == nil {
 			lines := strings.Split(string(content), "\n")
@@ -149,7 +149,7 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 				frontmatterLines := lines[1:endIdx]
 				frontmatterContent = strings.Join(frontmatterLines, "\n")
 				frontmatterStart = 2 // Frontmatter content starts at line 2
-				
+
 				// Use the frontmatter lines as context (first few lines)
 				maxLines := min(5, endIdx)
 				for i := 0; i < maxLines; i++ {
@@ -170,17 +170,17 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 	if isJSONSchemaError {
 		// Extract JSON path information from the validation error
 		jsonPaths := ExtractJSONPathFromValidationError(err)
-		
+
 		// If we have paths and frontmatter content, try to get precise locations
 		if len(jsonPaths) > 0 && frontmatterContent != "" {
 			// Use the first error path for the primary error location
 			primaryPath := jsonPaths[0]
 			location := LocateJSONPathInYAML(frontmatterContent, primaryPath.Path)
-			
+
 			if location.Found {
 				// Adjust line number to account for frontmatter position in file
 				adjustedLine := location.Line + frontmatterStart - 1
-				
+
 				// Create a compiler error with precise location information
 				compilerErr := console.CompilerError{
 					Position: console.ErrorPosition{
@@ -199,7 +199,7 @@ func validateWithSchemaAndLocation(frontmatter map[string]any, schemaJSON, conte
 				return errors.New(formattedErr)
 			}
 		}
-		
+
 		// Fallback: Create a compiler error with basic location information
 		compilerErr := console.CompilerError{
 			Position: console.ErrorPosition{
