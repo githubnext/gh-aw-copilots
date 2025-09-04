@@ -143,7 +143,7 @@ type WorkflowData struct {
 // SafeOutputsConfig holds configuration for automatic output routes
 type SafeOutputsConfig struct {
 	CreateIssues                    *CreateIssuesConfig                    `yaml:"create-issue,omitempty"`
-	CreateDiscussions               *CreateDiscussionsConfig  `yaml:"create-discussion,omitempty"`
+	CreateDiscussions               *CreateDiscussionsConfig               `yaml:"create-discussion,omitempty"`
 	AddIssueComments                *AddIssueCommentsConfig                `yaml:"add-issue-comment,omitempty"`
 	CreatePullRequests              *CreatePullRequestsConfig              `yaml:"create-pull-request,omitempty"`
 	CreatePullRequestReviewComments *CreatePullRequestReviewCommentsConfig `yaml:"create-pull-request-review-comment,omitempty"`

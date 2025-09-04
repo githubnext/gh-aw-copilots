@@ -55,6 +55,9 @@ describe('create_pr_review_comment.cjs', () => {
     // Reset environment variables
     delete process.env.GITHUB_AW_AGENT_OUTPUT;
     delete process.env.GITHUB_AW_PR_REVIEW_COMMENT_SIDE;
+    
+    // Reset global context to default PR context
+    global.context = mockContext;
   });
 
   it('should create a single PR review comment with basic configuration', async () => {
@@ -79,7 +82,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify the API was called correctly
     expect(mockGithub.rest.pulls.createReviewComment).toHaveBeenCalledWith({
@@ -121,7 +124,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify the API was called with multi-line parameters
     expect(mockGithub.rest.pulls.createReviewComment).toHaveBeenCalledWith({
@@ -166,7 +169,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify both API calls were made
     expect(mockGithub.rest.pulls.createReviewComment).toHaveBeenCalledTimes(2);
@@ -196,7 +199,7 @@ describe('create_pr_review_comment.cjs', () => {
     process.env.GITHUB_AW_PR_REVIEW_COMMENT_SIDE = 'LEFT';
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify the configured side was used
     expect(mockGithub.rest.pulls.createReviewComment).toHaveBeenCalledWith(
@@ -229,7 +232,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify no API calls were made
     expect(mockGithub.rest.pulls.createReviewComment).not.toHaveBeenCalled();
@@ -267,7 +270,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify no API calls were made due to validation failures
     expect(mockGithub.rest.pulls.createReviewComment).not.toHaveBeenCalled();
@@ -288,7 +291,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify no API calls were made due to validation failure
     expect(mockGithub.rest.pulls.createReviewComment).not.toHaveBeenCalled();
@@ -308,7 +311,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify no API calls were made due to validation failure
     expect(mockGithub.rest.pulls.createReviewComment).not.toHaveBeenCalled();
@@ -331,7 +334,7 @@ describe('create_pr_review_comment.cjs', () => {
     });
 
     // Execute the script
-    await eval(createPRReviewCommentScript);
+    await eval(`(async () => { ${createPRReviewCommentScript} })()`);
 
     // Verify the body includes the AI disclaimer
     expect(mockGithub.rest.pulls.createReviewComment).toHaveBeenCalledWith(
