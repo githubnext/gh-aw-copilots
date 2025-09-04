@@ -294,6 +294,114 @@ nested:
 	}
 }
 
+// TestNestedSearchOptimization demonstrates the improved approach of searching within sub-YAML content
+func TestNestedSearchOptimization(t *testing.T) {
+	// Create a complex YAML with many sections to demonstrate the optimization benefit
+	yamlContent := `name: Complex Workflow
+version: "1.0"
+# Many top-level properties that should be ignored when searching in nested contexts
+global_prop1: value1
+global_prop2: value2  
+global_prop3: value3
+global_prop4: value4
+global_prop5: value5
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  # This is the problematic additional property within the 'on' context
+  invalid_trigger: not_allowed
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+  # Another additional property within the 'permissions' context  
+  invalid_permission: write
+workflow:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+deeply:
+  nested:
+    structure:
+      with:
+        many: levels
+        # Additional property deep in the structure
+        bad_prop: invalid
+        valid_prop: good
+# More global properties that should be ignored
+footer_prop1: value1
+footer_prop2: value2`
+
+	tests := []struct {
+		name         string
+		jsonPath     string
+		errorMessage string
+		expectedLine int
+		expectedCol  int
+		shouldFind   bool
+	}{
+		{
+			name:         "find additional property in 'on' section - should not find global properties",
+			jsonPath:     "/on",
+			errorMessage: "at '/on': additional properties 'invalid_trigger' not allowed",
+			expectedLine: 15, // Line where 'invalid_trigger' is located
+			expectedCol:  3,  // Column position of 'invalid_trigger' (indented)
+			shouldFind:   true,
+		},
+		{
+			name:         "find additional property in 'permissions' section - should not find on.invalid_trigger",
+			jsonPath:     "/permissions",
+			errorMessage: "at '/permissions': additional properties 'invalid_permission' not allowed",
+			expectedLine: 21, // Line where 'invalid_permission' is located
+			expectedCol:  3,  // Column position of 'invalid_permission' (indented)
+			shouldFind:   true,
+		},
+		{
+			name:         "find additional property in deeply nested structure",
+			jsonPath:     "/deeply/nested/structure/with",
+			errorMessage: "at '/deeply/nested/structure/with': additional properties 'bad_prop' not allowed",
+			expectedLine: 32, // Line where 'bad_prop' is located
+			expectedCol:  9,  // Column position accounting for deep indentation (4 levels * 2 spaces + 1)
+			shouldFind:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			location := LocateJSONPathInYAMLWithAdditionalProperties(yamlContent, tt.jsonPath, tt.errorMessage)
+
+			if location.Found != tt.shouldFind {
+				t.Errorf("Expected Found=%v, got Found=%v", tt.shouldFind, location.Found)
+			}
+
+			if location.Line != tt.expectedLine {
+				t.Errorf("Expected Line=%d, got Line=%d", tt.expectedLine, location.Line)
+			}
+
+			if location.Column != tt.expectedCol {
+				t.Errorf("Expected Column=%d, got Column=%d", tt.expectedCol, location.Column)
+			}
+
+			// Verify that the optimization correctly identified the target property
+			// by checking that the found location actually contains the expected property name
+			lines := strings.Split(yamlContent, "\n")
+			if location.Found && location.Line > 0 && location.Line <= len(lines) {
+				foundLine := lines[location.Line-1] // Convert to 0-based index
+				propertyNames := extractAdditionalPropertyNames(tt.errorMessage)
+				if len(propertyNames) > 0 {
+					expectedProperty := propertyNames[0]
+					if !strings.Contains(foundLine, expectedProperty) {
+						t.Errorf("Found line '%s' does not contain expected property '%s'",
+							strings.TrimSpace(foundLine), expectedProperty)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestFindFrontmatterBounds(t *testing.T) {
 	tests := []struct {
 		name                     string

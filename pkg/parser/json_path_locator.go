@@ -275,14 +275,8 @@ func findFirstAdditionalProperty(yamlContent string, propertyNames []string) JSO
 }
 
 // findAdditionalPropertyInNestedContext finds additional properties within a specific nested JSON path context
+// It extracts the sub-YAML content for the JSON path and searches within it for better efficiency
 func findAdditionalPropertyInNestedContext(yamlContent string, jsonPath string, propertyNames []string) JSONPathLocation {
-	// First, locate the base path in the YAML
-	basePath := LocateJSONPathInYAML(yamlContent, jsonPath)
-	if !basePath.Found {
-		// If we can't find the base path, fall back to searching the entire content
-		return findFirstAdditionalProperty(yamlContent, propertyNames)
-	}
-
 	// Parse the path segments to understand the nesting structure
 	pathSegments := parseJSONPath(jsonPath)
 	if len(pathSegments) == 0 {
@@ -297,50 +291,64 @@ func findAdditionalPropertyInNestedContext(yamlContent string, jsonPath string, 
 		return findFirstAdditionalProperty(yamlContent, propertyNames)
 	}
 
-	// Search for the additional properties within the nested section
+	// Extract the sub-YAML content for the identified nested section
 	lines := strings.Split(yamlContent, "\n")
+	subYAMLLines := make([]string, 0, nestedSection.endLine-nestedSection.startLine+1)
 
-	// Look for additional properties within the identified nested section
-	for lineNum := nestedSection.startLine; lineNum <= nestedSection.endLine; lineNum++ {
-		if lineNum >= len(lines) {
-			break
-		}
-
+	// Extract lines from the nested section, maintaining relative indentation
+	var baseIndent = -1
+	for lineNum := nestedSection.startLine; lineNum <= nestedSection.endLine && lineNum < len(lines); lineNum++ {
 		line := lines[lineNum]
-		trimmedLine := strings.TrimSpace(line)
 
-		// Skip empty lines and comments
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+		// Skip the section header line (e.g., "on:")
+		if lineNum == nestedSection.startLine {
 			continue
 		}
 
-		// Check if the line is at the correct indentation level for the nested context
-		// Additional properties should be at the same level as other properties in this context
-		if !isAtCorrectIndentationLevel(line, nestedSection.baseIndentLevel) {
-			continue
+		// Calculate the indentation and normalize it
+		lineIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if baseIndent == -1 && strings.TrimSpace(line) != "" {
+			baseIndent = lineIndent
 		}
 
-		// Check if this line contains any of the additional properties
-		for _, propName := range propertyNames {
-			// Look for "propName:" pattern at the start of the trimmed line
-			keyPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(propName) + `\s*:`)
-			if keyPattern.MatchString(trimmedLine) {
-				// Found the property - return position of the property name
-				propIndex := strings.Index(line, propName)
-				if propIndex != -1 {
-					return JSONPathLocation{
-						Line:   lineNum + 1,   // 1-based line numbers
-						Column: propIndex + 1, // 1-based column numbers
-						Found:  true,
-					}
-				}
-			}
+		// Create normalized line by removing the base indentation
+		var normalizedLine string
+		if lineIndent >= baseIndent && baseIndent > 0 {
+			normalizedLine = line[baseIndent:]
+		} else {
+			normalizedLine = line
 		}
+
+		subYAMLLines = append(subYAMLLines, normalizedLine)
 	}
 
-	// If we can't find the additional properties in the nested context,
-	// fall back to a global search
-	return findFirstAdditionalProperty(yamlContent, propertyNames)
+	// Create the sub-YAML content
+	subYAMLContent := strings.Join(subYAMLLines, "\n")
+
+	// Search for additional properties within the extracted sub-YAML content
+	subLocation := findFirstAdditionalProperty(subYAMLContent, propertyNames)
+
+	if !subLocation.Found {
+		// If we can't find the additional properties in the sub-YAML,
+		// fall back to a global search
+		return findFirstAdditionalProperty(yamlContent, propertyNames)
+	}
+
+	// Map the location back to the original YAML coordinates
+	// subLocation.Line is 1-based, so we need to adjust it
+	originalLine := nestedSection.startLine + subLocation.Line // +1 to skip section header, -1 for 0-based indexing
+	originalColumn := subLocation.Column
+
+	// If we had base indentation, we need to adjust the column position
+	if baseIndent > 0 {
+		originalColumn += baseIndent
+	}
+
+	return JSONPathLocation{
+		Line:   originalLine + 1, // Convert back to 1-based line numbers
+		Column: originalColumn,
+		Found:  true,
+	}
 }
 
 // NestedSection represents a section of YAML content that corresponds to a nested object
@@ -423,11 +431,4 @@ func findNestedSection(yamlContent string, pathSegments []PathSegment) NestedSec
 		endLine:         endLine,
 		baseIndentLevel: baseIndentLevel,
 	}
-}
-
-// isAtCorrectIndentationLevel checks if a line is at the expected indentation level for properties
-// within the nested context
-func isAtCorrectIndentationLevel(line string, expectedLevel int) bool {
-	actualLevel := (len(line) - len(strings.TrimLeft(line, " \t"))) / 2
-	return actualLevel == expectedLevel
 }
