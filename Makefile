@@ -77,7 +77,8 @@ deps-dev: deps copy-copilot-to-claude
 # Run linter
 .PHONY: golint
 golint:
-	@if command -v golangci-lint >/dev/null 2>&1; then \
+	@export PATH="$$(go env GOPATH)/bin:$$PATH"; \
+	if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run; \
 	else \
 		echo "golangci-lint is not installed. Install it with:"; \
