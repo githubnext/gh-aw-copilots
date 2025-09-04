@@ -207,7 +207,7 @@ jobs:
         with:
           script: |
             async function main() {
-              const fs = require("fs");
+              const fs = require('fs');
               /**
                * Sanitizes content for safe output in GitHub Actions
                * @param {string} content - The content to sanitize
@@ -225,10 +225,13 @@ jobs:
                   'githubusercontent.com',
                   'githubassets.com',
                   'github.dev',
-                  'codespaces.new'
+                  'codespaces.new',
                 ];
                 const allowedDomains = allowedDomainsEnv
-                  ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+                  ? allowedDomainsEnv
+                      .split(',')
+                      .map((d) => d.trim())
+                      .filter((d) => d)
                   : defaultAllowedDomains;
                 let sanitized = content;
                 // Neutralize @mentions to prevent unintended notifications
@@ -237,7 +240,7 @@ jobs:
                 sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
                 // XML character escaping
                 sanitized = sanitized
-                  .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+                  .replace(/&/g, '&amp;') // Must be first to avoid double-escaping
                   .replace(/</g, '&lt;')
                   .replace(/>/g, '&gt;')
                   .replace(/"/g, '&quot;')
@@ -273,7 +276,7 @@ jobs:
                     // Extract the hostname part (before first slash, colon, or other delimiter)
                     const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
                     // Check if this domain or any parent domain is in the allowlist
-                    const isAllowed = allowedDomains.some(allowedDomain => {
+                    const isAllowed = allowedDomains.some((allowedDomain) => {
                       const normalizedAllowed = allowedDomain.toLowerCase();
                       return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
                     });
@@ -299,8 +302,10 @@ jobs:
                  */
                 function neutralizeMentions(s) {
                   // Replace @name or @org/team outside code with `@name`
-                  return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
-                    (_m, p1, p2) => `${p1}\`@${p2}\``);
+                  return s.replace(
+                    /(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+                    (_m, p1, p2) => `${p1}\`@${p2}\``
+                  );
                 }
                 /**
                  * Neutralizes bot trigger phrases by wrapping them in backticks
@@ -309,8 +314,10 @@ jobs:
                  */
                 function neutralizeBotTriggers(s) {
                   // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
-                  return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
-                    (match, action, ref) => `\`${action} #${ref}\``);
+                  return s.replace(
+                    /\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+                    (match, action, ref) => `\`${action} #${ref}\``
+                  );
                 }
               }
               /**
@@ -331,15 +338,15 @@ jobs:
                   case 'add-issue-comment':
                     return 1; // Only one comment allowed
                   case 'create-pull-request':
-                    return 1;  // Only one pull request allowed
+                    return 1; // Only one pull request allowed
                   case 'add-issue-label':
-                    return 5;  // Only one labels operation allowed
+                    return 5; // Only one labels operation allowed
                   case 'update-issue':
-                    return 1;  // Only one issue update allowed
+                    return 1; // Only one issue update allowed
                   case 'push-to-branch':
-                    return 1;  // Only one push to branch allowed
+                    return 1; // Only one push to branch allowed
                   default:
-                    return 1;  // Default to single item for unknown types
+                    return 1; // Default to single item for unknown types
                 }
               }
               const outputFile = process.env.GITHUB_AW_SAFE_OUTPUTS;
@@ -388,11 +395,13 @@ jobs:
                   // Validate against expected output types
                   const itemType = item.type;
                   if (!expectedOutputTypes[itemType]) {
-                    errors.push(`Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`);
+                    errors.push(
+                      `Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`
+                    );
                     continue;
                   }
                   // Check for too many items of the same type
-                  const typeCount = parsedItems.filter(existing => existing.type === itemType).length;
+                  const typeCount = parsedItems.filter((existing) => existing.type === itemType).length;
                   const maxAllowed = getMaxAllowedForType(itemType, expectedOutputTypes);
                   if (typeCount >= maxAllowed) {
                     errors.push(`Line ${i + 1}: Too many items of type '${itemType}'. Maximum allowed: ${maxAllowed}.`);
@@ -414,7 +423,7 @@ jobs:
                       item.body = sanitizeContent(item.body);
                       // Sanitize labels if present
                       if (item.labels && Array.isArray(item.labels)) {
-                        item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+                        item.labels = item.labels.map((label) => (typeof label === 'string' ? sanitizeContent(label) : label));
                       }
                       break;
                     case 'add-issue-comment':
@@ -443,7 +452,7 @@ jobs:
                       }
                       // Sanitize labels if present
                       if (item.labels && Array.isArray(item.labels)) {
-                        item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+                        item.labels = item.labels.map((label) => (typeof label === 'string' ? sanitizeContent(label) : label));
                       }
                       break;
                     case 'add-issue-label':
@@ -451,18 +460,16 @@ jobs:
                         errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
                         continue;
                       }
-                      if (item.labels.some(label => typeof label !== 'string')) {
+                      if (item.labels.some((label) => typeof label !== 'string')) {
                         errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
                         continue;
                       }
                       // Sanitize label strings
-                      item.labels = item.labels.map(label => sanitizeContent(label));
+                      item.labels = item.labels.map((label) => sanitizeContent(label));
                       break;
                     case 'update-issue':
                       // Check that at least one updateable field is provided
-                      const hasValidField = (item.status !== undefined) || 
-                                            (item.title !== undefined) || 
-                                            (item.body !== undefined);
+                      const hasValidField = item.status !== undefined || item.title !== undefined || item.body !== undefined;
                       if (!hasValidField) {
                         errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
                         continue;
@@ -528,7 +535,7 @@ jobs:
               // Report validation results
               if (errors.length > 0) {
                 console.log('Validation errors found:');
-                errors.forEach(error => console.log(`  - ${error}`));
+                errors.forEach((error) => console.log(`  - ${error}`));
                 // For now, we'll continue with valid items but log the errors
                 // In the future, we might want to fail the workflow for invalid items
               }
@@ -536,7 +543,7 @@ jobs:
               // Set the parsed and validated items as output
               const validatedOutput = {
                 items: parsedItems,
-                errors: errors
+                errors: errors,
               };
               core.setOutput('output', JSON.stringify(validatedOutput));
               core.setOutput('raw_output', outputContent);
@@ -615,7 +622,11 @@ jobs:
                         if (nextLine.includes('success in')) {
                           statusIcon = '✅';
                           break;
-                        } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+                        } else if (
+                          nextLine.includes('failure in') ||
+                          nextLine.includes('error in') ||
+                          nextLine.includes('failed in')
+                        ) {
                           statusIcon = '❌';
                           break;
                         }
@@ -688,11 +699,18 @@ jobs:
                 for (let i = 0; i < lines.length; i++) {
                   const line = lines[i];
                   // Skip metadata lines
-                  if (line.includes('OpenAI Codex') || line.startsWith('--------') || 
-                      line.includes('workdir:') || line.includes('model:') || 
-                      line.includes('provider:') || line.includes('approval:') || 
-                      line.includes('sandbox:') || line.includes('reasoning effort:') || 
-                      line.includes('reasoning summaries:') || line.includes('tokens used:')) {
+                  if (
+                    line.includes('OpenAI Codex') ||
+                    line.startsWith('--------') ||
+                    line.includes('workdir:') ||
+                    line.includes('model:') ||
+                    line.includes('provider:') ||
+                    line.includes('approval:') ||
+                    line.includes('sandbox:') ||
+                    line.includes('reasoning effort:') ||
+                    line.includes('reasoning summaries:') ||
+                    line.includes('tokens used:')
+                  ) {
                     continue;
                   }
                   // Process thinking sections
@@ -713,7 +731,11 @@ jobs:
                         if (nextLine.includes('success in')) {
                           statusIcon = '✅';
                           break;
-                        } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+                        } else if (
+                          nextLine.includes('failure in') ||
+                          nextLine.includes('error in') ||
+                          nextLine.includes('failed in')
+                        ) {
                           statusIcon = '❌';
                           break;
                         }
@@ -769,11 +791,11 @@ jobs:
               // Convert multi-line commands to single line by replacing newlines with spaces
               // and collapsing multiple spaces
               let formatted = command
-                .replace(/\n/g, ' ')           // Replace newlines with spaces
-                .replace(/\r/g, ' ')           // Replace carriage returns with spaces
-                .replace(/\t/g, ' ')           // Replace tabs with spaces
-                .replace(/\s+/g, ' ')          // Collapse multiple spaces into one
-                .trim();                       // Remove leading/trailing whitespace
+                .replace(/\n/g, ' ') // Replace newlines with spaces
+                .replace(/\r/g, ' ') // Replace carriage returns with spaces
+                .replace(/\t/g, ' ') // Replace tabs with spaces
+                .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+                .trim(); // Remove leading/trailing whitespace
               // Escape backticks to prevent markdown issues
               formatted = formatted.replace(/`/g, '\\`');
               // Truncate if too long (keep reasonable length for summary)
@@ -955,10 +977,10 @@ jobs:
         with:
           script: |
             /** @type {typeof import("fs")} */
-            const fs = require("fs");
+            const fs = require('fs');
             /** @type {typeof import("crypto")} */
-            const crypto = require("crypto");
-            const { execSync } = require("child_process");
+            const crypto = require('crypto');
+            const { execSync } = require('child_process');
             async function main() {
               // Environment validation - fail early if required variables are missing
               const workflowId = process.env.GITHUB_AW_WORKFLOW_ID;
@@ -969,7 +991,7 @@ jobs:
               if (!baseBranch) {
                 throw new Error('GITHUB_AW_BASE_BRANCH environment variable is required');
               }
-              const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT || "";
+              const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT || '';
               if (outputContent.trim() === '') {
                 console.log('Agent output content is empty');
               }
@@ -996,12 +1018,17 @@ jobs:
                 return;
               }
               // Find the create-pull-request item
-              const pullRequestItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'create-pull-request');
+              const pullRequestItem = validatedOutput.items.find(
+                /** @param {any} item */ (item) => item.type === 'create-pull-request'
+              );
               if (!pullRequestItem) {
                 console.log('No create-pull-request item found in agent output');
                 return;
               }
-              console.log('Found create-pull-request item:', { title: pullRequestItem.title, bodyLength: pullRequestItem.body.length });
+              console.log('Found create-pull-request item:', {
+                title: pullRequestItem.title,
+                bodyLength: pullRequestItem.body.length,
+              });
               // Extract title, body, and branch from the JSON item
               let title = pullRequestItem.title.trim();
               let bodyLines = pullRequestItem.body.split('\n');
@@ -1017,7 +1044,7 @@ jobs:
               }
               // Add AI disclaimer with run id, run htmlurl
               const runId = context.runId;
-              const runUrl = context.payload.repository 
+              const runUrl = context.payload.repository
                 ? `${context.payload.repository.html_url}/actions/runs/${runId}`
                 : `https://github.com/actions/runs/${runId}`;
               bodyLines.push(``, ``, `> Generated by Agentic Workflow Run [${runId}](${runUrl})`, '');
@@ -1025,7 +1052,12 @@ jobs:
               const body = bodyLines.join('\n').trim();
               // Parse labels from environment variable (comma-separated string)
               const labelsEnv = process.env.GITHUB_AW_PR_LABELS;
-              const labels = labelsEnv ? labelsEnv.split(',').map(/** @param {string} label */ label => label.trim()).filter(/** @param {string} label */ label => label) : [];
+              const labels = labelsEnv
+                ? labelsEnv
+                    .split(',')
+                    .map(/** @param {string} label */ (label) => label.trim())
+                    .filter(/** @param {string} label */ (label) => label)
+                : [];
               // Parse draft setting from environment variable (defaults to true)
               const draftEnv = process.env.GITHUB_AW_PR_DRAFT;
               const draft = draftEnv ? draftEnv.toLowerCase() === 'true' : true;
@@ -1078,7 +1110,7 @@ jobs:
                 body: body,
                 head: branchName,
                 base: baseBranch,
-                draft: draft
+                draft: draft,
               });
               console.log('Created pull request #' + pullRequest.number + ': ' + pullRequest.html_url);
               // Add labels if specified
@@ -1087,7 +1119,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: pullRequest.number,
-                  labels: labels
+                  labels: labels,
                 });
                 console.log('Added labels to pull request:', labels);
               }
@@ -1097,12 +1129,15 @@ jobs:
               core.setOutput('branch_name', branchName);
               // Write summary to GitHub Actions summary
               await core.summary
-                .addRaw(`
+                .addRaw(
+                  `
             ## Pull Request
             - **Pull Request**: [#${pullRequest.number}](${pullRequest.html_url})
             - **Branch**: \`${branchName}\`
             - **Base Branch**: \`${baseBranch}\`
-            `).write();
+            `
+                )
+                .write();
             }
             await main();
 

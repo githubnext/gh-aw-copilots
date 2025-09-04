@@ -1,21 +1,21 @@
 function main() {
   const fs = require('fs');
-  
+
   try {
     const logFile = process.env.AGENT_LOG_FILE;
     if (!logFile) {
       console.log('No agent log file specified');
       return;
     }
-    
+
     if (!fs.existsSync(logFile)) {
       console.log(`Log file not found: ${logFile}`);
       return;
     }
-    
+
     const content = fs.readFileSync(logFile, 'utf8');
     const parsedLog = parseCodexLog(content);
-    
+
     if (parsedLog) {
       core.summary.addRaw(parsedLog).write();
       console.log('Codex log parsed successfully');
@@ -31,20 +31,20 @@ function parseCodexLog(logContent) {
   try {
     const lines = logContent.split('\n');
     let markdown = '## 🤖 Commands and Tools\n\n';
-    
+
     const commandSummary = [];
-    
+
     // First pass: collect commands for summary
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
+
       // Detect tool usage and exec commands
       if (line.includes('] tool ') && line.includes('(')) {
         // Extract tool name
         const toolMatch = line.match(/\] tool ([^(]+)\(/);
         if (toolMatch) {
           const toolName = toolMatch[1];
-          
+
           // Look ahead to find the result status
           let statusIcon = '❓'; // Unknown by default
           for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
@@ -52,12 +52,16 @@ function parseCodexLog(logContent) {
             if (nextLine.includes('success in')) {
               statusIcon = '✅';
               break;
-            } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+            } else if (
+              nextLine.includes('failure in') ||
+              nextLine.includes('error in') ||
+              nextLine.includes('failed in')
+            ) {
               statusIcon = '❌';
               break;
             }
           }
-          
+
           if (toolName.includes('.')) {
             // Format as provider::method
             const parts = toolName.split('.');
@@ -73,7 +77,7 @@ function parseCodexLog(logContent) {
         const execMatch = line.match(/exec (.+?) in/);
         if (execMatch) {
           const formattedCommand = formatBashCommand(execMatch[1]);
-          
+
           // Look ahead to find the result status
           let statusIcon = '❓'; // Unknown by default
           for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
@@ -86,12 +90,12 @@ function parseCodexLog(logContent) {
               break;
             }
           }
-          
+
           commandSummary.push(`* ${statusIcon} \`${formattedCommand}\``);
         }
       }
     }
-    
+
     // Add command summary
     if (commandSummary.length > 0) {
       for (const cmd of commandSummary) {
@@ -100,10 +104,10 @@ function parseCodexLog(logContent) {
     } else {
       markdown += 'No commands or tools used.\n';
     }
-    
+
     // Add Information section
     markdown += '\n## 📊 Information\n\n';
-    
+
     // Extract metadata from Codex logs
     let totalTokens = 0;
     const tokenMatches = logContent.match(/tokens used: (\d+)/g);
@@ -113,53 +117,60 @@ function parseCodexLog(logContent) {
         totalTokens += tokens;
       }
     }
-    
+
     if (totalTokens > 0) {
       markdown += `**Total Tokens Used:** ${totalTokens.toLocaleString()}\n\n`;
     }
-    
+
     // Count tool calls and exec commands
     const toolCalls = (logContent.match(/\] tool /g) || []).length;
     const execCommands = (logContent.match(/\] exec /g) || []).length;
-    
+
     if (toolCalls > 0) {
       markdown += `**Tool Calls:** ${toolCalls}\n\n`;
     }
-    
+
     if (execCommands > 0) {
       markdown += `**Commands Executed:** ${execCommands}\n\n`;
     }
-    
+
     markdown += '\n## 🤖 Reasoning\n\n';
-    
+
     // Second pass: process full conversation flow with interleaved reasoning, tools, and commands
     let inThinkingSection = false;
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
+
       // Skip metadata lines
-      if (line.includes('OpenAI Codex') || line.startsWith('--------') || 
-          line.includes('workdir:') || line.includes('model:') || 
-          line.includes('provider:') || line.includes('approval:') || 
-          line.includes('sandbox:') || line.includes('reasoning effort:') || 
-          line.includes('reasoning summaries:') || line.includes('tokens used:')) {
+      if (
+        line.includes('OpenAI Codex') ||
+        line.startsWith('--------') ||
+        line.includes('workdir:') ||
+        line.includes('model:') ||
+        line.includes('provider:') ||
+        line.includes('approval:') ||
+        line.includes('sandbox:') ||
+        line.includes('reasoning effort:') ||
+        line.includes('reasoning summaries:') ||
+        line.includes('tokens used:')
+      ) {
         continue;
       }
-      
+
       // Process thinking sections
       if (line.includes('] thinking')) {
         inThinkingSection = true;
         continue;
       }
-      
+
       // Process tool calls
       if (line.includes('] tool ') && line.includes('(')) {
         inThinkingSection = false;
         const toolMatch = line.match(/\] tool ([^(]+)\(/);
         if (toolMatch) {
           const toolName = toolMatch[1];
-          
+
           // Look ahead to find the result status
           let statusIcon = '❓'; // Unknown by default
           for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
@@ -167,12 +178,16 @@ function parseCodexLog(logContent) {
             if (nextLine.includes('success in')) {
               statusIcon = '✅';
               break;
-            } else if (nextLine.includes('failure in') || nextLine.includes('error in') || nextLine.includes('failed in')) {
+            } else if (
+              nextLine.includes('failure in') ||
+              nextLine.includes('error in') ||
+              nextLine.includes('failed in')
+            ) {
               statusIcon = '❌';
               break;
             }
           }
-          
+
           if (toolName.includes('.')) {
             const parts = toolName.split('.');
             const provider = parts[0];
@@ -184,14 +199,14 @@ function parseCodexLog(logContent) {
         }
         continue;
       }
-      
+
       // Process exec commands
       if (line.includes('] exec ')) {
         inThinkingSection = false;
         const execMatch = line.match(/exec (.+?) in/);
         if (execMatch) {
           const formattedCommand = formatBashCommand(execMatch[1]);
-          
+
           // Look ahead to find the result status
           let statusIcon = '❓'; // Unknown by default
           for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
@@ -204,12 +219,12 @@ function parseCodexLog(logContent) {
               break;
             }
           }
-          
+
           markdown += `${statusIcon} \`${formattedCommand}\`\n\n`;
         }
         continue;
       }
-      
+
       // Process thinking content
       if (inThinkingSection && line.trim().length > 20 && !line.startsWith('[2025-')) {
         const trimmed = line.trim();
@@ -217,7 +232,7 @@ function parseCodexLog(logContent) {
         markdown += `${trimmed}\n\n`;
       }
     }
-    
+
     return markdown;
   } catch (error) {
     console.error('Error parsing Codex log:', error);
@@ -227,25 +242,25 @@ function parseCodexLog(logContent) {
 
 function formatBashCommand(command) {
   if (!command) return '';
-  
+
   // Convert multi-line commands to single line by replacing newlines with spaces
   // and collapsing multiple spaces
   let formatted = command
-    .replace(/\n/g, ' ')           // Replace newlines with spaces
-    .replace(/\r/g, ' ')           // Replace carriage returns with spaces
-    .replace(/\t/g, ' ')           // Replace tabs with spaces
-    .replace(/\s+/g, ' ')          // Collapse multiple spaces into one
-    .trim();                       // Remove leading/trailing whitespace
-  
+    .replace(/\n/g, ' ') // Replace newlines with spaces
+    .replace(/\r/g, ' ') // Replace carriage returns with spaces
+    .replace(/\t/g, ' ') // Replace tabs with spaces
+    .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+    .trim(); // Remove leading/trailing whitespace
+
   // Escape backticks to prevent markdown issues
   formatted = formatted.replace(/`/g, '\\`');
-  
+
   // Truncate if too long (keep reasonable length for summary)
   const maxLength = 80;
   if (formatted.length > maxLength) {
     formatted = formatted.substring(0, maxLength) + '...';
   }
-  
+
   return formatted;
 }
 

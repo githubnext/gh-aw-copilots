@@ -1,9 +1,9 @@
 async function main() {
-  // Read inputs from environment variables  
+  // Read inputs from environment variables
   const reaction = process.env.GITHUB_AW_REACTION || 'eyes';
   const alias = process.env.GITHUB_AW_ALIAS; // Only present for alias workflows
   const runId = context.runId;
-  const runUrl = context.payload.repository 
+  const runUrl = context.payload.repository
     ? `${context.payload.repository.html_url}/actions/runs/${runId}`
     : `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
 
@@ -97,7 +97,6 @@ async function main() {
         console.log('Skipping comment edit for event type:', eventName);
       }
     }
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Failed to process reaction and comment edit:', errorMessage);
@@ -114,8 +113,8 @@ async function addReaction(endpoint, reaction) {
   const response = await github.request('POST ' + endpoint, {
     content: reaction,
     headers: {
-      'Accept': 'application/vnd.github+json'
-    }
+      Accept: 'application/vnd.github+json',
+    },
   });
 
   const reactionId = response.data?.id;
@@ -138,13 +137,13 @@ async function editCommentWithWorkflowLink(endpoint, runUrl) {
     // First, get the current comment content
     const getResponse = await github.request('GET ' + endpoint, {
       headers: {
-        'Accept': 'application/vnd.github+json'
-      }
+        Accept: 'application/vnd.github+json',
+      },
     });
 
     const originalBody = getResponse.data.body || '';
     const workflowLinkText = `\n\n---\n*🤖 [Workflow run](${runUrl}) triggered by this comment*`;
-    
+
     // Check if we've already added a workflow link to avoid duplicates
     if (originalBody.includes('*🤖 [Workflow run](')) {
       console.log('Comment already contains a workflow run link, skipping edit');
@@ -157,13 +156,12 @@ async function editCommentWithWorkflowLink(endpoint, runUrl) {
     const updateResponse = await github.request('PATCH ' + endpoint, {
       body: updatedBody,
       headers: {
-        'Accept': 'application/vnd.github+json'
-      }
+        Accept: 'application/vnd.github+json',
+      },
     });
 
     console.log(`Successfully updated comment with workflow link`);
     console.log(`Comment ID: ${updateResponse.data.id}`);
-    
   } catch (error) {
     // Don't fail the entire job if comment editing fails - just log it
     const errorMessage = error instanceof Error ? error.message : String(error);

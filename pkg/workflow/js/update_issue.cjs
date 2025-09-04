@@ -28,7 +28,7 @@ async function main() {
   }
 
   // Find all update-issue items
-  const updateItems = validatedOutput.items.filter(/** @param {any} item */ item => item.type === 'update-issue');
+  const updateItems = validatedOutput.items.filter(/** @param {any} item */ (item) => item.type === 'update-issue');
   if (updateItems.length === 0) {
     console.log('No update-issue items found in agent output');
     return;
@@ -37,7 +37,7 @@ async function main() {
   console.log(`Found ${updateItems.length} update-issue item(s)`);
 
   // Get the configuration from environment variables
-  const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || "triggering";
+  const updateTarget = process.env.GITHUB_AW_UPDATE_TARGET || 'triggering';
   const canUpdateStatus = process.env.GITHUB_AW_UPDATE_STATUS === 'true';
   const canUpdateTitle = process.env.GITHUB_AW_UPDATE_TITLE === 'true';
   const canUpdateBody = process.env.GITHUB_AW_UPDATE_BODY === 'true';
@@ -49,7 +49,7 @@ async function main() {
   const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
 
   // Validate context based on target configuration
-  if (updateTarget === "triggering" && !isIssueContext) {
+  if (updateTarget === 'triggering' && !isIssueContext) {
     console.log('Target is "triggering" but not running in issue context, skipping issue update');
     return;
   }
@@ -64,7 +64,7 @@ async function main() {
     // Determine the issue number for this update
     let issueNumber;
 
-    if (updateTarget === "*") {
+    if (updateTarget === '*') {
       // For target "*", we need an explicit issue number from the update item
       if (updateItem.issue_number) {
         issueNumber = parseInt(updateItem.issue_number, 10);
@@ -76,7 +76,7 @@ async function main() {
         console.log('Target is "*" but no issue_number specified in update item');
         continue;
       }
-    } else if (updateTarget && updateTarget !== "triggering") {
+    } else if (updateTarget && updateTarget !== 'triggering') {
       // Explicit issue number specified in target
       issueNumber = parseInt(updateTarget, 10);
       if (isNaN(issueNumber) || issueNumber <= 0) {
@@ -151,7 +151,7 @@ async function main() {
         owner: context.repo.owner,
         repo: context.repo.repo,
         issue_number: issueNumber,
-        ...updateData
+        ...updateData,
       });
 
       console.log('Updated issue #' + issue.number + ': ' + issue.html_url);
@@ -163,7 +163,10 @@ async function main() {
         core.setOutput('issue_url', issue.html_url);
       }
     } catch (error) {
-      console.error(`✗ Failed to update issue #${issueNumber}:`, error instanceof Error ? error.message : String(error));
+      console.error(
+        `✗ Failed to update issue #${issueNumber}:`,
+        error instanceof Error ? error.message : String(error)
+      );
       throw error;
     }
   }

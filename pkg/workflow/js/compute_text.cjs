@@ -16,11 +16,14 @@ function sanitizeContent(content) {
     'githubusercontent.com',
     'githubassets.com',
     'github.dev',
-    'codespaces.new'
+    'codespaces.new',
   ];
 
   const allowedDomains = allowedDomainsEnv
-    ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+    ? allowedDomainsEnv
+        .split(',')
+        .map((d) => d.trim())
+        .filter((d) => d)
     : defaultAllowedDomains;
 
   let sanitized = content;
@@ -33,7 +36,7 @@ function sanitizeContent(content) {
 
   // XML character escaping
   sanitized = sanitized
-    .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+    .replace(/&/g, '&amp;') // Must be first to avoid double-escaping
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
@@ -80,14 +83,14 @@ function sanitizeContent(content) {
       const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
 
       // Check if this domain or any parent domain is in the allowlist
-      const isAllowed = allowedDomains.some(allowedDomain => {
+      const isAllowed = allowedDomains.some((allowedDomain) => {
         const normalizedAllowed = allowedDomain.toLowerCase();
         return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
       });
 
       return isAllowed ? match : '(redacted)';
     });
-    
+
     return s;
   }
 
@@ -112,8 +115,10 @@ function sanitizeContent(content) {
    */
   function neutralizeMentions(s) {
     // Replace @name or @org/team outside code with `@name`
-    return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
-      (_m, p1, p2) => `${p1}\`@${p2}\``);
+    return s.replace(
+      /(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+      (_m, p1, p2) => `${p1}\`@${p2}\``
+    );
   }
 
   /**
@@ -123,8 +128,10 @@ function sanitizeContent(content) {
    */
   function neutralizeBotTriggers(s) {
     // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
-    return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
-      (match, action, ref) => `\`${action} #${ref}\``);
+    return s.replace(
+      /\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+      (match, action, ref) => `\`${action} #${ref}\``
+    );
   }
 }
 
@@ -138,17 +145,17 @@ async function main() {
   const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
     owner: owner,
     repo: repo,
-    username: actor
+    username: actor,
   });
-  
+
   const permission = repoPermission.data.permission;
   console.log(`Repository permission level: ${permission}`);
-  
+
   if (permission !== 'admin' && permission !== 'maintain') {
     core.setOutput('text', '');
     return;
   }
-  
+
   // Determine current body text based on event context
   switch (context.eventName) {
     case 'issues':
@@ -159,7 +166,7 @@ async function main() {
         text = `${title}\n\n${body}`;
       }
       break;
-      
+
     case 'pull_request':
       // For pull requests: title + body
       if (context.payload.pull_request) {
@@ -168,7 +175,7 @@ async function main() {
         text = `${title}\n\n${body}`;
       }
       break;
-      
+
     case 'pull_request_target':
       // For pull request target events: title + body
       if (context.payload.pull_request) {
@@ -177,37 +184,37 @@ async function main() {
         text = `${title}\n\n${body}`;
       }
       break;
-      
+
     case 'issue_comment':
       // For issue comments: comment body
       if (context.payload.comment) {
         text = context.payload.comment.body || '';
       }
       break;
-      
+
     case 'pull_request_review_comment':
       // For PR review comments: comment body
       if (context.payload.comment) {
         text = context.payload.comment.body || '';
       }
       break;
-      
+
     case 'pull_request_review':
       // For PR reviews: review body
       if (context.payload.review) {
         text = context.payload.review.body || '';
       }
       break;
-      
+
     default:
       // Default: empty text
       text = '';
       break;
   }
-  
+
   // Sanitize the text before output
   const sanitizedText = sanitizeContent(text);
-  
+
   // Display sanitized text in logs
   console.log(`text: ${sanitizedText}`);
 

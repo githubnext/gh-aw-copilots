@@ -1,6 +1,6 @@
 async function main() {
-  const fs = require("fs");
-  
+  const fs = require('fs');
+
   /**
    * Sanitizes content for safe output in GitHub Actions
    * @param {string} content - The content to sanitize
@@ -19,11 +19,14 @@ async function main() {
       'githubusercontent.com',
       'githubassets.com',
       'github.dev',
-      'codespaces.new'
+      'codespaces.new',
     ];
 
     const allowedDomains = allowedDomainsEnv
-      ? allowedDomainsEnv.split(',').map(d => d.trim()).filter(d => d)
+      ? allowedDomainsEnv
+          .split(',')
+          .map((d) => d.trim())
+          .filter((d) => d)
       : defaultAllowedDomains;
 
     let sanitized = content;
@@ -36,7 +39,7 @@ async function main() {
 
     // XML character escaping
     sanitized = sanitized
-      .replace(/&/g, '&amp;')   // Must be first to avoid double-escaping
+      .replace(/&/g, '&amp;') // Must be first to avoid double-escaping
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
@@ -81,7 +84,7 @@ async function main() {
         const hostname = domain.split(/[\/:\?#]/)[0].toLowerCase();
 
         // Check if this domain or any parent domain is in the allowlist
-        const isAllowed = allowedDomains.some(allowedDomain => {
+        const isAllowed = allowedDomains.some((allowedDomain) => {
           const normalizedAllowed = allowedDomain.toLowerCase();
           return hostname === normalizedAllowed || hostname.endsWith('.' + normalizedAllowed);
         });
@@ -110,8 +113,10 @@ async function main() {
      */
     function neutralizeMentions(s) {
       // Replace @name or @org/team outside code with `@name`
-      return s.replace(/(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
-        (_m, p1, p2) => `${p1}\`@${p2}\``);
+      return s.replace(
+        /(^|[^\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?)/g,
+        (_m, p1, p2) => `${p1}\`@${p2}\``
+      );
     }
 
     /**
@@ -121,11 +126,13 @@ async function main() {
      */
     function neutralizeBotTriggers(s) {
       // Neutralize common bot trigger phrases like "fixes #123", "closes #asdfs", etc.
-      return s.replace(/\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
-        (match, action, ref) => `\`${action} #${ref}\``);
+      return s.replace(
+        /\b(fixes?|closes?|resolves?|fix|close|resolve)\s+#(\w+)/gi,
+        (match, action, ref) => `\`${action} #${ref}\``
+      );
     }
   }
-  
+
   /**
    * Gets the maximum allowed count for a given output type
    * @param {string} itemType - The output item type
@@ -137,7 +144,7 @@ async function main() {
     if (config && config[itemType] && typeof config[itemType] === 'object' && config[itemType].max) {
       return config[itemType].max;
     }
-    
+
     // Use default limits for plural-supported types
     switch (itemType) {
       case 'create-issue':
@@ -145,20 +152,20 @@ async function main() {
       case 'add-issue-comment':
         return 1; // Only one comment allowed
       case 'create-pull-request':
-        return 1;  // Only one pull request allowed
+        return 1; // Only one pull request allowed
       case 'add-issue-label':
-        return 5;  // Only one labels operation allowed
+        return 5; // Only one labels operation allowed
       case 'update-issue':
-        return 1;  // Only one issue update allowed
+        return 1; // Only one issue update allowed
       case 'push-to-branch':
-        return 1;  // Only one push to branch allowed
+        return 1; // Only one push to branch allowed
       default:
-        return 1;  // Default to single item for unknown types
+        return 1; // Default to single item for unknown types
     }
   }
   const outputFile = process.env.GITHUB_AW_SAFE_OUTPUTS;
   const safeOutputsConfig = process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG;
-  
+
   if (!outputFile) {
     console.log('GITHUB_AW_SAFE_OUTPUTS not set, no output to collect');
     core.setOutput('output', '');
@@ -202,7 +209,7 @@ async function main() {
 
     try {
       const item = JSON.parse(line);
-      
+
       // Validate that the item has a 'type' field
       if (!item.type) {
         errors.push(`Line ${i + 1}: Missing required 'type' field`);
@@ -212,12 +219,14 @@ async function main() {
       // Validate against expected output types
       const itemType = item.type;
       if (!expectedOutputTypes[itemType]) {
-        errors.push(`Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`);
+        errors.push(
+          `Line ${i + 1}: Unexpected output type '${itemType}'. Expected one of: ${Object.keys(expectedOutputTypes).join(', ')}`
+        );
         continue;
       }
 
       // Check for too many items of the same type
-      const typeCount = parsedItems.filter(existing => existing.type === itemType).length;
+      const typeCount = parsedItems.filter((existing) => existing.type === itemType).length;
       const maxAllowed = getMaxAllowedForType(itemType, expectedOutputTypes);
       if (typeCount >= maxAllowed) {
         errors.push(`Line ${i + 1}: Too many items of type '${itemType}'. Maximum allowed: ${maxAllowed}.`);
@@ -240,7 +249,7 @@ async function main() {
           item.body = sanitizeContent(item.body);
           // Sanitize labels if present
           if (item.labels && Array.isArray(item.labels)) {
-            item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+            item.labels = item.labels.map((label) => (typeof label === 'string' ? sanitizeContent(label) : label));
           }
           break;
 
@@ -271,7 +280,7 @@ async function main() {
           }
           // Sanitize labels if present
           if (item.labels && Array.isArray(item.labels)) {
-            item.labels = item.labels.map(label => typeof label === 'string' ? sanitizeContent(label) : label);
+            item.labels = item.labels.map((label) => (typeof label === 'string' ? sanitizeContent(label) : label));
           }
           break;
 
@@ -280,19 +289,17 @@ async function main() {
             errors.push(`Line ${i + 1}: add-issue-label requires a 'labels' array field`);
             continue;
           }
-          if (item.labels.some(label => typeof label !== 'string')) {
+          if (item.labels.some((label) => typeof label !== 'string')) {
             errors.push(`Line ${i + 1}: add-issue-label labels array must contain only strings`);
             continue;
           }
           // Sanitize label strings
-          item.labels = item.labels.map(label => sanitizeContent(label));
+          item.labels = item.labels.map((label) => sanitizeContent(label));
           break;
 
         case 'update-issue':
           // Check that at least one updateable field is provided
-          const hasValidField = (item.status !== undefined) || 
-                                (item.title !== undefined) || 
-                                (item.body !== undefined);
+          const hasValidField = item.status !== undefined || item.title !== undefined || item.body !== undefined;
           if (!hasValidField) {
             errors.push(`Line ${i + 1}: update-issue requires at least one of: 'status', 'title', or 'body' fields`);
             continue;
@@ -354,7 +361,6 @@ async function main() {
 
       console.log(`Line ${i + 1}: Valid ${itemType} item`);
       parsedItems.push(item);
-
     } catch (error) {
       errors.push(`Line ${i + 1}: Invalid JSON - ${error.message}`);
     }
@@ -363,8 +369,8 @@ async function main() {
   // Report validation results
   if (errors.length > 0) {
     console.log('Validation errors found:');
-    errors.forEach(error => console.log(`  - ${error}`));
-    
+    errors.forEach((error) => console.log(`  - ${error}`));
+
     // For now, we'll continue with valid items but log the errors
     // In the future, we might want to fail the workflow for invalid items
   }
@@ -374,7 +380,7 @@ async function main() {
   // Set the parsed and validated items as output
   const validatedOutput = {
     items: parsedItems,
-    errors: errors
+    errors: errors,
   };
 
   core.setOutput('output', JSON.stringify(validatedOutput));

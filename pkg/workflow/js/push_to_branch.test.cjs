@@ -12,8 +12,8 @@ describe('push_to_branch.cjs', () => {
       setOutput: vi.fn(),
       summary: {
         addRaw: vi.fn().mockReturnThis(),
-        write: vi.fn()
-      }
+        write: vi.fn(),
+      },
     };
     global.core = mockCore;
 
@@ -22,9 +22,9 @@ describe('push_to_branch.cjs', () => {
       eventName: 'pull_request',
       payload: {
         pull_request: { number: 123 },
-        repository: { html_url: 'https://github.com/testowner/testrepo' }
+        repository: { html_url: 'https://github.com/testowner/testrepo' },
       },
-      repo: { owner: 'testowner', repo: 'testrepo' }
+      repo: { owner: 'testowner', repo: 'testrepo' },
     };
 
     // Clear environment variables
@@ -45,7 +45,7 @@ describe('push_to_branch.cjs', () => {
     it('should have valid JavaScript syntax', () => {
       const scriptPath = path.join(__dirname, 'push_to_branch.cjs');
       const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      
+
       // Basic syntax validation - should not contain obvious errors
       expect(scriptContent).toContain('async function main()');
       expect(scriptContent).toContain('GITHUB_AW_PUSH_BRANCH');
@@ -57,7 +57,7 @@ describe('push_to_branch.cjs', () => {
     it('should export a main function', () => {
       const scriptPath = path.join(__dirname, 'push_to_branch.cjs');
       const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      
+
       // Check that the script has the expected structure
       expect(scriptContent).toMatch(/async function main\(\) \{[\s\S]*\}/);
     });
@@ -65,7 +65,7 @@ describe('push_to_branch.cjs', () => {
     it('should handle required environment variables', () => {
       const scriptPath = path.join(__dirname, 'push_to_branch.cjs');
       const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      
+
       // Check that environment variables are handled
       expect(scriptContent).toContain('process.env.GITHUB_AW_PUSH_BRANCH');
       expect(scriptContent).toContain('process.env.GITHUB_AW_AGENT_OUTPUT');
@@ -75,7 +75,7 @@ describe('push_to_branch.cjs', () => {
     it('should handle patch file operations', () => {
       const scriptPath = path.join(__dirname, 'push_to_branch.cjs');
       const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      
+
       // Check that patch operations are included
       expect(scriptContent).toContain('fs.existsSync');
       expect(scriptContent).toContain('fs.readFileSync');
@@ -87,7 +87,7 @@ describe('push_to_branch.cjs', () => {
     it('should validate branch operations', () => {
       const scriptPath = path.join(__dirname, 'push_to_branch.cjs');
       const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      
+
       // Check that git branch operations are handled
       expect(scriptContent).toContain('git checkout');
       expect(scriptContent).toContain('git fetch');

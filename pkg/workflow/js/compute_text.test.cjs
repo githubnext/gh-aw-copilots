@@ -4,25 +4,25 @@ import path from 'path';
 
 // Mock the global objects that GitHub Actions provides
 const mockCore = {
-  setOutput: vi.fn()
+  setOutput: vi.fn(),
 };
 
 const mockGithub = {
   rest: {
     repos: {
-      getCollaboratorPermissionLevel: vi.fn()
-    }
-  }
+      getCollaboratorPermissionLevel: vi.fn(),
+    },
+  },
 };
 
 const mockContext = {
   actor: 'test-user',
   repo: {
     owner: 'test-owner',
-    repo: 'test-repo'
+    repo: 'test-repo',
   },
   eventName: 'issues',
-  payload: {}
+  payload: {},
 };
 
 // Set up global variables
@@ -37,18 +37,18 @@ describe('compute_text.cjs', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Reset context
     mockContext.eventName = 'issues';
     mockContext.payload = {};
-    
+
     // Reset environment variables
     delete process.env.GITHUB_AW_ALLOWED_DOMAINS;
-    
+
     // Read the script content
     const scriptPath = path.join(process.cwd(), 'pkg/workflow/js/compute_text.cjs');
     computeTextScript = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Extract sanitizeContent function for unit testing
     // We need to eval the script to get access to the function
     const scriptWithExport = computeTextScript.replace(
@@ -152,9 +152,9 @@ describe('compute_text.cjs', () => {
     beforeEach(() => {
       // Set up default successful permission check
       mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-        data: { permission: 'admin' }
+        data: { permission: 'admin' },
       });
-      
+
       // Get the main function from global scope
       testMain = global.testMain;
     });
@@ -164,8 +164,8 @@ describe('compute_text.cjs', () => {
       mockContext.payload = {
         issue: {
           title: 'Test Issue',
-          body: 'Issue description'
-        }
+          body: 'Issue description',
+        },
       };
 
       await testMain();
@@ -178,8 +178,8 @@ describe('compute_text.cjs', () => {
       mockContext.payload = {
         pull_request: {
           title: 'Test PR',
-          body: 'PR description'
-        }
+          body: 'PR description',
+        },
       };
 
       await testMain();
@@ -191,8 +191,8 @@ describe('compute_text.cjs', () => {
       mockContext.eventName = 'issue_comment';
       mockContext.payload = {
         comment: {
-          body: 'This is a comment'
-        }
+          body: 'This is a comment',
+        },
       };
 
       await testMain();
@@ -205,8 +205,8 @@ describe('compute_text.cjs', () => {
       mockContext.payload = {
         pull_request: {
           title: 'Test PR Target',
-          body: 'PR target description'
-        }
+          body: 'PR target description',
+        },
       };
 
       await testMain();
@@ -218,8 +218,8 @@ describe('compute_text.cjs', () => {
       mockContext.eventName = 'pull_request_review_comment';
       mockContext.payload = {
         comment: {
-          body: 'Review comment'
-        }
+          body: 'Review comment',
+        },
       };
 
       await testMain();
@@ -231,8 +231,8 @@ describe('compute_text.cjs', () => {
       mockContext.eventName = 'pull_request_review';
       mockContext.payload = {
         review: {
-          body: 'Review body'
-        }
+          body: 'Review body',
+        },
       };
 
       await testMain();
@@ -251,15 +251,15 @@ describe('compute_text.cjs', () => {
 
     it('should deny access for non-admin/maintain users', async () => {
       mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-        data: { permission: 'read' }
+        data: { permission: 'read' },
       });
 
       mockContext.eventName = 'issues';
       mockContext.payload = {
         issue: {
           title: 'Test Issue',
-          body: 'Issue description'
-        }
+          body: 'Issue description',
+        },
       };
 
       await testMain();
@@ -272,8 +272,8 @@ describe('compute_text.cjs', () => {
       mockContext.payload = {
         issue: {
           title: 'Test @user fixes #123',
-          body: 'Visit https://evil.com'
-        }
+          body: 'Visit https://evil.com',
+        },
       };
 
       await testMain();
@@ -287,7 +287,7 @@ describe('compute_text.cjs', () => {
     it('should handle missing title and body gracefully', async () => {
       mockContext.eventName = 'issues';
       mockContext.payload = {
-        issue: {} // No title or body
+        issue: {}, // No title or body
       };
 
       await testMain();
@@ -300,8 +300,8 @@ describe('compute_text.cjs', () => {
       mockContext.eventName = 'issue_comment';
       mockContext.payload = {
         comment: {
-          body: null
-        }
+          body: null,
+        },
       };
 
       await testMain();

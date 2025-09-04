@@ -4,23 +4,23 @@ import path from 'path';
 
 // Mock the global objects that GitHub Actions provides
 const mockCore = {
-  setOutput: vi.fn()
+  setOutput: vi.fn(),
 };
 
 const mockGithub = {
   rest: {
     repos: {
-      getCollaboratorPermissionLevel: vi.fn()
-    }
-  }
+      getCollaboratorPermissionLevel: vi.fn(),
+    },
+  },
 };
 
 const mockContext = {
   actor: 'testuser',
   repo: {
     owner: 'testowner',
-    repo: 'testrepo'
-  }
+    repo: 'testrepo',
+  },
 };
 
 // Set up global variables
@@ -34,14 +34,14 @@ describe('check_team_member.cjs', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Reset context to default state
     global.context.actor = 'testuser';
     global.context.repo = {
       owner: 'testowner',
-      repo: 'testrepo'
+      repo: 'testrepo',
     };
-    
+
     // Read the script content
     const scriptPath = path.join(process.cwd(), 'pkg/workflow/js/check_team_member.cjs');
     checkTeamMemberScript = fs.readFileSync(scriptPath, 'utf8');
@@ -49,7 +49,7 @@ describe('check_team_member.cjs', () => {
 
   it('should set is_team_member to true for admin permission', async () => {
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'admin' }
+      data: { permission: 'admin' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -60,10 +60,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission level: admin');
     expect(consoleSpy).toHaveBeenCalledWith('User has admin access to repository');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'true');
@@ -73,7 +73,7 @@ describe('check_team_member.cjs', () => {
 
   it('should set is_team_member to true for maintain permission', async () => {
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'maintain' }
+      data: { permission: 'maintain' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -84,10 +84,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission level: maintain');
     expect(consoleSpy).toHaveBeenCalledWith('User has maintain access to repository');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'true');
@@ -97,7 +97,7 @@ describe('check_team_member.cjs', () => {
 
   it('should set is_team_member to false for write permission', async () => {
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'write' }
+      data: { permission: 'write' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -108,10 +108,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission level: write');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'false');
 
@@ -120,7 +120,7 @@ describe('check_team_member.cjs', () => {
 
   it('should set is_team_member to false for read permission', async () => {
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'read' }
+      data: { permission: 'read' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -131,10 +131,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission level: read');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'false');
 
@@ -143,7 +143,7 @@ describe('check_team_member.cjs', () => {
 
   it('should set is_team_member to false for none permission', async () => {
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'none' }
+      data: { permission: 'none' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -154,10 +154,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission level: none');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'false');
 
@@ -176,10 +176,10 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith("Checking if user 'testuser' is admin or maintainer of testowner/testrepo");
     expect(consoleSpy).toHaveBeenCalledWith('Repository permission check failed: API Error: Not Found');
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'false');
 
@@ -188,9 +188,9 @@ describe('check_team_member.cjs', () => {
 
   it('should handle different actor names correctly', async () => {
     global.context.actor = 'different-user';
-    
+
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'admin' }
+      data: { permission: 'admin' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -201,10 +201,12 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'testowner',
       repo: 'testrepo',
-      username: 'different-user'
+      username: 'different-user',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'different-user\' is admin or maintainer of testowner/testrepo');
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Checking if user 'different-user' is admin or maintainer of testowner/testrepo"
+    );
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'true');
 
     consoleSpy.mockRestore();
@@ -213,11 +215,11 @@ describe('check_team_member.cjs', () => {
   it('should handle different repository contexts correctly', async () => {
     global.context.repo = {
       owner: 'different-owner',
-      repo: 'different-repo'
+      repo: 'different-repo',
     };
-    
+
     mockGithub.rest.repos.getCollaboratorPermissionLevel.mockResolvedValue({
-      data: { permission: 'maintain' }
+      data: { permission: 'maintain' },
     });
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -228,10 +230,12 @@ describe('check_team_member.cjs', () => {
     expect(mockGithub.rest.repos.getCollaboratorPermissionLevel).toHaveBeenCalledWith({
       owner: 'different-owner',
       repo: 'different-repo',
-      username: 'testuser'
+      username: 'testuser',
     });
 
-    expect(consoleSpy).toHaveBeenCalledWith('Checking if user \'testuser\' is admin or maintainer of different-owner/different-repo');
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Checking if user 'testuser' is admin or maintainer of different-owner/different-repo"
+    );
     expect(mockCore.setOutput).toHaveBeenCalledWith('is_team_member', 'true');
 
     consoleSpy.mockRestore();

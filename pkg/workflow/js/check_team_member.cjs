@@ -9,12 +9,12 @@ async function main() {
     const repoPermission = await github.rest.repos.getCollaboratorPermissionLevel({
       owner: owner,
       repo: repo,
-      username: actor
+      username: actor,
     });
-    
+
     const permission = repoPermission.data.permission;
     console.log(`Repository permission level: ${permission}`);
-    
+
     if (permission === 'admin' || permission === 'maintain') {
       console.log(`User has ${permission} access to repository`);
       core.setOutput('is_team_member', 'true');

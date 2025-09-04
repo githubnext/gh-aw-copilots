@@ -28,7 +28,7 @@ async function main() {
   }
 
   // Find the add-issue-label item
-  const labelsItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'add-issue-label');
+  const labelsItem = validatedOutput.items.find(/** @param {any} item */ (item) => item.type === 'add-issue-label');
   if (!labelsItem) {
     console.log('No add-issue-label item found in agent output');
     return;
@@ -39,9 +39,12 @@ async function main() {
   // Read the allowed labels from environment variable (optional)
   const allowedLabelsEnv = process.env.GITHUB_AW_LABELS_ALLOWED;
   let allowedLabels = null;
-  
+
   if (allowedLabelsEnv && allowedLabelsEnv.trim() !== '') {
-    allowedLabels = allowedLabelsEnv.split(',').map(label => label.trim()).filter(label => label);
+    allowedLabels = allowedLabelsEnv
+      .split(',')
+      .map((label) => label.trim())
+      .filter((label) => label);
     if (allowedLabels.length === 0) {
       allowedLabels = null; // Treat empty list as no restrictions
     }
@@ -65,7 +68,10 @@ async function main() {
 
   // Check if we're in an issue or pull request context
   const isIssueContext = context.eventName === 'issues' || context.eventName === 'issue_comment';
-  const isPRContext = context.eventName === 'pull_request' || context.eventName === 'pull_request_review' || context.eventName === 'pull_request_review_comment';
+  const isPRContext =
+    context.eventName === 'pull_request' ||
+    context.eventName === 'pull_request_review' ||
+    context.eventName === 'pull_request_review_comment';
 
   if (!isIssueContext && !isPRContext) {
     core.setFailed('Not running in issue or pull request context, skipping label addition');
@@ -114,7 +120,7 @@ async function main() {
   // Validate that all requested labels are in the allowed list (if restrictions are set)
   let validLabels;
   if (allowedLabels) {
-    validLabels = requestedLabels.filter(/** @param {string} label */ label => allowedLabels.includes(label));
+    validLabels = requestedLabels.filter(/** @param {string} label */ (label) => allowedLabels.includes(label));
   } else {
     // No restrictions, all requested labels are valid
     validLabels = requestedLabels;
@@ -125,18 +131,22 @@ async function main() {
 
   // Enforce max limit
   if (uniqueLabels.length > maxCount) {
-    console.log(`too many labels, keep ${maxCount}`)
+    console.log(`too many labels, keep ${maxCount}`);
     uniqueLabels = uniqueLabels.slice(0, maxCount);
   }
 
   if (uniqueLabels.length === 0) {
     console.log('No labels to add');
     core.setOutput('labels_added', '');
-    await core.summary.addRaw(`
+    await core.summary
+      .addRaw(
+        `
 ## Label Addition
 
 No labels were added (no valid labels found in agent output).
-`).write();
+`
+      )
+      .write();
     return;
   }
 
@@ -148,7 +158,7 @@ No labels were added (no valid labels found in agent output).
       owner: context.repo.owner,
       repo: context.repo.repo,
       issue_number: issueNumber,
-      labels: uniqueLabels
+      labels: uniqueLabels,
     });
 
     console.log(`Successfully added ${uniqueLabels.length} labels to ${contextType} #${issueNumber}`);
@@ -157,15 +167,18 @@ No labels were added (no valid labels found in agent output).
     core.setOutput('labels_added', uniqueLabels.join('\n'));
 
     // Write summary
-    const labelsListMarkdown = uniqueLabels.map(label => `- \`${label}\``).join('\n');
-    await core.summary.addRaw(`
+    const labelsListMarkdown = uniqueLabels.map((label) => `- \`${label}\``).join('\n');
+    await core.summary
+      .addRaw(
+        `
 ## Label Addition
 
 Successfully added ${uniqueLabels.length} label(s) to ${contextType} #${issueNumber}:
 
 ${labelsListMarkdown}
-`).write();
-
+`
+      )
+      .write();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Failed to add labels:', errorMessage);

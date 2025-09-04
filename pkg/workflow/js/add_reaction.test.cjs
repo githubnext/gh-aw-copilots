@@ -8,25 +8,25 @@ const mockCore = {
   setOutput: vi.fn(),
   summary: {
     addRaw: vi.fn().mockReturnThis(),
-    write: vi.fn()
-  }
+    write: vi.fn(),
+  },
 };
 
 const mockGithub = {
-  request: vi.fn()
+  request: vi.fn(),
 };
 
 const mockContext = {
   eventName: 'issues',
   repo: {
     owner: 'testowner',
-    repo: 'testrepo'
+    repo: 'testrepo',
   },
   payload: {
     issue: {
-      number: 123
-    }
-  }
+      number: 123,
+    },
+  },
 };
 
 // Set up global variables
@@ -40,22 +40,22 @@ describe('add_reaction.cjs', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Reset environment variables
     delete process.env.GITHUB_AW_REACTION;
-    
+
     // Reset context to default
     global.context = {
       eventName: 'issues',
       repo: {
         owner: 'testowner',
-        repo: 'testrepo'
+        repo: 'testrepo',
       },
       payload: {
         issue: {
-          number: 123
-        }
-      }
+          number: 123,
+        },
+      },
     };
 
     // Load the script content
@@ -66,7 +66,7 @@ describe('add_reaction.cjs', () => {
   describe('Environment variable validation', () => {
     it('should use default values when environment variables are not set', async () => {
       mockGithub.request.mockResolvedValue({
-        data: { id: 123, content: 'eyes' }
+        data: { id: 123, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -74,7 +74,7 @@ describe('add_reaction.cjs', () => {
       await eval(`(async () => { ${addReactionScript} })()`);
 
       expect(consoleSpy).toHaveBeenCalledWith('Reaction type:', 'eyes');
-      
+
       consoleSpy.mockRestore();
     });
 
@@ -90,13 +90,13 @@ describe('add_reaction.cjs', () => {
 
     it('should accept all valid reaction types', async () => {
       const validReactions = ['+1', '-1', 'laugh', 'confused', 'heart', 'hooray', 'rocket', 'eyes'];
-      
+
       for (const reaction of validReactions) {
         vi.clearAllMocks();
         process.env.GITHUB_AW_REACTION = reaction;
-        
+
         mockGithub.request.mockResolvedValue({
-          data: { id: 123, content: reaction }
+          data: { id: 123, content: reaction },
         });
 
         await eval(`(async () => { ${addReactionScript} })()`);
@@ -111,9 +111,9 @@ describe('add_reaction.cjs', () => {
     it('should handle issues event', async () => {
       global.context.eventName = 'issues';
       global.context.payload = { issue: { number: 123 } };
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 456, content: 'eyes' }
+        data: { id: 456, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -123,39 +123,42 @@ describe('add_reaction.cjs', () => {
       expect(consoleSpy).toHaveBeenCalledWith('API endpoint:', '/repos/testowner/testrepo/issues/123/reactions');
       expect(mockGithub.request).toHaveBeenCalledWith('POST /repos/testowner/testrepo/issues/123/reactions', {
         content: 'eyes',
-        headers: { 'Accept': 'application/vnd.github+json' }
+        headers: { Accept: 'application/vnd.github+json' },
       });
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should handle issue_comment event', async () => {
       global.context.eventName = 'issue_comment';
       global.context.payload = { comment: { id: 789 } };
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 456, content: 'eyes' }
+        data: { id: 456, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('API endpoint:', '/repos/testowner/testrepo/issues/comments/789/reactions');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'API endpoint:',
+        '/repos/testowner/testrepo/issues/comments/789/reactions'
+      );
       expect(mockGithub.request).toHaveBeenCalledWith('POST /repos/testowner/testrepo/issues/comments/789/reactions', {
         content: 'eyes',
-        headers: { 'Accept': 'application/vnd.github+json' }
+        headers: { Accept: 'application/vnd.github+json' },
       });
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should handle pull_request event', async () => {
       global.context.eventName = 'pull_request';
       global.context.payload = { pull_request: { number: 456 } };
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 789, content: 'eyes' }
+        data: { id: 789, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -165,30 +168,33 @@ describe('add_reaction.cjs', () => {
       expect(consoleSpy).toHaveBeenCalledWith('API endpoint:', '/repos/testowner/testrepo/issues/456/reactions');
       expect(mockGithub.request).toHaveBeenCalledWith('POST /repos/testowner/testrepo/issues/456/reactions', {
         content: 'eyes',
-        headers: { 'Accept': 'application/vnd.github+json' }
+        headers: { Accept: 'application/vnd.github+json' },
       });
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should handle pull_request_review_comment event', async () => {
       global.context.eventName = 'pull_request_review_comment';
       global.context.payload = { comment: { id: 321 } };
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 654, content: 'eyes' }
+        data: { id: 654, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       await eval(`(async () => { ${addReactionScript} })()`);
 
-      expect(consoleSpy).toHaveBeenCalledWith('API endpoint:', '/repos/testowner/testrepo/pulls/comments/321/reactions');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'API endpoint:',
+        '/repos/testowner/testrepo/pulls/comments/321/reactions'
+      );
       expect(mockGithub.request).toHaveBeenCalledWith('POST /repos/testowner/testrepo/pulls/comments/321/reactions', {
         content: 'eyes',
-        headers: { 'Accept': 'application/vnd.github+json' }
+        headers: { Accept: 'application/vnd.github+json' },
       });
-      
+
       consoleSpy.mockRestore();
     });
 
@@ -222,9 +228,9 @@ describe('add_reaction.cjs', () => {
   describe('Add reaction functionality', () => {
     it('should successfully add reaction with direct response', async () => {
       process.env.GITHUB_AW_REACTION = 'heart';
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 123, content: 'heart' }
+        data: { id: 123, content: 'heart' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -233,15 +239,15 @@ describe('add_reaction.cjs', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('Successfully added reaction: heart (id: 123)');
       expect(mockCore.setOutput).toHaveBeenCalledWith('reaction-id', '123');
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should handle response without ID', async () => {
       process.env.GITHUB_AW_REACTION = 'rocket';
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { content: 'rocket' }
+        data: { content: 'rocket' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -250,7 +256,7 @@ describe('add_reaction.cjs', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('Successfully added reaction: rocket');
       expect(mockCore.setOutput).toHaveBeenCalledWith('reaction-id', '');
-      
+
       consoleSpy.mockRestore();
     });
   });
@@ -266,7 +272,7 @@ describe('add_reaction.cjs', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('Failed to add reaction:', 'API Error');
       expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: API Error');
-      
+
       consoleSpy.mockRestore();
     });
 
@@ -280,7 +286,7 @@ describe('add_reaction.cjs', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('Failed to add reaction:', 'String error');
       expect(mockCore.setFailed).toHaveBeenCalledWith('Failed to add reaction: String error');
-      
+
       consoleSpy.mockRestore();
     });
   });
@@ -288,9 +294,9 @@ describe('add_reaction.cjs', () => {
   describe('Output and logging', () => {
     it('should log reaction type', async () => {
       process.env.GITHUB_AW_REACTION = 'rocket';
-      
+
       mockGithub.request.mockResolvedValue({
-        data: { id: 123, content: 'rocket' }
+        data: { id: 123, content: 'rocket' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -298,13 +304,13 @@ describe('add_reaction.cjs', () => {
       await eval(`(async () => { ${addReactionScript} })()`);
 
       expect(consoleSpy).toHaveBeenCalledWith('Reaction type:', 'rocket');
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should log API endpoint', async () => {
       mockGithub.request.mockResolvedValue({
-        data: { id: 123, content: 'eyes' }
+        data: { id: 123, content: 'eyes' },
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -312,7 +318,7 @@ describe('add_reaction.cjs', () => {
       await eval(`(async () => { ${addReactionScript} })()`);
 
       expect(consoleSpy).toHaveBeenCalledWith('API endpoint:', '/repos/testowner/testrepo/issues/123/reactions');
-      
+
       consoleSpy.mockRestore();
     });
   });

@@ -65,7 +65,6 @@ async function main() {
     console.log('API endpoint:', endpoint);
 
     await addReaction(endpoint, reaction);
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Failed to add reaction:', errorMessage);
@@ -82,8 +81,8 @@ async function addReaction(endpoint, reaction) {
   const response = await github.request('POST ' + endpoint, {
     content: reaction,
     headers: {
-      'Accept': 'application/vnd.github+json'
-    }
+      Accept: 'application/vnd.github+json',
+    },
   });
 
   const reactionId = response.data?.id;

@@ -404,8 +404,10 @@ jobs:
                     if (usage.input_tokens || usage.output_tokens) {
                       markdown += `**Token Usage:**\n`;
                       if (usage.input_tokens) markdown += `- Input: ${usage.input_tokens.toLocaleString()}\n`;
-                      if (usage.cache_creation_input_tokens) markdown += `- Cache Creation: ${usage.cache_creation_input_tokens.toLocaleString()}\n`;
-                      if (usage.cache_read_input_tokens) markdown += `- Cache Read: ${usage.cache_read_input_tokens.toLocaleString()}\n`;
+                      if (usage.cache_creation_input_tokens)
+                        markdown += `- Cache Creation: ${usage.cache_creation_input_tokens.toLocaleString()}\n`;
+                      if (usage.cache_read_input_tokens)
+                        markdown += `- Cache Read: ${usage.cache_read_input_tokens.toLocaleString()}\n`;
                       if (usage.output_tokens) markdown += `- Output: ${usage.output_tokens.toLocaleString()}\n`;
                       markdown += '\n';
                     }
@@ -501,7 +503,8 @@ jobs:
                     const keys = Object.keys(input);
                     if (keys.length > 0) {
                       // Try to find the most important parameter
-                      const mainParam = keys.find(k => ['query', 'command', 'path', 'file_path', 'content'].includes(k)) || keys[0];
+                      const mainParam =
+                        keys.find((k) => ['query', 'command', 'path', 'file_path', 'content'].includes(k)) || keys[0];
                       const value = String(input[mainParam] || '');
                       if (value) {
                         markdown += `${statusIcon} ${toolName}: ${truncateString(value, 100)}\n\n`;
@@ -531,7 +534,8 @@ jobs:
               const keys = Object.keys(input);
               if (keys.length === 0) return '';
               const paramStrs = [];
-              for (const key of keys.slice(0, 4)) { // Show up to 4 parameters
+              for (const key of keys.slice(0, 4)) {
+                // Show up to 4 parameters
                 const value = String(input[key] || '');
                 paramStrs.push(`${key}: ${truncateString(value, 40)}`);
               }
@@ -545,11 +549,11 @@ jobs:
               // Convert multi-line commands to single line by replacing newlines with spaces
               // and collapsing multiple spaces
               let formatted = command
-                .replace(/\n/g, ' ')           // Replace newlines with spaces
-                .replace(/\r/g, ' ')           // Replace carriage returns with spaces
-                .replace(/\t/g, ' ')           // Replace tabs with spaces
-                .replace(/\s+/g, ' ')          // Collapse multiple spaces into one
-                .trim();                       // Remove leading/trailing whitespace
+                .replace(/\n/g, ' ') // Replace newlines with spaces
+                .replace(/\r/g, ' ') // Replace carriage returns with spaces
+                .replace(/\t/g, ' ') // Replace tabs with spaces
+                .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+                .trim(); // Remove leading/trailing whitespace
               // Escape backticks to prevent markdown issues
               formatted = formatted.replace(/`/g, '\\`');
               // Truncate if too long (keep reasonable length for summary)

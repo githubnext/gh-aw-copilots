@@ -1,7 +1,7 @@
 async function main() {
   /** @type {typeof import("fs")} */
-  const fs = require("fs");
-  const { execSync } = require("child_process");
+  const fs = require('fs');
+  const { execSync } = require('child_process');
 
   // Environment validation - fail early if required variables are missing
   const branchName = process.env.GITHUB_AW_PUSH_BRANCH;
@@ -10,13 +10,13 @@ async function main() {
     return;
   }
 
-  const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT || "";
+  const outputContent = process.env.GITHUB_AW_AGENT_OUTPUT || '';
   if (outputContent.trim() === '') {
     console.log('Agent output content is empty');
     return;
   }
 
-  const target = process.env.GITHUB_AW_PUSH_TARGET || "triggering";
+  const target = process.env.GITHUB_AW_PUSH_TARGET || 'triggering';
 
   // Check if patch file exists and has valid content
   if (!fs.existsSync('/tmp/aw.patch')) {
@@ -50,7 +50,7 @@ async function main() {
   }
 
   // Find the push-to-branch item
-  const pushItem = validatedOutput.items.find(/** @param {any} item */ item => item.type === 'push-to-branch');
+  const pushItem = validatedOutput.items.find(/** @param {any} item */ (item) => item.type === 'push-to-branch');
   if (!pushItem) {
     console.log('No push-to-branch item found in agent output');
     return;
@@ -59,7 +59,7 @@ async function main() {
   console.log('Found push-to-branch item');
 
   // Validate target configuration for pull request context
-  if (target !== "*" && target !== "triggering") {
+  if (target !== '*' && target !== 'triggering') {
     // If target is a specific number, validate it's a valid pull request number
     const targetNumber = parseInt(target, 10);
     if (isNaN(targetNumber)) {
@@ -69,7 +69,7 @@ async function main() {
   }
 
   // Check if we're in a pull request context when required
-  if (target === "triggering" && !context.payload.pull_request) {
+  if (target === 'triggering' && !context.payload.pull_request) {
     core.setFailed('push-to-branch with target "triggering" requires pull request context');
     return;
   }
@@ -104,7 +104,7 @@ async function main() {
 
   // Commit and push the changes
   execSync('git add .', { stdio: 'inherit' });
-  
+
   // Check if there are changes to commit
   try {
     execSync('git diff --cached --exit-code', { stdio: 'ignore' });
@@ -121,7 +121,7 @@ async function main() {
 
   // Get commit SHA
   const commitSha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-  const pushUrl = context.payload.repository 
+  const pushUrl = context.payload.repository
     ? `${context.payload.repository.html_url}/tree/${branchName}`
     : `https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName}`;
 
@@ -132,12 +132,15 @@ async function main() {
 
   // Write summary to GitHub Actions summary
   await core.summary
-    .addRaw(`
+    .addRaw(
+      `
 ## Push to Branch
 - **Branch**: \`${branchName}\`
 - **Commit**: [${commitSha.substring(0, 7)}](${pushUrl})
 - **URL**: [${pushUrl}](${pushUrl})
-`).write();
+`
+    )
+    .write();
 }
 
 await main();

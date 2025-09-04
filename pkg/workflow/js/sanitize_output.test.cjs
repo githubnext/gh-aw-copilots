@@ -4,7 +4,7 @@ import path from 'path';
 
 // Mock the global objects that GitHub Actions provides
 const mockCore = {
-  setOutput: vi.fn()
+  setOutput: vi.fn(),
 };
 
 // Set up global variables
@@ -17,21 +17,18 @@ describe('sanitize_output.cjs', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Reset environment variables
     delete process.env.GITHUB_AW_SAFE_OUTPUTS;
     delete process.env.GITHUB_AW_ALLOWED_DOMAINS;
-    
+
     // Read the script content
     const scriptPath = path.join(process.cwd(), 'pkg/workflow/js/sanitize_output.cjs');
     sanitizeScript = fs.readFileSync(scriptPath, 'utf8');
-    
+
     // Extract sanitizeContent function for unit testing
     // We need to eval the script to get access to the function
-    const scriptWithExport = sanitizeScript.replace(
-      'await main();',
-      'global.testSanitizeContent = sanitizeContent;'
-    );
+    const scriptWithExport = sanitizeScript.replace('await main();', 'global.testSanitizeContent = sanitizeContent;');
     eval(scriptWithExport);
     sanitizeContentFunction = global.testSanitizeContent;
   });
@@ -119,15 +116,12 @@ describe('sanitize_output.cjs', () => {
 
     it('should respect custom allowed domains from environment', () => {
       process.env.GITHUB_AW_ALLOWED_DOMAINS = 'example.com,trusted.org';
-      
+
       // Re-run the script setup to pick up env variable
-      const scriptWithExport = sanitizeScript.replace(
-        'await main();',
-        'global.testSanitizeContent = sanitizeContent;'
-      );
+      const scriptWithExport = sanitizeScript.replace('await main();', 'global.testSanitizeContent = sanitizeContent;');
       eval(scriptWithExport);
       const customSanitize = global.testSanitizeContent;
-      
+
       const input = 'Links: https://example.com/page https://trusted.org/file https://github.com/repo';
       const result = customSanitize(input);
       expect(result).toContain('https://example.com/page');
@@ -179,27 +173,27 @@ This fixes #123 and has links:
 
 Special chars: \x00\x1F & "quotes" 'apostrophes'
       `.trim();
-      
+
       const result = sanitizeContentFunction(input);
-      
+
       // Check @mention neutralization
       expect(result).toContain('`@user`');
-      
+
       // Check bot trigger neutralization
       expect(result).toContain('`fixes #123`');
-      
+
       // Check URL filtering
       expect(result).toContain('(redacted)'); // HTTP and JavaScript URLs
       expect(result).toContain('https://github.com/repo');
       expect(result).not.toContain('http://bad.com');
       expect(result).not.toContain('javascript:alert');
-      
+
       // Check XML escaping
       expect(result).toContain('&lt;script&gt;');
       expect(result).toContain('&quot;quotes&quot;');
       expect(result).toContain('&apos;apostrophes&apos;');
       expect(result).toContain('&amp;');
-      
+
       // Check control character removal
       expect(result).not.toContain('\x00');
       expect(result).not.toContain('\x1F');
@@ -213,14 +207,11 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
 
     it('should handle empty environment variable gracefully', () => {
       process.env.GITHUB_AW_ALLOWED_DOMAINS = '  ,  ,  ';
-      
-      const scriptWithExport = sanitizeScript.replace(
-        'await main();',
-        'global.testSanitizeContent = sanitizeContent;'
-      );
+
+      const scriptWithExport = sanitizeScript.replace('await main();', 'global.testSanitizeContent = sanitizeContent;');
       eval(scriptWithExport);
       const customSanitize = global.testSanitizeContent;
-      
+
       const input = 'Link: https://github.com/repo';
       const result = customSanitize(input);
       // With empty allowedDomains array, all HTTPS URLs get blocked
@@ -241,7 +232,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const input = 'Code: `@user.method()` and normal @user mention';
       const result = sanitizeContentFunction(input);
       expect(result).toContain('`@user.method()`'); // Should remain unchanged
-      expect(result).toContain('`@user`'); // Should be neutralized  
+      expect(result).toContain('`@user`'); // Should be neutralized
     });
 
     it('should handle various bot trigger phrase formats', () => {
@@ -262,7 +253,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Nested: (https://github.com) [http://bad.com] "ftp://files.com"
       `;
       const result = sanitizeContentFunction(input);
-      
+
       // Check case insensitive protocol blocking
       expect(result).toContain('(redacted)'); // HTTP://CAPS.COM
       expect(result).toContain('https://github.com/path?query=value#fragment');
@@ -281,7 +272,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Multiple: https://github.com https://github.io https://githubassets.com
       `;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).toContain('https://github.com/user/repo');
       expect(result).toContain('https://github.io/docs');
       expect(result).toContain('https://githubusercontent.com/file.txt');
@@ -297,11 +288,11 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Edge: https://github.com.attacker.com https://sub.github.io.fake.com
       `;
       const result = sanitizeContentFunction(input);
-      
+
       // Valid subdomains should be preserved
       expect(result).toContain('https://api.github.com/v4/graphql');
       expect(result).toContain('https://docs.github.com/en/');
-      
+
       // Invalid domains should be blocked
       expect(result).toContain('(redacted)');
       expect(result).not.toContain('github.com.evil.com');
@@ -319,7 +310,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Auth: https://github.com/repo (user info stripped by domain parsing)
       `;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).toContain('https://github.com/user/repo-name_with.dots');
       expect(result).toContain('https://github.com/search?q=test&amp;type=code'); // & escaped
       expect(result).toContain('https://github.com/user/repo#readme');
@@ -333,7 +324,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const result = sanitizeContentFunction(input);
       expect(result.length).toBe(exactLength);
       expect(result).not.toContain('[Content truncated due to length]');
-      
+
       const overLength = 'x'.repeat(exactLength + 100); // Significantly longer
       const overResult = sanitizeContentFunction(overLength);
       // The result should be truncated and contain the truncation message
@@ -350,9 +341,11 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const lines = result.split('\n');
       expect(lines.length).toBe(exactLines);
       expect(result).not.toContain('[Content truncated due to line count]');
-      
-      // Test with more than 65000 lines  
-      const overLines = Array(exactLines + 1).fill('line').join('\n');
+
+      // Test with more than 65000 lines
+      const overLines = Array(exactLines + 1)
+        .fill('line')
+        .join('\n');
       const overResult = sanitizeContentFunction(overLines);
       const overResultLines = overResult.split('\n');
       expect(overResultLines.length).toBeLessThanOrEqual(exactLines + 1); // +1 for truncation message
@@ -367,7 +360,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Complex: \x1b[38;5;196mTrueColor\x1b[0m
       `;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).not.toContain('\x1b[');
       expect(result).toContain('Red');
       expect(result).toContain('Bold Green');
@@ -385,7 +378,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         </xml>
       `;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).toContain('&lt;xml attr=&quot;value &amp; &apos;quotes&apos;&quot;&gt;');
       expect(result).toContain('&lt;![CDATA[&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;]]&gt;');
       expect(result).toContain('&lt;!-- comment with &quot;quotes&quot; &amp; &apos;apostrophes&apos; --&gt;');
@@ -407,7 +400,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
 
 \tTab at start`;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).toContain('\n');
       expect(result).toContain('\t');
       expect(result.split('\n').length).toBeGreaterThan(1);
@@ -424,12 +417,12 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
         Mixed: https://evil.com/path?goto=https://github.com/safe
       `;
       const result = sanitizeContentFunction(input);
-      
+
       expect(result).toContain('https://github.com/repo');
       expect(result).toContain('(redacted)'); // For evil.com and http://github.com
       expect(result).not.toContain('https://evil.com');
       expect(result).not.toContain('http://github.com');
-      
+
       // The safe URL in query param should still be preserved
       expect(result).toContain('https://github.com/safe');
     });
@@ -442,7 +435,7 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       if (fs.existsSync(testFile)) {
         fs.unlinkSync(testFile);
       }
-      
+
       // Make fs available globally for the evaluated script
       global.fs = fs;
     });
@@ -454,29 +447,29 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
 
     it('should handle missing GITHUB_AW_SAFE_OUTPUTS environment variable', async () => {
       delete process.env.GITHUB_AW_SAFE_OUTPUTS;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith('GITHUB_AW_SAFE_OUTPUTS not set, no output to collect');
       expect(mockCore.setOutput).toHaveBeenCalledWith('output', '');
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should handle non-existent output file', async () => {
       process.env.GITHUB_AW_SAFE_OUTPUTS = '/tmp/non-existent-file.txt';
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith('Output file does not exist:', '/tmp/non-existent-file.txt');
       expect(mockCore.setOutput).toHaveBeenCalledWith('output', '');
-      
+
       consoleSpy.mockRestore();
     });
 
@@ -484,15 +477,15 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const testFile = '/tmp/test-empty-output.txt';
       fs.writeFileSync(testFile, '   \n  \t  \n  ');
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith('Output file is empty');
       expect(mockCore.setOutput).toHaveBeenCalledWith('output', '');
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -502,27 +495,27 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const testFile = '/tmp/test-output.txt';
       fs.writeFileSync(testFile, testContent);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith(
         'Collected agentic output (sanitized):',
         expect.stringContaining('`@user`')
       );
-      
-      const outputCall = mockCore.setOutput.mock.calls.find(call => call[0] === 'output');
+
+      const outputCall = mockCore.setOutput.mock.calls.find((call) => call[0] === 'output');
       expect(outputCall).toBeDefined();
       const sanitizedOutput = outputCall[1];
-      
+
       // Verify sanitization occurred
       expect(sanitizedOutput).toContain('`@user`');
       expect(sanitizedOutput).toContain('`fixes #123`');
       expect(sanitizedOutput).toContain('(redacted)'); // HTTP URL
       expect(sanitizedOutput).toContain('https://github.com/repo'); // HTTPS URL preserved
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -532,21 +525,21 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const testFile = '/tmp/test-long-output.txt';
       fs.writeFileSync(testFile, longContent);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       const logCalls = consoleSpy.mock.calls;
-      const outputLogCall = logCalls.find(call => 
-        call[0] && call[0].includes('Collected agentic output (sanitized):')
+      const outputLogCall = logCalls.find(
+        (call) => call[0] && call[0].includes('Collected agentic output (sanitized):')
       );
-      
+
       expect(outputLogCall).toBeDefined();
       expect(outputLogCall[1]).toContain('...');
       expect(outputLogCall[1].length).toBeLessThan(longContent.length);
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -555,17 +548,17 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       // Create a file and then remove read permissions
       const testFile = '/tmp/test-no-read.txt';
       fs.writeFileSync(testFile, 'test content');
-      
+
       // Mock readFileSync to throw an error
       const originalReadFileSync = fs.readFileSync;
       const readFileSyncSpy = vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
         throw new Error('Permission denied');
       });
-      
+
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       let thrownError = null;
       try {
         // Execute the script - it should throw but we catch it
@@ -573,14 +566,14 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       } catch (error) {
         thrownError = error;
       }
-      
+
       expect(thrownError).toBeTruthy();
       expect(thrownError.message).toContain('Permission denied');
-      
+
       // Restore spies
       readFileSyncSpy.mockRestore();
       consoleSpy.mockRestore();
-      
+
       // Clean up
       if (fs.existsSync(testFile)) {
         fs.unlinkSync(testFile);
@@ -588,20 +581,20 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
     });
 
     it('should handle binary file content', async () => {
-      const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD]);
+      const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xfd]);
       const testFile = '/tmp/test-binary.txt';
       fs.writeFileSync(testFile, binaryData);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       // Should handle binary data gracefully
-      const outputCall = mockCore.setOutput.mock.calls.find(call => call[0] === 'output');
+      const outputCall = mockCore.setOutput.mock.calls.find((call) => call[0] === 'output');
       expect(outputCall).toBeDefined();
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -611,15 +604,15 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const testFile = '/tmp/test-whitespace.txt';
       fs.writeFileSync(testFile, whitespaceContent);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith('Output file is empty');
       expect(mockCore.setOutput).toHaveBeenCalledWith('output', '');
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -628,28 +621,28 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       // Create content that will trigger both length and line truncation
       const lineContent = 'This is a line with @user and https://evil.com plus <script>alert("xss")</script>\n';
       const repeatedContent = lineContent.repeat(70000); // Will exceed line limit
-      
+
       const testFile = '/tmp/test-large-mixed.txt';
       fs.writeFileSync(testFile, repeatedContent);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
-      const outputCall = mockCore.setOutput.mock.calls.find(call => call[0] === 'output');
+
+      const outputCall = mockCore.setOutput.mock.calls.find((call) => call[0] === 'output');
       expect(outputCall).toBeDefined();
       const result = outputCall[1];
-      
+
       // Should be truncated (could be due to line count or length limit)
       expect(result).toMatch(/\[Content truncated due to (line count|length)\]/);
-      
+
       // But should still sanitize what it processes
       expect(result).toContain('`@user`');
       expect(result).toContain('(redacted)'); // evil.com
       expect(result).toContain('&lt;script&gt;'); // XML escaping
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
@@ -659,22 +652,22 @@ Special chars: \x00\x1F & "quotes" 'apostrophes'
       const testFile = '/tmp/test-short.txt';
       fs.writeFileSync(testFile, shortContent);
       process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-      
+
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Execute the script
       await eval(`(async () => { ${sanitizeScript} })()`);
-      
+
       const logCalls = consoleSpy.mock.calls;
-      const outputLogCall = logCalls.find(call => 
-        call[0] && call[0].includes('Collected agentic output (sanitized):')
+      const outputLogCall = logCalls.find(
+        (call) => call[0] && call[0].includes('Collected agentic output (sanitized):')
       );
-      
+
       expect(outputLogCall).toBeDefined();
       // Should not have ... for short content
       expect(outputLogCall[1]).not.toContain('...');
       expect(outputLogCall[1]).toContain('`@user`');
-      
+
       consoleSpy.mockRestore();
       fs.unlinkSync(testFile);
     });
