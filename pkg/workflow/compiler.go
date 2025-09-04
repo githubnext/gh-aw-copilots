@@ -149,6 +149,7 @@ type SafeOutputsConfig struct {
 	AddIssueComments                *AddIssueCommentsConfig                `yaml:"add-issue-comment,omitempty"`
 	CreatePullRequests              *CreatePullRequestsConfig              `yaml:"create-pull-request,omitempty"`
 	CreatePullRequestReviewComments *CreatePullRequestReviewCommentsConfig `yaml:"create-pull-request-review-comment,omitempty"`
+	CreateSecurityReports           *CreateSecurityReportsConfig           `yaml:"create-security-report,omitempty"`
 	AddIssueLabels                  *AddIssueLabelsConfig                  `yaml:"add-issue-label,omitempty"`
 	UpdateIssues                    *UpdateIssuesConfig                    `yaml:"update-issue,omitempty"`
 	PushToBranch                    *PushToBranchConfig                    `yaml:"push-to-branch,omitempty"`
@@ -192,6 +193,11 @@ type CreatePullRequestsConfig struct {
 type CreatePullRequestReviewCommentsConfig struct {
 	Max  int    `yaml:"max,omitempty"`  // Maximum number of review comments to create (default: 1)
 	Side string `yaml:"side,omitempty"` // Side of the diff: "LEFT" or "RIGHT" (default: "RIGHT")
+}
+
+// CreateSecurityReportsConfig holds configuration for creating security reports (SARIF format) from agent output
+type CreateSecurityReportsConfig struct {
+	Max int `yaml:"max,omitempty"` // Maximum number of security findings to include (default: unlimited)
 }
 
 // AddIssueLabelsConfig holds configuration for adding labels to issues/PRs from agent output
@@ -1756,6 +1762,17 @@ func (c *Compiler) buildJobs(data *WorkflowData) error {
 			}
 		}
 
+		// Build create_security_report job if output.create-security-report is configured
+		if data.SafeOutputs.CreateSecurityReports != nil {
+			createSecurityReportJob, err := c.buildCreateOutputSecurityReportJob(data, jobName)
+			if err != nil {
+				return fmt.Errorf("failed to build create_security_report job: %w", err)
+			}
+			if err := c.jobManager.AddJob(createSecurityReportJob); err != nil {
+				return fmt.Errorf("failed to add create_security_report job: %w", err)
+			}
+		}
+
 		// Build create_pull_request job if output.create-pull-request is configured
 		if data.SafeOutputs.CreatePullRequests != nil {
 			createPullRequestJob, err := c.buildCreateOutputPullRequestJob(data, jobName)
@@ -2182,6 +2199,82 @@ func (c *Compiler) buildCreateOutputPullRequestReviewCommentJob(data *WorkflowDa
 		RunsOn:         "runs-on: ubuntu-latest",
 		Permissions:    "permissions:\n      contents: read\n      pull-requests: write",
 		TimeoutMinutes: 10, // 10-minute timeout as required
+		Steps:          steps,
+		Outputs:        outputs,
+		Depends:        []string{mainJobName}, // Depend on the main workflow job
+	}
+
+	return job, nil
+}
+
+// buildCreateOutputSecurityReportJob creates the create_security_report job
+func (c *Compiler) buildCreateOutputSecurityReportJob(data *WorkflowData, mainJobName string) (*Job, error) {
+	if data.SafeOutputs == nil || data.SafeOutputs.CreateSecurityReports == nil {
+		return nil, fmt.Errorf("safe-outputs.create-security-report configuration is required")
+	}
+
+	var steps []string
+	steps = append(steps, "      - name: Create Security Report\n")
+	steps = append(steps, "        id: create_security_report\n")
+	steps = append(steps, "        uses: actions/github-script@v7\n")
+
+	// Add environment variables
+	steps = append(steps, "        env:\n")
+	// Pass the agent output content from the main job
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_AGENT_OUTPUT: ${{ needs.%s.outputs.output }}\n", mainJobName))
+	// Pass the max configuration
+	if data.SafeOutputs.CreateSecurityReports.Max > 0 {
+		steps = append(steps, fmt.Sprintf("          GITHUB_AW_SECURITY_REPORT_MAX: %d\n", data.SafeOutputs.CreateSecurityReports.Max))
+	}
+
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          script: |\n")
+
+	// Add each line of the script with proper indentation
+	formattedScript := FormatJavaScriptForYAML(createSecurityReportScript)
+	steps = append(steps, formattedScript...)
+
+	// Add step to upload SARIF artifact
+	steps = append(steps, "      - name: Upload SARIF artifact\n")
+	steps = append(steps, "        if: steps.create_security_report.outputs.sarif_file\n")
+	steps = append(steps, "        uses: actions/upload-artifact@v4\n")
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          name: security-report.sarif\n")
+	steps = append(steps, "          path: ${{ steps.create_security_report.outputs.sarif_file }}\n")
+
+	// Add step to upload SARIF to GitHub Code Scanning
+	steps = append(steps, "      - name: Upload SARIF to GitHub Security\n")
+	steps = append(steps, "        if: steps.create_security_report.outputs.sarif_file\n")
+	steps = append(steps, "        uses: github/codeql-action/upload-sarif@v3\n")
+	steps = append(steps, "        with:\n")
+	steps = append(steps, "          sarif_file: ${{ steps.create_security_report.outputs.sarif_file }}\n")
+
+	// Create outputs for the job
+	outputs := map[string]string{
+		"sarif_file":         "${{ steps.create_security_report.outputs.sarif_file }}",
+		"findings_count":     "${{ steps.create_security_report.outputs.findings_count }}",
+		"artifact_uploaded":  "${{ steps.create_security_report.outputs.artifact_uploaded }}",
+		"codeql_uploaded":    "${{ steps.create_security_report.outputs.codeql_uploaded }}",
+	}
+
+	// Build job condition - security reports can run in any context unlike PR review comments
+	var jobCondition string
+	if data.Command != "" {
+		// Build the command trigger condition
+		commandCondition := buildCommandOnlyCondition(data.Command)
+		commandConditionStr := commandCondition.Render()
+		jobCondition = fmt.Sprintf("if: %s", commandConditionStr)
+	} else {
+		// No specific condition needed - security reports can run anytime
+		jobCondition = ""
+	}
+
+	job := &Job{
+		Name:           "create_security_report",
+		If:             jobCondition,
+		RunsOn:         "runs-on: ubuntu-latest",
+		Permissions:    "permissions:\n      contents: read\n      security-events: write\n      actions: read", // Need security-events:write for SARIF upload
+		TimeoutMinutes: 10, // 10-minute timeout
 		Steps:          steps,
 		Outputs:        outputs,
 		Depends:        []string{mainJobName}, // Depend on the main workflow job
@@ -2984,6 +3077,12 @@ func (c *Compiler) extractSafeOutputsConfig(frontmatter map[string]any) *SafeOut
 				config.CreatePullRequestReviewComments = prReviewCommentsConfig
 			}
 
+			// Handle create-security-report
+			securityReportsConfig := c.parseSecurityReportsConfig(outputMap)
+			if securityReportsConfig != nil {
+				config.CreateSecurityReports = securityReportsConfig
+			}
+
 			// Parse allowed-domains configuration
 			if allowedDomains, exists := outputMap["allowed-domains"]; exists {
 				if domainsArray, ok := allowedDomains.([]any); ok {
@@ -3239,6 +3338,27 @@ func (c *Compiler) parsePullRequestReviewCommentsConfig(outputMap map[string]any
 	}
 
 	return prReviewCommentsConfig
+}
+
+// parseSecurityReportsConfig handles create-security-report configuration
+func (c *Compiler) parseSecurityReportsConfig(outputMap map[string]any) *CreateSecurityReportsConfig {
+	if _, exists := outputMap["create-security-report"]; !exists {
+		return nil
+	}
+
+	configData := outputMap["create-security-report"]
+	securityReportsConfig := &CreateSecurityReportsConfig{Max: 0} // Default max is 0 (unlimited)
+
+	if configMap, ok := configData.(map[string]any); ok {
+		// Parse max
+		if max, exists := configMap["max"]; exists {
+			if maxInt, ok := c.parseIntValue(max); ok {
+				securityReportsConfig.Max = maxInt
+			}
+		}
+	}
+
+	return securityReportsConfig
 }
 
 // parseIntValue safely parses various numeric types to int
