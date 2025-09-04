@@ -234,18 +234,29 @@ engine:
 
 > This is only supported by the claude engine today.
 
-Control network access for AI engines using the top-level `network` field. If no `network:` permission is specified, it defaults to `network: defaults` which uses a curated whitelist of common development and package manager domains.
+Control network access for AI engines using the top-level `network` field. If no `network:` permission is specified, it defaults to `network: defaults` which uses a curated allow-list of common development and package manager domains.
 
 ### Supported Formats
 
 ```yaml
-# Default whitelist (curated list of development domains)
+# Default allow-list (basic infrastructure only)
 engine:
   id: claude
 
 network: defaults
 
-# Or allow specific domains only
+# Or use ecosystem identifiers + custom domains
+engine:
+  id: claude
+
+network:
+  allowed:
+    - defaults              # Basic infrastructure (certs, JSON schema, Ubuntu, etc.)
+    - python               # Python/PyPI ecosystem
+    - node                 # Node.js/NPM ecosystem
+    - "api.example.com"    # Custom domain
+
+# Or allow specific domains only (no ecosystems)
 engine:
   id: claude
 
@@ -273,31 +284,43 @@ network: {}
 
 ### Security Model
 
-- **Default Whitelist**: When no network permissions are specified or `network: defaults` is used, access is restricted to a curated whitelist of common development domains (package managers, container registries, etc.)
-- **Selective Access**: When `network: { allowed: [...] }` is specified, only listed domains are accessible
-- **Defaults Expansion**: When "defaults" appears in the allowed list, it expands to include all default whitelist domains plus any additional specified domains
+- **Default Allow List**: When no network permissions are specified or `network: defaults` is used, access is restricted to basic infrastructure domains only (certificates, JSON schema, Ubuntu, common package mirrors, Microsoft sources)
+- **Ecosystem Access**: Use ecosystem identifiers like `python`, `node`, `containers` to enable access to specific development ecosystems
+- **Selective Access**: When `network: { allowed: [...] }` is specified, only listed domains/ecosystems are accessible
 - **No Access**: When `network: {}` is specified, all network access is denied
-- **Engine vs Tools**: Engine permissions control the AI engine itself, separate from MCP tool permissions
-- **Hook Enforcement**: Uses Claude Code's hook system for runtime network access control
 - **Domain Validation**: Supports exact matches and wildcard patterns (`*` matches any characters including dots, allowing nested subdomains)
 
 ### Examples
 
 ```yaml
-# Default whitelist (common development domains like npmjs.org, pypi.org, etc.)
+# Default infrastructure only (basic certificates, JSON schema, Ubuntu, etc.)
 engine:
   id: claude
 
 network: defaults
 
-# Allow specific APIs only
+# Python development environment
 engine:
   id: claude
 
 network:
   allowed:
-    - "api.github.com"
-    - "httpbin.org"
+    - defaults             # Basic infrastructure
+    - python              # Python/PyPI ecosystem
+    - github              # GitHub domains
+
+# Full-stack development with multiple ecosystems
+engine:
+  id: claude
+
+network:
+  allowed:
+    - defaults
+    - python
+    - node
+    - containers
+    - dotnet
+    - "api.custom.com"    # Custom domain
 
 # Allow all subdomains of a trusted domain
 # Note: "*.github.com" matches api.github.com, subdomain.github.com, and even nested.api.github.com
@@ -309,14 +332,15 @@ network:
     - "*.company-internal.com"
     - "public-api.service.com"
 
-# Combine default whitelist with custom domains
-# This gives access to all package managers, registries, etc. PLUS your custom domains
+# Specific ecosystems only (no basic infrastructure)
 engine:
   id: claude
 
 network:
   allowed:
     - "defaults"                    # Expands to full default whitelist
+    - java
+    - rust
     - "api.mycompany.com"           # Add custom API
     - "*.internal.mycompany.com"    # Add internal services
 
@@ -327,30 +351,55 @@ engine:
 network: {}
 ```
 
-### Default Whitelist Domains
+### Available Ecosystem Identifiers
 
-The `network: defaults` mode includes access to these categories of domains:
-- **Package Managers**
-- **Container Registries**
-- **Development Tools**
-- **Certificate Authorities**
-- **Language-specific Repositories**: For Go, Python, Node.js, Java, .NET, Rust, etc.
+The `network: { allowed: [...] }` format supports these ecosystem identifiers:
+
+- **`defaults`**: Basic infrastructure (certificates, JSON schema, Ubuntu, common package mirrors, Microsoft sources)
+- **`containers`**: Container registries (Docker Hub, GitHub Container Registry, Quay, etc.)
+- **`dotnet`**: .NET and NuGet ecosystem
+- **`dart`**: Dart and Flutter ecosystem  
+- **`github`**: GitHub domains (api.github.com, github.com, etc.)
+- **`go`**: Go ecosystem (golang.org, proxy.golang.org, etc.)
+- **`terraform`**: HashiCorp and Terraform ecosystem
+- **`haskell`**: Haskell ecosystem (hackage.haskell.org, etc.)
+- **`java`**: Java ecosystem (Maven Central, Gradle, etc.)
+- **`linux-distros`**: Linux distribution package repositories (Debian, Alpine, etc.)
+- **`node`**: Node.js and NPM ecosystem (npmjs.org, nodejs.org, etc.)
+- **`perl`**: Perl and CPAN ecosystem
+- **`php`**: PHP and Composer ecosystem
+- **`playwright`**: Playwright testing framework domains
+- **`python`**: Python ecosystem (PyPI, Conda, etc.)
+- **`ruby`**: Ruby and RubyGems ecosystem
+- **`rust`**: Rust and Cargo ecosystem (crates.io, etc.)
+- **`swift`**: Swift and CocoaPods ecosystem
+
+You can mix ecosystem identifiers with specific domain names for fine-grained control:
+
+```yaml
+network:
+  allowed:
+    - defaults              # Basic infrastructure
+    - python               # Python ecosystem
+    - "api.custom.com"     # Custom domain
+    - "*.internal.corp"    # Wildcard domain
+```
 
 ### Permission Modes
 
-1. **Default whitelist**: Curated list of development domains (default when no `network:` field specified)
+1. **Default allow-list**: Curated list of development domains (default when no `network:` field specified)
    ```yaml
    engine:
      id: claude
-     # No network block - defaults to curated whitelist
+     # No network block - defaults to curated allow-list
    ```
 
-2. **Explicit default whitelist**: Curated list of development domains (explicit)
+2. **Explicit default allow-list**: Curated list of development domains (explicit)
    ```yaml
    engine:
      id: claude
 
-   network: defaults  # Curated whitelist of development domains
+   network: defaults  # Curated allow-list of development domains
    ```
 
 3. **No network access**: Complete network access denial
