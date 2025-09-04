@@ -16,9 +16,9 @@ func TestCustomEngineWorkflowCompilation(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	tests := []struct {
-		name           string
-		content        string
-		shouldContain  []string
+		name             string
+		content          string
+		shouldContain    []string
 		shouldNotContain []string
 	}{
 		{
@@ -98,7 +98,7 @@ Simple custom workflow with one step.`,
 
 			compiler := NewCompiler(false, "", "test")
 			compiler.SetSkipValidation(true) // Skip validation for test simplicity
-			
+
 			err := compiler.CompileWorkflow(testFile)
 			if err != nil {
 				t.Fatalf("Failed to compile workflow: %v", err)
@@ -163,7 +163,7 @@ This workflow uses the custom engine but doesn't define any steps.`
 
 	compiler := NewCompiler(false, "", "test")
 	compiler.SetSkipValidation(true)
-	
+
 	err = compiler.CompileWorkflow(testFile)
 	if err != nil {
 		t.Fatalf("Failed to compile workflow: %v", err)

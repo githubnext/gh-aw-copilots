@@ -3510,7 +3510,16 @@ func (c *Compiler) convertStepToYAML(stepMap map[string]any) (string, error) {
 	// Add run command
 	if run, hasRun := stepMap["run"]; hasRun {
 		if runStr, ok := run.(string); ok {
-			stepYAML.WriteString(fmt.Sprintf("        run: %s\n", runStr))
+			if strings.Contains(runStr, "\n") {
+				// Multi-line run command - use literal block scalar
+				stepYAML.WriteString("        run: |\n")
+				for _, line := range strings.Split(runStr, "\n") {
+					stepYAML.WriteString("          " + line + "\n")
+				}
+			} else {
+				// Single-line run command
+				stepYAML.WriteString(fmt.Sprintf("        run: %s\n", runStr))
+			}
 		}
 	}
 
@@ -3673,7 +3682,7 @@ func (c *Compiler) generateCustomEngineSteps(yaml *strings.Builder, data *Workfl
 				fmt.Printf("Error converting step %d to YAML: %v\n", i+1, err)
 				continue
 			}
-			
+
 			// The convertStepToYAML already includes proper indentation, just add it directly
 			yaml.WriteString(stepYAML)
 		}
