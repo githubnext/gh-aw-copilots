@@ -472,9 +472,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aw_info.json
           path: /tmp/aw_info.json
           if-no-files-found: warn
+          name: aw_info.json
       - name: Execute Claude Code Action
         id: agentic_execution
         uses: anthropics/claude-code-base-action@v0.0.56
@@ -1538,9 +1538,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: test-claude-mcp.log
           path: /tmp/test-claude-mcp.log
-          if-no-files-found: warn
 
   create_issue:
     needs: test-claude-mcp

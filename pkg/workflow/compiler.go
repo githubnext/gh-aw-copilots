@@ -185,10 +185,11 @@ type AddIssueCommentsConfig struct {
 
 // CreatePullRequestsConfig holds configuration for creating GitHub pull requests from agent output
 type CreatePullRequestsConfig struct {
-	TitlePrefix string   `yaml:"title-prefix,omitempty"`
-	Labels      []string `yaml:"labels,omitempty"`
-	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
-	Max         int      `yaml:"max,omitempty"`   // Maximum number of pull requests to create
+	TitlePrefix   string   `yaml:"title-prefix,omitempty"`
+	Labels        []string `yaml:"labels,omitempty"`
+	Draft         *bool    `yaml:"draft,omitempty"`         // Pointer to distinguish between unset (nil) and explicitly false
+	Max           int      `yaml:"max,omitempty"`           // Maximum number of pull requests to create
+	RetentionDays *int     `yaml:"retention-days,omitempty"` // Artifact retention days (1-90, GitHub default is 90)
 }
 
 // CreatePullRequestReviewCommentsConfig holds configuration for creating GitHub pull request review comments from agent output
@@ -2789,17 +2790,21 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	c.generateCreateAwInfo(yaml, data, engine)
 
 	// Upload info to artifact
-	c.generateUploadAwInfo(yaml)
+	var retentionDays *int
+	if data.SafeOutputs != nil && data.SafeOutputs.CreatePullRequests != nil {
+		retentionDays = data.SafeOutputs.CreatePullRequests.RetentionDays
+	}
+	c.generateUploadAwInfo(yaml, retentionDays)
 
 	// Add AI execution step using the agentic engine
 	c.generateEngineExecutionSteps(yaml, data, engine, logFileFull)
 
 	// add workflow_complete.txt
-	c.generateWorkflowComplete(yaml)
+	c.generateWorkflowComplete(yaml, retentionDays)
 
 	// Add output collection step only if safe-outputs feature is used (GITHUB_AW_SAFE_OUTPUTS functionality)
 	if data.SafeOutputs != nil {
-		c.generateOutputCollectionStep(yaml, data)
+		c.generateOutputCollectionStep(yaml, data, retentionDays)
 	}
 
 	// Add engine-declared output files collection (if any)
@@ -2809,13 +2814,13 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 
 	// Extract and upload squid access logs (if any proxy tools were used)
 	c.generateExtractAccessLogs(yaml, data.Tools)
-	c.generateUploadAccessLogs(yaml, data.Tools)
+	c.generateUploadAccessLogs(yaml, data.Tools, retentionDays)
 
 	// parse agent logs for GITHUB_STEP_SUMMARY
 	c.generateLogParsing(yaml, engine, logFileFull)
 
 	// upload agent logs
-	c.generateUploadAgentLogs(yaml, logFile, logFileFull)
+	c.generateUploadAgentLogs(yaml, logFile, logFileFull, retentionDays)
 
 	// Add git patch generation step only if safe-outputs create-pull-request feature is used
 	if data.SafeOutputs != nil && (data.SafeOutputs.CreatePullRequests != nil || data.SafeOutputs.PushToBranch != nil) {
@@ -2826,7 +2831,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	c.generatePostSteps(yaml, data)
 }
 
-func (c *Compiler) generateWorkflowComplete(yaml *strings.Builder) {
+func (c *Compiler) generateWorkflowComplete(yaml *strings.Builder, retentionDays *int) {
 	yaml.WriteString("      - name: Check if workflow-complete.txt exists, if so upload it\n")
 	yaml.WriteString("        id: check_file\n")
 	yaml.WriteString("        run: |\n")
@@ -2837,22 +2842,39 @@ func (c *Compiler) generateWorkflowComplete(yaml *strings.Builder) {
 	yaml.WriteString("            echo \"File does not exist\"\n")
 	yaml.WriteString("            echo \"upload=false\" >> $GITHUB_OUTPUT\n")
 	yaml.WriteString("          fi\n")
-	yaml.WriteString("      - name: Upload workflow-complete.txt\n")
-	yaml.WriteString("        if: steps.check_file.outputs.upload == 'true'\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
-	yaml.WriteString("        with:\n")
-	yaml.WriteString("          name: workflow-complete\n")
-	yaml.WriteString("          path: workflow-complete.txt\n")
+	
+	c.generateArtifactUpload(yaml, "Upload workflow-complete.txt", "steps.check_file.outputs.upload == 'true'", map[string]string{
+		"name": "workflow-complete",
+		"path": "workflow-complete.txt",
+	}, retentionDays)
 }
 
-func (c *Compiler) generateUploadAgentLogs(yaml *strings.Builder, logFile string, logFileFull string) {
-	yaml.WriteString("      - name: Upload agent logs\n")
-	yaml.WriteString("        if: always()\n")
+func (c *Compiler) generateUploadAgentLogs(yaml *strings.Builder, logFile string, logFileFull string, retentionDays *int) {
+	c.generateArtifactUpload(yaml, "Upload agent logs", "always()", map[string]string{
+		"name":              logFile + ".log",
+		"path":              logFileFull,
+		"if-no-files-found": "warn",
+	}, retentionDays)
+}
+
+// generateArtifactUpload generates an artifact upload step with optional retention configuration
+func (c *Compiler) generateArtifactUpload(yaml *strings.Builder, stepName string, condition string, uploadConfig map[string]string, retentionDays *int) {
+	yaml.WriteString(fmt.Sprintf("      - name: %s\n", stepName))
+	if condition != "" {
+		yaml.WriteString(fmt.Sprintf("        if: %s\n", condition))
+	}
 	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
 	yaml.WriteString("        with:\n")
-	fmt.Fprintf(yaml, "          name: %s.log\n", logFile)
-	fmt.Fprintf(yaml, "          path: %s\n", logFileFull)
-	yaml.WriteString("          if-no-files-found: warn\n")
+	
+	// Write all upload configuration options
+	for key, value := range uploadConfig {
+		yaml.WriteString(fmt.Sprintf("          %s: %s\n", key, value))
+	}
+	
+	// Add retention-days if specified
+	if retentionDays != nil && *retentionDays > 0 {
+		yaml.WriteString(fmt.Sprintf("          retention-days: %d\n", *retentionDays))
+	}
 }
 
 func (c *Compiler) generateLogParsing(yaml *strings.Builder, engine AgenticEngine, logFileFull string) {
@@ -2883,14 +2905,12 @@ func (c *Compiler) generateLogParsing(yaml *strings.Builder, engine AgenticEngin
 	}
 }
 
-func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder) {
-	yaml.WriteString("      - name: Upload agentic run info\n")
-	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
-	yaml.WriteString("        with:\n")
-	yaml.WriteString("          name: aw_info.json\n")
-	yaml.WriteString("          path: /tmp/aw_info.json\n")
-	yaml.WriteString("          if-no-files-found: warn\n")
+func (c *Compiler) generateUploadAwInfo(yaml *strings.Builder, retentionDays *int) {
+	c.generateArtifactUpload(yaml, "Upload agentic run info", "always()", map[string]string{
+		"name":              "aw_info.json",
+		"path":              "/tmp/aw_info.json",
+		"if-no-files-found": "warn",
+	}, retentionDays)
 }
 
 func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[string]any) {
@@ -2925,7 +2945,7 @@ func (c *Compiler) generateExtractAccessLogs(yaml *strings.Builder, tools map[st
 	}
 }
 
-func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[string]any) {
+func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[string]any, retentionDays *int) {
 	// Check if any tools require proxy setup
 	var proxyTools []string
 	for toolName, toolConfig := range tools {
@@ -2942,13 +2962,11 @@ func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[str
 		return
 	}
 
-	yaml.WriteString("      - name: Upload squid access logs\n")
-	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
-	yaml.WriteString("        with:\n")
-	yaml.WriteString("          name: access.log\n")
-	yaml.WriteString("          path: /tmp/access-logs/\n")
-	yaml.WriteString("          if-no-files-found: warn\n")
+	c.generateArtifactUpload(yaml, "Upload squid access logs", "always()", map[string]string{
+		"name":              "access.log",
+		"path":              "/tmp/access-logs/",
+		"if-no-files-found": "warn",
+	}, retentionDays)
 }
 
 func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine AgenticEngine) {
@@ -3501,6 +3519,29 @@ func (c *Compiler) parsePullRequestsConfig(outputMap map[string]any) *CreatePull
 			}
 		}
 
+		// Parse retention-days
+		if retentionDays, exists := configMap["retention-days"]; exists {
+			var retentionInt int
+			// Handle both int and uint64 types (YAML unmarshaling can produce either)
+			switch v := retentionDays.(type) {
+			case int:
+				retentionInt = v
+			case uint64:
+				retentionInt = int(v)
+			case int64:
+				retentionInt = int(v)
+			case float64:
+				retentionInt = int(v)
+			default:
+				// Skip invalid types
+				break
+			}
+			// Validate retention days (GitHub allows 1-90 days)
+			if retentionInt >= 1 && retentionInt <= 90 {
+				pullRequestsConfig.RetentionDays = &retentionInt
+			}
+		}
+
 		// Note: max parameter is not supported for pull requests (always limited to 1)
 		// If max is specified, it will be ignored as pull requests are singular only
 	}
@@ -3998,7 +4039,7 @@ func (c *Compiler) generateOutputFileSetup(yaml *strings.Builder, data *Workflow
 }
 
 // generateOutputCollectionStep generates a step that reads the output file and sets it as a GitHub Actions output
-func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *WorkflowData) {
+func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *WorkflowData, retentionDays *int) {
 	yaml.WriteString("      - name: Collect agent output\n")
 	yaml.WriteString("        id: collect_output\n")
 	yaml.WriteString("        uses: actions/github-script@v7\n")
@@ -4083,13 +4124,12 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("            echo \"\" >> $GITHUB_STEP_SUMMARY\n")
 	yaml.WriteString("          fi\n")
 	yaml.WriteString("          echo '``````' >> $GITHUB_STEP_SUMMARY\n")
-	yaml.WriteString("      - name: Upload agentic output file\n")
-	yaml.WriteString("        if: always() && steps.collect_output.outputs.output != ''\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
-	yaml.WriteString("        with:\n")
-	fmt.Fprintf(yaml, "          name: %s\n", OutputArtifactName)
-	yaml.WriteString("          path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
-	yaml.WriteString("          if-no-files-found: warn\n")
+	
+	c.generateArtifactUpload(yaml, "Upload agentic output file", "always() && steps.collect_output.outputs.output != ''", map[string]string{
+		"name":              OutputArtifactName,
+		"path":              "${{ env.GITHUB_AW_SAFE_OUTPUTS }}",
+		"if-no-files-found": "warn",
+	}, retentionDays)
 
 }
 

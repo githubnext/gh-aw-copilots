@@ -1522,9 +1522,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: security-analysis-with-claude.log
           path: /tmp/security-analysis-with-claude.log
           if-no-files-found: warn
+          name: security-analysis-with-claude.log
 
   create_security_report:
     needs: security-analysis-with-claude

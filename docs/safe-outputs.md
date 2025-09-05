@@ -154,9 +154,16 @@ safe-outputs:
     title-prefix: "[ai] "            # Optional: prefix for PR titles
     labels: [automation, agentic]    # Optional: labels to attach to PRs
     draft: true                      # Optional: create as draft PR (defaults to true)
+    retention-days: 30               # Optional: artifact retention days (1-90, defaults to GitHub's default of 90)
 ```
 
 At most one pull request is currently supported.
+
+**Artifact Retention Configuration:**
+The `retention-days` option controls how long GitHub keeps artifacts uploaded during the workflow execution (logs, output files, etc.). This follows the same configuration as GitHub's `actions/upload-artifact@v4` action:
+- Valid range: 1-90 days
+- Default: GitHub's repository default (typically 90 days)
+- Applies to all artifacts generated during pull request workflows (agent logs, output files, run info, etc.)
 
 The agentic part of your workflow should instruct to:
 1. **Make code changes**: Make any code changes in the working directory—these are automatically collected using `git add -A` and committed

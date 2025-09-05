@@ -1278,9 +1278,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: test-codex-add-issue-comment.log
           path: /tmp/test-codex-add-issue-comment.log
-          if-no-files-found: warn
 
   create_issue_comment:
     needs: test-codex-add-issue-comment

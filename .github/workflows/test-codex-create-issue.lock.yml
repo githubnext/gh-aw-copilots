@@ -1088,9 +1088,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: test-codex-create-issue.log
           path: /tmp/test-codex-create-issue.log
-          if-no-files-found: warn
 
   create_issue:
     needs: test-codex-create-issue

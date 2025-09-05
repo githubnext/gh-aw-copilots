@@ -1182,9 +1182,9 @@ jobs:
         if: always() && steps.collect_output.outputs.output != ''
         uses: actions/upload-artifact@v4
         with:
-          name: aw_output.txt
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           if-no-files-found: warn
+          name: aw_output.txt
       - name: Upload engine output files
         uses: actions/upload-artifact@v4
         with:
@@ -1516,9 +1516,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: test-claude-add-issue-comment.log
           path: /tmp/test-claude-add-issue-comment.log
-          if-no-files-found: warn
 
   create_issue_comment:
     needs: test-claude-add-issue-comment

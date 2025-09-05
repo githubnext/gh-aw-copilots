@@ -5791,7 +5791,7 @@ func TestAccessLogUploadConditional(t *testing.T) {
 
 			// Test generateUploadAccessLogs
 			yaml.Reset()
-			compiler.generateUploadAccessLogs(&yaml, tt.tools)
+			compiler.generateUploadAccessLogs(&yaml, tt.tools, nil) // Pass nil for retention days in test
 			uploadContent := yaml.String()
 
 			hasExtractStep := strings.Contains(extractContent, "name: Extract squid access logs")
@@ -6267,4 +6267,143 @@ This workflow tests that forks array fields are properly commented out in the on
 			}
 		})
 	}
+}
+
+// TestRetentionDaysConfiguration tests the retention-days configuration for create-pull-request
+func TestRetentionDaysConfiguration(t *testing.T) {
+	// Test cases for retention-days parsing
+	testCases := []struct {
+		name                 string
+		retentionDays        interface{}
+		expectedRetention    *int
+		shouldParseSuccessfully bool
+	}{
+		{
+			name:                 "valid retention days 30",
+			retentionDays:        30,
+			expectedRetention:    intPtr(30),
+			shouldParseSuccessfully: true,
+		},
+		{
+			name:                 "valid retention days 1 (minimum)",
+			retentionDays:        1,
+			expectedRetention:    intPtr(1),
+			shouldParseSuccessfully: true,
+		},
+		{
+			name:                 "valid retention days 90 (maximum)",
+			retentionDays:        90,
+			expectedRetention:    intPtr(90),
+			shouldParseSuccessfully: true,
+		},
+		{
+			name:                 "invalid retention days 0 (below minimum)",
+			retentionDays:        0,
+			expectedRetention:    nil,
+			shouldParseSuccessfully: false,
+		},
+		{
+			name:                 "invalid retention days 91 (above maximum)",
+			retentionDays:        91,
+			expectedRetention:    nil,
+			shouldParseSuccessfully: false,
+		},
+		{
+			name:                 "no retention days specified",
+			retentionDays:        nil,
+			expectedRetention:    nil,
+			shouldParseSuccessfully: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			compiler := NewCompiler(false, "", "test-version")
+			
+			// Create test output map
+			outputMap := map[string]any{
+				"create-pull-request": map[string]any{},
+			}
+			
+			// Add retention-days if specified
+			if tc.retentionDays != nil {
+				outputMap["create-pull-request"].(map[string]any)["retention-days"] = tc.retentionDays
+			}
+
+			// Parse the configuration
+			result := compiler.parsePullRequestsConfig(outputMap)
+
+			// Verify the result
+			if tc.shouldParseSuccessfully && result == nil {
+				t.Errorf("Expected successful parsing but got nil result")
+				return
+			}
+
+			if result != nil {
+				// Check retention days
+				if tc.expectedRetention == nil {
+					if result.RetentionDays != nil {
+						t.Errorf("Expected nil retention days but got %v", *result.RetentionDays)
+					}
+				} else {
+					if result.RetentionDays == nil {
+						t.Errorf("Expected retention days %d but got nil", *tc.expectedRetention)
+					} else if *result.RetentionDays != *tc.expectedRetention {
+						t.Errorf("Expected retention days %d but got %d", *tc.expectedRetention, *result.RetentionDays)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestArtifactUploadWithRetention tests that artifact uploads include retention-days when specified
+func TestArtifactUploadWithRetention(t *testing.T) {
+	compiler := NewCompiler(false, "", "test-version")
+	
+	testCases := []struct {
+		name          string
+		retentionDays *int
+		expectedYAML  string
+	}{
+		{
+			name:          "with retention days",
+			retentionDays: intPtr(30),
+			expectedYAML:  "retention-days: 30",
+		},
+		{
+			name:          "without retention days",
+			retentionDays: nil,
+			expectedYAML:  "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var yaml strings.Builder
+			
+			// Test the generateArtifactUpload function
+			compiler.generateArtifactUpload(&yaml, "Test Upload", "always()", map[string]string{
+				"name": "test-artifact",
+				"path": "/tmp/test.txt",
+			}, tc.retentionDays)
+			
+			result := yaml.String()
+			
+			if tc.expectedYAML != "" {
+				if !strings.Contains(result, tc.expectedYAML) {
+					t.Errorf("Expected YAML to contain %q, but got:\n%s", tc.expectedYAML, result)
+				}
+			} else {
+				if strings.Contains(result, "retention-days") {
+					t.Errorf("Expected YAML not to contain retention-days, but got:\n%s", result)
+				}
+			}
+		})
+	}
+}
+
+// Helper function to create int pointers
+func intPtr(i int) *int {
+	return &i
 }

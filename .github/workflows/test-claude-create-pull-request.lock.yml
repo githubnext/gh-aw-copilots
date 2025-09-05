@@ -1343,9 +1343,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: warn
           name: test-claude-create-pull-request.log
           path: /tmp/test-claude-create-pull-request.log
-          if-no-files-found: warn
       - name: Generate git patch
         if: always()
         env:
