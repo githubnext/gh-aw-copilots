@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -132,4 +133,76 @@ func (c *Compiler) getAgenticEngine(engineSetting string) (CodingAgentEngine, er
 
 	// Try prefix match for backward compatibility
 	return c.engineRegistry.GetEngineByPrefix(engineSetting)
+}
+
+// validateEngineConflicts validates that included engines don't conflict with the main engine
+func (c *Compiler) validateEngineConflicts(mainEngineSetting string, includedEnginesJSON []string) error {
+	if len(includedEnginesJSON) == 0 {
+		return nil // No included engines to check
+	}
+
+	// Parse main engine configuration
+	mainConfig := &EngineConfig{}
+	if mainEngineSetting != "" {
+		mainConfig.ID = mainEngineSetting
+	}
+
+	// Check each included engine
+	for _, engineJSON := range includedEnginesJSON {
+		var includedEngine interface{}
+		if err := json.Unmarshal([]byte(engineJSON), &includedEngine); err != nil {
+			return fmt.Errorf("failed to parse included engine configuration: %w", err)
+		}
+
+		includedConfig := &EngineConfig{}
+		
+		// Handle string format
+		if engineStr, ok := includedEngine.(string); ok {
+			includedConfig.ID = engineStr
+		} else if engineObj, ok := includedEngine.(map[string]interface{}); ok {
+			// Handle object format
+			if id, hasID := engineObj["id"]; hasID {
+				if idStr, ok := id.(string); ok {
+					includedConfig.ID = idStr
+				}
+			}
+		}
+
+		// Check for conflicts
+		if mainEngineSetting != "" && includedConfig.ID != "" && mainConfig.ID != includedConfig.ID {
+			return fmt.Errorf("engine conflict: main workflow specifies engine '%s' but included workflow specifies engine '%s'. Remove the engine specification from either the main workflow or the included workflow", mainConfig.ID, includedConfig.ID)
+		}
+	}
+
+	return nil
+}
+
+// mergeEngineConfigs merges engine configurations, preferring the main workflow's engine
+func (c *Compiler) mergeEngineConfigs(mainEngineSetting string, includedEnginesJSON []string) (string, error) {
+	// If main workflow has engine setting, use it
+	if mainEngineSetting != "" {
+		return mainEngineSetting, nil
+	}
+
+	// If no main engine but we have included engines, use the first one
+	if len(includedEnginesJSON) > 0 {
+		var firstEngine interface{}
+		if err := json.Unmarshal([]byte(includedEnginesJSON[0]), &firstEngine); err != nil {
+			return "", fmt.Errorf("failed to parse included engine configuration: %w", err)
+		}
+
+		// Handle string format
+		if engineStr, ok := firstEngine.(string); ok {
+			return engineStr, nil
+		} else if engineObj, ok := firstEngine.(map[string]interface{}); ok {
+			// Handle object format - return the ID
+			if id, hasID := engineObj["id"]; hasID {
+				if idStr, ok := id.(string); ok {
+					return idStr, nil
+				}
+			}
+		}
+	}
+
+	return "", nil // No engine specified anywhere
 }
