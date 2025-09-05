@@ -45,12 +45,24 @@ func ValidateMainWorkflowFrontmatterWithSchemaAndLocation(frontmatter map[string
 
 // ValidateIncludedFileFrontmatterWithSchema validates included file frontmatter using JSON schema
 func ValidateIncludedFileFrontmatterWithSchema(frontmatter map[string]any) error {
-	return validateWithSchema(frontmatter, includedFileSchema, "included file")
+	// First run the standard schema validation
+	if err := validateWithSchema(frontmatter, includedFileSchema, "included file"); err != nil {
+		return err
+	}
+
+	// Then run custom validation for engine-specific rules
+	return validateEngineSpecificRules(frontmatter)
 }
 
 // ValidateIncludedFileFrontmatterWithSchemaAndLocation validates included file frontmatter with file location info
 func ValidateIncludedFileFrontmatterWithSchemaAndLocation(frontmatter map[string]any, filePath string) error {
-	return validateWithSchemaAndLocation(frontmatter, includedFileSchema, "included file", filePath)
+	// First run the standard schema validation with location
+	if err := validateWithSchemaAndLocation(frontmatter, includedFileSchema, "included file", filePath); err != nil {
+		return err
+	}
+
+	// Then run custom validation for engine-specific rules
+	return validateEngineSpecificRules(frontmatter)
 }
 
 // ValidateMCPConfigWithSchema validates MCP configuration using JSON schema
