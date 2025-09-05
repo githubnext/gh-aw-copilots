@@ -188,34 +188,6 @@ This is a test workflow that should automatically get additional Claude tools wh
 	}
 }
 
-// Helper function to parse workflow content like parseWorkflowFile but from string
-func (c *Compiler) parseWorkflowMarkdownContent(content string) (*WorkflowData, error) {
-	// This would normally be in parseWorkflowFile, but we'll extract the core logic for testing
-	result, err := parser.ExtractFrontmatterFromContent(content)
-	if err != nil {
-		return nil, err
-	}
-	engine := NewClaudeEngine()
-
-	// Extract SafeOutputs early
-	safeOutputs := c.extractSafeOutputsConfig(result.Frontmatter)
-
-	// Extract and process tools
-	topTools := extractToolsFromFrontmatter(result.Frontmatter)
-	topTools = c.applyDefaultGitHubMCPTools(topTools)
-	tools := engine.applyDefaultClaudeTools(topTools, safeOutputs)
-
-	// Build basic workflow data for testing
-	workflowData := &WorkflowData{
-		Name:        "Test Workflow",
-		Tools:       tools,
-		SafeOutputs: safeOutputs,
-		AI:          "claude",
-	}
-
-	return workflowData, nil
-}
-
 // Helper function to parse workflow content and return both WorkflowData and allowed tools string
 func (c *Compiler) parseWorkflowMarkdownContentWithToolsString(content string) (*WorkflowData, string, error) {
 	// This would normally be in parseWorkflowFile, but we'll extract the core logic for testing
