@@ -20,7 +20,7 @@ import (
 
 const (
 	// OutputArtifactName is the standard name for GITHUB_AW_SAFE_OUTPUTS artifact
-	OutputArtifactName = "aw_output.txt"
+	OutputArtifactName = "safe_output.jsonl"
 )
 
 // FileTracker interface for tracking files created during compilation
