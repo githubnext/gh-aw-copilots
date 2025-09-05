@@ -2087,14 +2087,16 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find the create-pull-request item
-              const pullRequestItem = validatedOutput.items.find(
+              // Find all create-pull-request items (using filter instead of find)
+              const pullRequestItems = validatedOutput.items.filter(
                 /** @param {any} item */ item => item.type === "create-pull-request"
               );
-              if (!pullRequestItem) {
+              if (pullRequestItems.length === 0) {
                 console.log("No create-pull-request item found in agent output");
                 return;
               }
+              // Process the first item for backward compatibility
+              const pullRequestItem = pullRequestItems[0];
               console.log("Found create-pull-request item:", {
                 title: pullRequestItem.title,
                 bodyLength: pullRequestItem.body.length,
@@ -2319,14 +2321,16 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find the add-issue-label item
-              const labelsItem = validatedOutput.items.find(
+              // Find all add-issue-label items (using filter instead of find)
+              const labelItems = validatedOutput.items.filter(
                 /** @param {any} item */ item => item.type === "add-issue-label"
               );
-              if (!labelsItem) {
+              if (labelItems.length === 0) {
                 console.log("No add-issue-label item found in agent output");
                 return;
               }
+              // Process the first item for backward compatibility
+              const labelsItem = labelItems[0];
               console.log("Found add-issue-label item:", {
                 labelsCount: labelsItem.labels.length,
               });
@@ -2805,14 +2809,16 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find the push-to-branch item
-              const pushItem = validatedOutput.items.find(
+              // Find all push-to-branch items (using filter instead of find)
+              const pushItems = validatedOutput.items.filter(
                 /** @param {any} item */ item => item.type === "push-to-branch"
               );
-              if (!pushItem) {
+              if (pushItems.length === 0) {
                 console.log("No push-to-branch item found in agent output");
                 return;
               }
+              // Process the first item for backward compatibility
+              const pushItem = pushItems[0];
               console.log("Found push-to-branch item");
               // Validate target configuration for pull request context
               if (target !== "*" && target !== "triggering") {

@@ -1747,14 +1747,16 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find the push-to-branch item
-              const pushItem = validatedOutput.items.find(
+              // Find all push-to-branch items (using filter instead of find)
+              const pushItems = validatedOutput.items.filter(
                 /** @param {any} item */ item => item.type === "push-to-branch"
               );
-              if (!pushItem) {
+              if (pushItems.length === 0) {
                 console.log("No push-to-branch item found in agent output");
                 return;
               }
+              // Process the first item for backward compatibility
+              const pushItem = pushItems[0];
               console.log("Found push-to-branch item");
               // Validate target configuration for pull request context
               if (target !== "*" && target !== "triggering") {

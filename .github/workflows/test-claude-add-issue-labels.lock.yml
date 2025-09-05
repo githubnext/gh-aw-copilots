@@ -1634,14 +1634,16 @@ jobs:
                 console.log("No valid items found in agent output");
                 return;
               }
-              // Find the add-issue-label item
-              const labelsItem = validatedOutput.items.find(
+              // Find all add-issue-label items (using filter instead of find)
+              const labelItems = validatedOutput.items.filter(
                 /** @param {any} item */ item => item.type === "add-issue-label"
               );
-              if (!labelsItem) {
+              if (labelItems.length === 0) {
                 console.log("No add-issue-label item found in agent output");
                 return;
               }
+              // Process the first item for backward compatibility
+              const labelsItem = labelItems[0];
               console.log("Found add-issue-label item:", {
                 labelsCount: labelsItem.labels.length,
               });

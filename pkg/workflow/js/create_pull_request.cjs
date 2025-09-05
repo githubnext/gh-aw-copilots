@@ -106,14 +106,17 @@ async function main() {
     return;
   }
 
-  // Find the create-pull-request item
-  const pullRequestItem = validatedOutput.items.find(
+  // Find all create-pull-request items (using filter instead of find)
+  const pullRequestItems = validatedOutput.items.filter(
     /** @param {any} item */ item => item.type === "create-pull-request"
   );
-  if (!pullRequestItem) {
+  if (pullRequestItems.length === 0) {
     console.log("No create-pull-request item found in agent output");
     return;
   }
+
+  // Process the first item for backward compatibility
+  const pullRequestItem = pullRequestItems[0];
 
   console.log("Found create-pull-request item:", {
     title: pullRequestItem.title,
