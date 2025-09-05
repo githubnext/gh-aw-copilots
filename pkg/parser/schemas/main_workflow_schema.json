@@ -1247,6 +1247,11 @@
                 "draft": {
                   "type": "boolean",
                   "description": "Whether to create pull request as draft (defaults to true)"
+                },
+                "if-no-changes": {
+                  "type": "string",
+                  "enum": ["warn", "error", "ignore"],
+                  "description": "Behavior when no changes to push: 'warn' (default - log warning but succeed), 'error' (fail the action), or 'ignore' (silent success)"
                 }
               },
               "additionalProperties": false

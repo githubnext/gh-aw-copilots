@@ -187,8 +187,9 @@ type AddIssueCommentsConfig struct {
 type CreatePullRequestsConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
-	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
-	Max         int      `yaml:"max,omitempty"`   // Maximum number of pull requests to create
+	Draft       *bool    `yaml:"draft,omitempty"`      // Pointer to distinguish between unset (nil) and explicitly false
+	Max         int      `yaml:"max,omitempty"`        // Maximum number of pull requests to create
+	IfNoChanges string   `yaml:"if-no-changes,omitempty"` // Behavior when no changes to push: "warn" (default), "error", or "ignore"
 }
 
 // CreatePullRequestReviewCommentsConfig holds configuration for creating GitHub pull request review comments from agent output
@@ -2493,6 +2494,13 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		draftValue = *data.SafeOutputs.CreatePullRequests.Draft
 	}
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_DRAFT: %q\n", fmt.Sprintf("%t", draftValue)))
+	
+	// Pass the if-no-changes configuration
+	ifNoChanges := data.SafeOutputs.CreatePullRequests.IfNoChanges
+	if ifNoChanges == "" {
+		ifNoChanges = "warn" // Default value
+	}
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_IF_NO_CHANGES: %q\n", ifNoChanges))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -3499,6 +3507,13 @@ func (c *Compiler) parsePullRequestsConfig(outputMap map[string]any) *CreatePull
 		if draft, exists := configMap["draft"]; exists {
 			if draftBool, ok := draft.(bool); ok {
 				pullRequestsConfig.Draft = &draftBool
+			}
+		}
+
+		// Parse if-no-changes
+		if ifNoChanges, exists := configMap["if-no-changes"]; exists {
+			if ifNoChangesStr, ok := ifNoChanges.(string); ok {
+				pullRequestsConfig.IfNoChanges = ifNoChangesStr
 			}
 		}
 

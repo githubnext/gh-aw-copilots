@@ -154,6 +154,34 @@ safe-outputs:
     title-prefix: "[ai] "            # Optional: prefix for PR titles
     labels: [automation, agentic]    # Optional: labels to attach to PRs
     draft: true                      # Optional: create as draft PR (defaults to true)
+    if-no-changes: "warn"            # Optional: behavior when no changes to commit (defaults to "warn")
+```
+
+**`if-no-changes` Configuration Options:**
+- **`"warn"` (default)**: Logs a warning message but the workflow succeeds
+- **`"error"`**: Fails the workflow with an error message if no changes are detected
+- **`"ignore"`**: Silent success with no console output when no changes are detected
+
+**Examples:**
+```yaml
+# Default behavior - warn but succeed when no changes
+safe-outputs:
+  create-pull-request:
+    if-no-changes: "warn"
+```
+
+```yaml
+# Strict mode - fail if no changes to commit
+safe-outputs:
+  create-pull-request:
+    if-no-changes: "error"
+```
+
+```yaml
+# Silent mode - no output on empty changesets
+safe-outputs:
+  create-pull-request:
+    if-no-changes: "ignore"
 ```
 
 At most one pull request is currently supported.
