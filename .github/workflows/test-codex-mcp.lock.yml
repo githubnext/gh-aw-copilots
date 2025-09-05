@@ -275,10 +275,11 @@ jobs:
           EOF
       - name: Create prompt
         env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'EOF'
+          cat > $GITHUB_AW_PROMPT << 'EOF'
           **First, get the current time using the get_current_time tool to timestamp your analysis.**
           
           Create an issue with title "Hello from Codex" and a comment in the body saying what the current time is and if you were successful in using the MCP tool
@@ -328,7 +329,7 @@ jobs:
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '``````markdown' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/aw-prompts/prompt.txt >> $GITHUB_STEP_SUMMARY
+          cat $GITHUB_AW_PROMPT >> $GITHUB_STEP_SUMMARY
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Generate agentic run info
         uses: actions/github-script@v7
@@ -382,6 +383,7 @@ jobs:
             -c model=o4-mini \
             --full-auto "$INSTRUCTION" 2>&1 | tee /tmp/test-codex-mcp.log
         env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1094,6 +1096,12 @@ jobs:
           if [ -s ${{ env.GITHUB_AW_SAFE_OUTPUTS }} ] && [ "$(tail -c1 ${{ env.GITHUB_AW_SAFE_OUTPUTS }})" != "" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
+          echo '``````' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Processed Output" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '``````json' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.collect_output.outputs.output }}' >> $GITHUB_STEP_SUMMARY
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Upload agentic output file
         if: always() && steps.collect_output.outputs.output != ''
