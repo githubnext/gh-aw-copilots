@@ -50,16 +50,16 @@ func TestAIInferenceEngineExecutionConfig(t *testing.T) {
 	engine := NewAIInferenceEngine()
 
 	tests := []struct {
-		name         string
-		engineConfig *EngineConfig
-		hasOutput    bool
+		name           string
+		engineConfig   *EngineConfig
+		hasOutput      bool
 		expectedAction string
 		expectedModel  string
 	}{
 		{
-			name:          "default configuration",
-			engineConfig:  nil,
-			hasOutput:     false,
+			name:           "default configuration",
+			engineConfig:   nil,
+			hasOutput:      false,
 			expectedAction: "actions/ai-inference@v1",
 			expectedModel:  "gpt-4o-mini",
 		},
@@ -70,7 +70,7 @@ func TestAIInferenceEngineExecutionConfig(t *testing.T) {
 				Version: "v2",
 				Model:   "gpt-4o",
 			},
-			hasOutput:     true,
+			hasOutput:      true,
 			expectedAction: "actions/ai-inference@v2",
 			expectedModel:  "gpt-4o",
 		},
@@ -82,7 +82,7 @@ func TestAIInferenceEngineExecutionConfig(t *testing.T) {
 					"CUSTOM_VAR": "custom_value",
 				},
 			},
-			hasOutput:     true,
+			hasOutput:      true,
 			expectedAction: "actions/ai-inference@v1",
 			expectedModel:  "gpt-4o-mini",
 		},
@@ -181,7 +181,7 @@ safe-outputs:
 
 			// Compile workflow
 			err := compiler.CompileWorkflow(testFile)
-			
+
 			if tt.expectError && err == nil {
 				t.Errorf("Expected error but compilation succeeded")
 			} else if !tt.expectError && err != nil {
@@ -221,17 +221,17 @@ func TestAIInferenceLogParsing(t *testing.T) {
 	engine := NewAIInferenceEngine()
 
 	tests := []struct {
-		name           string
-		logContent     string
-		expectedTokens int
-		expectedErrors int
+		name             string
+		logContent       string
+		expectedTokens   int
+		expectedErrors   int
 		expectedWarnings int
 	}{
 		{
-			name:           "empty log",
-			logContent:     "",
-			expectedTokens: 0,
-			expectedErrors: 0,
+			name:             "empty log",
+			logContent:       "",
+			expectedTokens:   0,
+			expectedErrors:   0,
 			expectedWarnings: 0,
 		},
 		{
@@ -240,16 +240,16 @@ func TestAIInferenceLogParsing(t *testing.T) {
 {"cost": 0.002}
 Error: Something went wrong
 Warning: This is a warning`,
-			expectedTokens: 100,
-			expectedErrors: 1,
+			expectedTokens:   100,
+			expectedErrors:   1,
 			expectedWarnings: 1,
 		},
 		{
 			name: "log with separate input/output tokens",
 			logContent: `{"usage": {"prompt_tokens": 50, "completion_tokens": 25}}
 Another error occurred`,
-			expectedTokens: 75,
-			expectedErrors: 1,
+			expectedTokens:   75,
+			expectedErrors:   1,
 			expectedWarnings: 0,
 		},
 	}
@@ -275,7 +275,7 @@ Another error occurred`,
 
 func TestAIInferenceEngineRegistry(t *testing.T) {
 	registry := NewEngineRegistry()
-	
+
 	// Test that ai-inference engine is registered
 	engine, err := registry.GetEngine("ai-inference")
 	if err != nil {

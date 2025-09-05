@@ -317,7 +317,7 @@ func init() {
 	addCmd.Flags().StringP("name", "n", "", "Specify name for the added workflow (without .md extension)")
 
 	// Add AI flag to add command
-	addCmd.Flags().StringP("engine", "a", "", "Override AI engine (claude, codex)")
+	addCmd.Flags().StringP("engine", "a", "", "Override AI engine (claude, codex, ai-inference)")
 
 	// Add repository flag to add command
 	addCmd.Flags().StringP("repo", "r", "", "Install and use workflows from specified repository (org/repo)")
@@ -342,7 +342,7 @@ func init() {
 	uninstallCmd.Flags().BoolP("local", "l", false, "Uninstall packages from local .aw/packages instead of global ~/.aw/packages")
 
 	// Add AI flag to compile and add commands
-	compileCmd.Flags().StringP("engine", "a", "", "Override AI engine (claude, codex)")
+	compileCmd.Flags().StringP("engine", "a", "", "Override AI engine (claude, codex, ai-inference)")
 	compileCmd.Flags().Bool("validate", false, "Enable GitHub Actions workflow schema validation")
 	compileCmd.Flags().BoolP("watch", "w", false, "Watch for changes to workflow files and recompile automatically")
 	compileCmd.Flags().Bool("instructions", false, "Generate or update GitHub Copilot instructions file")

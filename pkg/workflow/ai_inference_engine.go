@@ -57,7 +57,7 @@ func (e *AIInferenceEngine) GetExecutionConfig(workflowName string, logFile stri
 
 	// Build environment variables for the AI Inference action
 	aiInferenceEnv := ""
-	
+
 	// Add the prompt file path as an environment variable so ai-inference can use it
 	aiInferenceEnv += "            GITHUB_AW_PROMPT_FILE: /tmp/aw-prompts/prompt.txt"
 
@@ -105,7 +105,7 @@ func (e *AIInferenceEngine) RenderMCPConfig(yaml *strings.Builder, tools map[str
 func (e *AIInferenceEngine) ParseLogMetrics(logContent string, verbose bool) LogMetrics {
 	// Basic log parsing for AI Inference - this could be expanded later
 	metrics := LogMetrics{}
-	
+
 	// Look for common patterns in AI Inference logs
 	lines := strings.Split(logContent, "\n")
 	for _, line := range lines {
@@ -117,7 +117,7 @@ func (e *AIInferenceEngine) ParseLogMetrics(logContent string, verbose bool) Log
 		if lineMetrics.EstimatedCost > 0 {
 			metrics.EstimatedCost += lineMetrics.EstimatedCost
 		}
-		
+
 		// Count error and warning patterns
 		if strings.Contains(strings.ToLower(line), "error") {
 			metrics.ErrorCount++
@@ -125,7 +125,7 @@ func (e *AIInferenceEngine) ParseLogMetrics(logContent string, verbose bool) Log
 		if strings.Contains(strings.ToLower(line), "warning") || strings.Contains(strings.ToLower(line), "warn") {
 			metrics.WarningCount++
 		}
-		
+
 		// Additional parsing for AI Inference specific patterns
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
@@ -145,12 +145,12 @@ func (e *AIInferenceEngine) ParseLogMetrics(logContent string, verbose bool) Log
 				}
 			}
 		}
-		
+
 		if verbose && (strings.Contains(line, "model:") || strings.Contains(line, "Model:")) {
 			fmt.Printf("Found model reference in log: %s\n", line)
 		}
 	}
-	
+
 	return metrics
 }
 
