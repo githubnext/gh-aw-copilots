@@ -24,12 +24,6 @@ When a new issue is created, the workflow automatically:
 - Provides potential root causes and resolution suggestions
 - Posts the AI analysis as a comment on the issue
 
-### 3. Automatic Pull Request Review
-When a new pull request is opened, the workflow:
-- Reviews the changes and description
-- Provides code quality feedback
-- Posts suggestions as a comment on the PR
-
 ## Configuration Options
 
 ### Available Models

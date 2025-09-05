@@ -1,4 +1,5 @@
 ---
+name: AI Inference with GitHub Models
 on:
   workflow_dispatch:
     inputs:
@@ -12,13 +13,10 @@ on:
         default: 'gpt-4o-mini'
   issues:
     types: [opened]
-  pull_request:
-    types: [opened]
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+  models: read
 
 engine:
   id: custom
@@ -31,31 +29,7 @@ engine:
         # Use the specified model or default to gpt-4o-mini
         model: ${{ github.event.inputs.model || 'gpt-4o-mini' }}
         # Use the provided prompt or create one based on the event
-        prompt: |
-          ${{ github.event.inputs.prompt || 
-              (github.event_name == 'issues' && format('Analyze this GitHub issue and provide suggestions for resolution: 
-
-          **Issue Title:** {0}
-          **Issue Body:** {1}
-          
-          Please provide:
-          1. A summary of the issue
-          2. Potential root causes
-          3. Suggested resolution steps
-          4. Any code examples if applicable', github.event.issue.title, github.event.issue.body)) ||
-              (github.event_name == 'pull_request' && format('Review this GitHub pull request and provide feedback:
-
-          **PR Title:** {0}
-          **PR Description:** {1}
-          **Changed Files:** {2}
-          
-          Please provide:
-          1. A summary of the changes
-          2. Code quality assessment
-          3. Potential improvements
-          4. Security considerations if applicable', github.event.pull_request.title, github.event.pull_request.body, join(github.event.pull_request.changed_files.*.filename, ', '))) ||
-              'Hello! Please introduce yourself and explain your capabilities as a GitHub AI assistant.'
-          }}
+        prompt-file: ${{ env.GITHUB_AW_PROMPT }}
         # Configure the AI inference settings
         max_tokens: 1000
         temperature: 0.7
@@ -88,25 +62,7 @@ engine:
       if: github.event_name == 'issues'
       run: |
         # Generate safe output for issue comment
-        cat > response.json << 'EOF'
-        {
-          "type": "add-issue-comment",
-          "body": "## 🤖 AI Analysis\n\nI've analyzed this issue using GitHub's AI models. Here's my assessment:\n\n${{ steps.ai_inference.outputs.response }}\n\n---\n*This response was generated using GitHub Models via the AI Inference action.*"
-        }
-        EOF
-        echo "$(cat response.json)" >> $GITHUB_AW_SAFE_OUTPUTS
-
-    - name: Create PR Comment (for pull request events) 
-      if: github.event_name == 'pull_request'
-      run: |
-        # Generate safe output for PR comment
-        cat > response.json << 'EOF'
-        {
-          "type": "add-issue-comment", 
-          "body": "## 🤖 AI Code Review\n\nI've reviewed this pull request using GitHub's AI models. Here's my feedback:\n\n${{ steps.ai_inference.outputs.response }}\n\n---\n*This review was generated using GitHub Models via the AI Inference action.*"
-        }
-        EOF
-        echo "$(cat response.json)" >> $GITHUB_AW_SAFE_OUTPUTS
+        echo '{"type": "add-issue-comment", "body": "## 🤖 AI Analysis\n\nI'\''ve analyzed this issue using GitHub'\''s AI models. Here'\''s my assessment:\n\n${{ steps.ai_inference.outputs.response }}\n\n---\n*This response was generated using GitHub Models via the AI Inference action.*"}' >> $GITHUB_AW_SAFE_OUTPUTS
 
 safe-outputs:
   add-issue-comment:
@@ -121,9 +77,9 @@ This agentic workflow demonstrates how to use the actions/ai-inference custom ac
 ## Features
 
 - **Multi-Model Support**: Configure different GitHub Models (GPT-4o-mini, GPT-4, etc.)
-- **Event-Driven**: Responds to workflow dispatch, new issues, and pull requests
+- **Event-Driven**: Responds to workflow dispatch and new issues
 - **Context-Aware**: Provides relevant AI responses based on the triggering event
-- **Safe Outputs**: Automatically posts AI responses as comments on issues/PRs
+- **Safe Outputs**: Automatically posts AI responses as comments on issues
 - **Configurable**: Allows customization of prompts and models via workflow dispatch
 
 ## Usage
@@ -137,7 +93,6 @@ This agentic workflow demonstrates how to use the actions/ai-inference custom ac
 
 ### Automatic Execution
 - **New Issues**: When an issue is opened, the AI analyzes it and provides suggestions
-- **New PRs**: When a pull request is opened, the AI reviews it and provides feedback
 
 ## Models Available
 - `gpt-4o-mini` (default) - Fast and efficient for most tasks
