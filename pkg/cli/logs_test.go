@@ -846,18 +846,18 @@ func TestFormatFileSize(t *testing.T) {
 }
 
 func TestExtractLogMetricsWithAwOutputFile(t *testing.T) {
-	// Create a temporary directory with safe_output.jsonl
+	// Create a temporary directory with agent_output.json
 	tmpDir := t.TempDir()
 
-	// Create safe_output.jsonl file
-	awOutputPath := filepath.Join(tmpDir, "safe_output.jsonl")
+	// Create agent_output.json file
+	awOutputPath := filepath.Join(tmpDir, "agent_output.json")
 	awOutputContent := "This is the agent's output content.\nIt contains multiple lines."
 	err := os.WriteFile(awOutputPath, []byte(awOutputContent), 0644)
 	if err != nil {
-		t.Fatalf("Failed to create safe_output.jsonl: %v", err)
+		t.Fatalf("Failed to create agent_output.json: %v", err)
 	}
 
-	// Test that extractLogMetrics doesn't fail with safe_output.jsonl present
+	// Test that extractLogMetrics doesn't fail with agent_output.json present
 	metrics, err := extractLogMetrics(tmpDir, false)
 	if err != nil {
 		t.Fatalf("extractLogMetrics failed: %v", err)

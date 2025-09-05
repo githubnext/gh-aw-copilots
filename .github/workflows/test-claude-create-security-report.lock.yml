@@ -1275,7 +1275,7 @@ jobs:
         if: always() && steps.collect_output.outputs.output != ''
         uses: actions/upload-artifact@v4
         with:
-          name: safe_output.jsonl
+          name: agent_output.json
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           if-no-files-found: warn
       - name: Upload agent output JSON
