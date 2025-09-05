@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,26 @@ type LogMetrics = workflow.LogMetrics
 type ProcessedRun struct {
 	Run            WorkflowRun
 	AccessAnalysis *DomainAnalysis
+	MissingTools   []MissingToolReport
+}
+
+// MissingToolReport represents a missing tool reported by an agentic workflow
+type MissingToolReport struct {
+	Tool         string `json:"tool"`
+	Reason       string `json:"reason"`
+	Alternatives string `json:"alternatives,omitempty"`
+	Timestamp    string `json:"timestamp"`
+	WorkflowName string `json:"workflow_name,omitempty"` // Added for tracking which workflow reported this
+	RunID        int64  `json:"run_id,omitempty"`        // Added for tracking which run reported this
+}
+
+// MissingToolSummary aggregates missing tool reports across runs
+type MissingToolSummary struct {
+	Tool        string
+	Count       int
+	Workflows   []string // List of workflow names that reported this tool
+	FirstReason string   // Reason from the first occurrence
+	RunIDs      []int64  // List of run IDs where this tool was reported
 }
 
 // ErrNoArtifacts indicates that a workflow run has no artifacts
@@ -58,6 +79,7 @@ type DownloadResult struct {
 	Run            WorkflowRun
 	Metrics        LogMetrics
 	AccessAnalysis *DomainAnalysis
+	MissingTools   []MissingToolReport
 	Error          error
 	Skipped        bool
 	LogsPath       string
@@ -333,6 +355,7 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 			processedRun := ProcessedRun{
 				Run:            run,
 				AccessAnalysis: result.AccessAnalysis,
+				MissingTools:   result.MissingTools,
 			}
 			processedRuns = append(processedRuns, processedRun)
 			batchProcessed++
@@ -376,6 +399,9 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 
 	// Display access log analysis
 	displayAccessLogAnalysis(processedRuns, verbose)
+
+	// Display missing tools analysis
+	displayMissingToolsAnalysis(processedRuns, verbose)
 
 	// Display logs location prominently
 	absOutputDir, _ := filepath.Abs(outputDir)
@@ -447,6 +473,15 @@ func downloadRunArtifactsConcurrent(runs []WorkflowRun, outputDir string, verbos
 					}
 				}
 				result.AccessAnalysis = accessAnalysis
+
+				// Extract missing tools if available
+				missingTools, missingErr := extractMissingToolsFromRun(runOutputDir, run, verbose)
+				if missingErr != nil {
+					if verbose {
+						fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to extract missing tools for run %d: %v", run.DatabaseID, missingErr)))
+					}
+				}
+				result.MissingTools = missingTools
 			}
 
 			return result
@@ -1044,4 +1079,221 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// extractMissingToolsFromRun extracts missing tool reports from a workflow run's artifacts
+func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([]MissingToolReport, error) {
+	var missingTools []MissingToolReport
+
+	// Check if this run has GitHub Actions workflow run logs with missing tool outputs
+	// The missing-tool job creates job outputs that are stored as workflow outputs
+	// We need to check for GitHub Actions step outputs or log files
+
+	// First, check for missing_tool job logs or step outputs
+	err := filepath.Walk(runDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Look for workflow run logs that might contain missing tool outputs
+		// GitHub Actions logs are typically in files with "log" in the name
+		fileName := strings.ToLower(info.Name())
+		if strings.Contains(fileName, "log") || strings.HasSuffix(fileName, ".txt") {
+			content, readErr := os.ReadFile(path)
+			if readErr != nil {
+				if verbose {
+					fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read %s: %v", path, readErr)))
+				}
+				return nil // Continue processing other files
+			}
+
+			// Look for missing tool output patterns in the log content
+			tools := parseMissingToolsFromLog(string(content), run, verbose)
+			missingTools = append(missingTools, tools...)
+		}
+
+		return nil
+	})
+
+	if verbose && len(missingTools) > 0 {
+		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found %d missing tool reports in run %d", len(missingTools), run.DatabaseID)))
+	}
+
+	return missingTools, err
+}
+
+// parseMissingToolsFromLog parses missing tool reports from log content
+func parseMissingToolsFromLog(logContent string, run WorkflowRun, verbose bool) []MissingToolReport {
+	var tools []MissingToolReport
+
+	// Look for the missing tool output patterns that the JavaScript script would produce
+	// The script outputs JSON via core.setOutput, so we look for these patterns
+	lines := strings.Split(logContent, "\n")
+
+	for _, line := range lines {
+		// Look for GitHub Actions output that contains tools_reported
+		if strings.Contains(line, "tools_reported") {
+			// Try to extract the JSON from the output line
+			if jsonStart := strings.Index(line, "["); jsonStart != -1 {
+				if jsonEnd := strings.LastIndex(line, "]"); jsonEnd > jsonStart {
+					jsonStr := line[jsonStart : jsonEnd+1]
+					var toolReports []MissingToolReport
+					if err := json.Unmarshal([]byte(jsonStr), &toolReports); err == nil {
+						// Enrich the reports with run information
+						for i := range toolReports {
+							toolReports[i].WorkflowName = run.WorkflowName
+							toolReports[i].RunID = run.DatabaseID
+						}
+						tools = append(tools, toolReports...)
+						if verbose {
+							fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Parsed %d missing tools from workflow output in run %d", len(toolReports), run.DatabaseID)))
+						}
+					} else if verbose {
+						// Log parsing error for debugging
+						fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse JSON from line: %s, error: %v", jsonStr, err)))
+					}
+				}
+			}
+		}
+	}
+
+	return tools
+}
+
+// displayMissingToolsAnalysis displays a summary of missing tools across all runs
+func displayMissingToolsAnalysis(processedRuns []ProcessedRun, verbose bool) {
+	// Aggregate missing tools across all runs
+	toolSummary := make(map[string]*MissingToolSummary)
+	var totalReports int
+
+	for _, pr := range processedRuns {
+		for _, tool := range pr.MissingTools {
+			totalReports++
+			if summary, exists := toolSummary[tool.Tool]; exists {
+				summary.Count++
+				// Add workflow if not already in the list
+				found := false
+				for _, wf := range summary.Workflows {
+					if wf == tool.WorkflowName {
+						found = true
+						break
+					}
+				}
+				if !found {
+					summary.Workflows = append(summary.Workflows, tool.WorkflowName)
+				}
+				summary.RunIDs = append(summary.RunIDs, tool.RunID)
+			} else {
+				toolSummary[tool.Tool] = &MissingToolSummary{
+					Tool:        tool.Tool,
+					Count:       1,
+					Workflows:   []string{tool.WorkflowName},
+					FirstReason: tool.Reason,
+					RunIDs:      []int64{tool.RunID},
+				}
+			}
+		}
+	}
+
+	if totalReports == 0 {
+		return // No missing tools to display
+	}
+
+	// Display summary header
+	fmt.Printf("\n%s\n", console.FormatListHeader("🛠️  Missing Tools Summary"))
+	fmt.Printf("%s\n\n", console.FormatListHeader("======================="))
+
+	// Convert map to slice for sorting
+	var summaries []*MissingToolSummary
+	for _, summary := range toolSummary {
+		summaries = append(summaries, summary)
+	}
+
+	// Sort by count (descending)
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].Count > summaries[j].Count
+	})
+
+	// Display summary table
+	headers := []string{"Tool", "Occurrences", "Workflows", "First Reason"}
+	var rows [][]string
+
+	for _, summary := range summaries {
+		workflowList := strings.Join(summary.Workflows, ", ")
+		if len(workflowList) > 40 {
+			workflowList = workflowList[:37] + "..."
+		}
+
+		reason := summary.FirstReason
+		if len(reason) > 50 {
+			reason = reason[:47] + "..."
+		}
+
+		rows = append(rows, []string{
+			summary.Tool,
+			fmt.Sprintf("%d", summary.Count),
+			workflowList,
+			reason,
+		})
+	}
+
+	tableConfig := console.TableConfig{
+		Headers: headers,
+		Rows:    rows,
+	}
+
+	fmt.Print(console.RenderTable(tableConfig))
+
+	// Display total summary
+	uniqueTools := len(toolSummary)
+	fmt.Printf("\n📊 %s: %d unique missing tools reported %d times across workflows\n",
+		console.FormatCountMessage("Total"),
+		uniqueTools,
+		totalReports)
+
+	// Verbose mode: Show detailed breakdown by workflow
+	if verbose && totalReports > 0 {
+		displayDetailedMissingToolsBreakdown(processedRuns)
+	}
+}
+
+// displayDetailedMissingToolsBreakdown shows missing tools organized by workflow (verbose mode)
+func displayDetailedMissingToolsBreakdown(processedRuns []ProcessedRun) {
+	fmt.Printf("\n%s\n", console.FormatListHeader("🔍 Detailed Missing Tools Breakdown"))
+	fmt.Printf("%s\n", console.FormatListHeader("===================================="))
+
+	for _, pr := range processedRuns {
+		if len(pr.MissingTools) == 0 {
+			continue
+		}
+
+		fmt.Printf("\n%s (Run %d) - %d missing tools:\n",
+			console.FormatInfoMessage(pr.Run.WorkflowName),
+			pr.Run.DatabaseID,
+			len(pr.MissingTools))
+
+		for i, tool := range pr.MissingTools {
+			fmt.Printf("  %d. %s %s\n",
+				i+1,
+				console.FormatListItem(tool.Tool),
+				console.FormatVerboseMessage(fmt.Sprintf("- %s", tool.Reason)))
+
+			if tool.Alternatives != "" && tool.Alternatives != "null" {
+				fmt.Printf("     %s %s\n",
+					console.FormatWarningMessage("Alternatives:"),
+					tool.Alternatives)
+			}
+
+			if tool.Timestamp != "" {
+				fmt.Printf("     %s %s\n",
+					console.FormatVerboseMessage("Reported at:"),
+					tool.Timestamp)
+			}
+		}
+	}
 }
