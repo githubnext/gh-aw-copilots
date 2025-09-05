@@ -66,7 +66,7 @@ This should inherit the engine from the included file.
 		t.Fatal(err)
 	}
 	lockStr := string(lockContent)
-	
+
 	// Should contain references to codex installation and execution
 	if !strings.Contains(lockStr, "Install Codex") {
 		t.Error("Expected lock file to contain 'Install Codex' step")
@@ -246,7 +246,7 @@ This should use the default engine.
 		t.Fatal(err)
 	}
 	lockStr := string(lockContent)
-	
+
 	// Should contain references to claude action (default engine)
 	if !strings.Contains(lockStr, "anthropics/claude-code-base-action") {
 		t.Error("Expected lock file to contain claude action reference")
@@ -306,7 +306,7 @@ This workflow specifies claude engine directly.
 		t.Fatal(err)
 	}
 	lockStr := string(lockContent)
-	
+
 	// Should contain references to claude action
 	if !strings.Contains(lockStr, "anthropics/claude-code-base-action") {
 		t.Error("Expected lock file to contain claude action reference")

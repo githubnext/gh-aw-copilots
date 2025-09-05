@@ -49,7 +49,7 @@ func ValidateIncludedFileFrontmatterWithSchema(frontmatter map[string]any) error
 	if err := validateWithSchema(frontmatter, includedFileSchema, "included file"); err != nil {
 		return err
 	}
-	
+
 	// Then run custom validation for engine-specific rules
 	return validateEngineSpecificRules(frontmatter)
 }
@@ -60,7 +60,7 @@ func ValidateIncludedFileFrontmatterWithSchemaAndLocation(frontmatter map[string
 	if err := validateWithSchemaAndLocation(frontmatter, includedFileSchema, "included file", filePath); err != nil {
 		return err
 	}
-	
+
 	// Then run custom validation for engine-specific rules
 	return validateEngineSpecificRules(frontmatter)
 }

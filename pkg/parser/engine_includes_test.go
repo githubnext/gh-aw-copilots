@@ -9,7 +9,7 @@ import (
 func TestExpandIncludesForEngines(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
-	
+
 	// Create include file with engine specification
 	includeContent := `---
 engine: codex
@@ -53,7 +53,7 @@ Some content here.
 func TestExpandIncludesForEnginesObjectFormat(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
-	
+
 	// Create include file with object-format engine specification
 	includeContent := `---
 engine:
@@ -103,7 +103,7 @@ Some content here.
 func TestExpandIncludesForEnginesNoEngine(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
-	
+
 	// Create include file without engine specification
 	includeContent := `---
 tools:
@@ -141,7 +141,7 @@ Some content here.
 func TestExpandIncludesForEnginesMultipleIncludes(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
-	
+
 	// Create first include file with engine
 	include1Content := `---
 engine: claude
@@ -207,7 +207,7 @@ More content.
 func TestExpandIncludesForEnginesOptionalMissing(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
-	
+
 	// Create main markdown content with optional include directive to non-existent file
 	mainContent := `# Main Workflow
 

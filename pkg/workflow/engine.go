@@ -155,7 +155,7 @@ func (c *Compiler) validateEngineConflicts(mainEngineSetting string, includedEng
 		}
 
 		includedConfig := &EngineConfig{}
-		
+
 		// Handle string format
 		if engineStr, ok := includedEngine.(string); ok {
 			includedConfig.ID = engineStr
