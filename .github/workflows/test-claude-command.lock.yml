@@ -57,7 +57,7 @@ jobs:
               } catch (repoError) {
                 const errorMessage =
                   repoError instanceof Error ? repoError.message : String(repoError);
-                console.log(`Repository permission check failed: ${errorMessage}`);
+                core.warning(`Repository permission check failed: ${errorMessage}`);
               }
               core.setOutput("is_team_member", "false");
             }
@@ -398,7 +398,7 @@ jobs:
                 }
               } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error("Failed to process reaction and comment edit:", errorMessage);
+                core.error(`Failed to process reaction and comment edit: ${errorMessage}`);
                 core.setFailed(
                   `Failed to process reaction and comment edit: ${errorMessage}`
                 );
@@ -995,6 +995,10 @@ jobs:
                     return 1; // Only one push to branch allowed
                   case "create-discussion":
                     return 1; // Only one discussion allowed
+                  case "missing-tool":
+                    return 1000; // Allow many missing tool reports (default: unlimited)
+                  case "create-security-report":
+                    return 1000; // Allow many security reports (default: unlimited)
                   default:
                     return 1; // Default to single item for unknown types
                 }
@@ -1413,6 +1417,68 @@ jobs:
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
                       break;
+                    case "missing-tool":
+                      // Validate required tool field
+                      if (!item.tool || typeof item.tool !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'tool' string field`
+                        );
+                        continue;
+                      }
+                      // Validate required reason field
+                      if (!item.reason || typeof item.reason !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'reason' string field`
+                        );
+                        continue;
+                      }
+                      // Sanitize text content
+                      item.tool = sanitizeContent(item.tool);
+                      item.reason = sanitizeContent(item.reason);
+                      // Validate optional alternatives field
+                      if (item.alternatives !== undefined) {
+                        if (typeof item.alternatives !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: missing-tool 'alternatives' must be a string`
+                          );
+                          continue;
+                        }
+                        item.alternatives = sanitizeContent(item.alternatives);
+                      }
+                      break;
+                    case "create-security-report":
+                      // Validate required sarif field
+                      if (!item.sarif) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report requires a 'sarif' field`
+                        );
+                        continue;
+                      }
+                      // SARIF content can be object or string
+                      if (
+                        typeof item.sarif !== "object" &&
+                        typeof item.sarif !== "string"
+                      ) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report 'sarif' must be an object or string`
+                        );
+                        continue;
+                      }
+                      // If SARIF is a string, sanitize it
+                      if (typeof item.sarif === "string") {
+                        item.sarif = sanitizeContent(item.sarif);
+                      }
+                      // Validate optional category field
+                      if (item.category !== undefined) {
+                        if (typeof item.category !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: create-security-report 'category' must be a string`
+                          );
+                          continue;
+                        }
+                        item.category = sanitizeContent(item.category);
+                      }
+                      break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
                       continue;
@@ -1425,8 +1491,8 @@ jobs:
               }
               // Report validation results
               if (errors.length > 0) {
-                console.log("Validation errors found:");
-                errors.forEach(error => console.log(`  - ${error}`));
+                core.warning("Validation errors found:");
+                errors.forEach(error => core.warning(`  - ${error}`));
                 // For now, we'll continue with valid items but log the errors
                 // In the future, we might want to fail the workflow for invalid items
               }
@@ -1496,7 +1562,7 @@ jobs:
                 // Append to GitHub step summary
                 core.summary.addRaw(markdown).write();
               } catch (error) {
-                console.error("Error parsing Claude log:", error.message);
+                core.error(`Error parsing Claude log: ${error.message}`);
                 core.setFailed(error.message);
               }
             }
@@ -1959,9 +2025,8 @@ jobs:
                     core.setOutput("comment_url", comment.html_url);
                   }
                 } catch (error) {
-                  console.error(
-                    `✗ Failed to create comment:`,
-                    error instanceof Error ? error.message : String(error)
+                  core.error(
+                    `✗ Failed to create comment: ${error instanceof Error ? error.message : String(error)}`
                   );
                   throw error;
                 }
@@ -1997,69 +2062,84 @@ jobs:
           GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-command.outputs.output }}
         with:
           script: |
-            const fs = require('fs');
-            const path = require('path');
-            // Get environment variables
-            const agentOutput = process.env.GITHUB_AW_AGENT_OUTPUT || '';
-            const maxReports = process.env.GITHUB_AW_MISSING_TOOL_MAX ? parseInt(process.env.GITHUB_AW_MISSING_TOOL_MAX) : null;
-            console.log('Processing missing-tool reports...');
-            console.log('Agent output length:', agentOutput.length);
-            if (maxReports) {
-              console.log('Maximum reports allowed:', maxReports);
-            }
-            const missingTools = [];
-            if (agentOutput.trim()) {
-              const lines = agentOutput.split('\n').filter(line => line.trim());
-              for (const line of lines) {
-                try {
-                  const entry = JSON.parse(line);
-                  if (entry.type === 'missing-tool') {
-                    // Validate required fields
-                    if (!entry.tool) {
-                      console.log('Warning: missing-tool entry missing "tool" field:', line);
-                      continue;
-                    }
-                    if (!entry.reason) {
-                      console.log('Warning: missing-tool entry missing "reason" field:', line);
-                      continue;
-                    }
-                    const missingTool = {
-                      tool: entry.tool,
-                      reason: entry.reason,
-                      alternatives: entry.alternatives || null,
-                      timestamp: new Date().toISOString()
-                    };
-                    missingTools.push(missingTool);
-                    console.log('Recorded missing tool:', missingTool.tool);
-                    // Check max limit
-                    if (maxReports && missingTools.length >= maxReports) {
-                      console.log('Reached maximum number of missing tool reports (${maxReports})');
-                      break;
-                    }
+            async function main() {
+              const fs = require("fs");
+              // Get environment variables
+              const agentOutput = process.env.GITHUB_AW_AGENT_OUTPUT || "";
+              const maxReports = process.env.GITHUB_AW_MISSING_TOOL_MAX
+                ? parseInt(process.env.GITHUB_AW_MISSING_TOOL_MAX)
+                : null;
+              core.info("Processing missing-tool reports...");
+              core.info(`Agent output length: ${agentOutput.length}`);
+              if (maxReports) {
+                core.info(`Maximum reports allowed: ${maxReports}`);
+              }
+              const missingTools = [];
+              // Return early if no agent output
+              if (!agentOutput.trim()) {
+                core.info("No agent output to process");
+                core.setOutput("tools_reported", JSON.stringify(missingTools));
+                core.setOutput("total_count", missingTools.length.toString());
+                return;
+              }
+              // Parse as JSON array
+              const parsedData = JSON.parse(agentOutput);
+              core.info(`Parsed agent output with ${parsedData.length} entries`);
+              // Process all parsed entries
+              for (const entry of parsedData) {
+                if (entry.type === "missing-tool") {
+                  // Validate required fields
+                  if (!entry.tool) {
+                    core.warning(
+                      `missing-tool entry missing 'tool' field: ${JSON.stringify(entry)}`
+                    );
+                    continue;
                   }
-                } catch (error) {
-                  console.log('Warning: Failed to parse line as JSON:', line);
-                  console.log('Parse error:', error.message);
+                  if (!entry.reason) {
+                    core.warning(
+                      `missing-tool entry missing 'reason' field: ${JSON.stringify(entry)}`
+                    );
+                    continue;
+                  }
+                  const missingTool = {
+                    tool: entry.tool,
+                    reason: entry.reason,
+                    alternatives: entry.alternatives || null,
+                    timestamp: new Date().toISOString(),
+                  };
+                  missingTools.push(missingTool);
+                  core.info(`Recorded missing tool: ${missingTool.tool}`);
+                  // Check max limit
+                  if (maxReports && missingTools.length >= maxReports) {
+                    core.info(
+                      `Reached maximum number of missing tool reports (${maxReports})`
+                    );
+                    break;
+                  }
                 }
               }
+              core.info(`Total missing tools reported: ${missingTools.length}`);
+              // Output results
+              core.setOutput("tools_reported", JSON.stringify(missingTools));
+              core.setOutput("total_count", missingTools.length.toString());
+              // Log details for debugging
+              if (missingTools.length > 0) {
+                core.info("Missing tools summary:");
+                missingTools.forEach((tool, index) => {
+                  core.info(`${index + 1}. Tool: ${tool.tool}`);
+                  core.info(`   Reason: ${tool.reason}`);
+                  if (tool.alternatives) {
+                    core.info(`   Alternatives: ${tool.alternatives}`);
+                  }
+                  core.info(`   Reported at: ${tool.timestamp}`);
+                  core.info("");
+                });
+              } else {
+                core.info("No missing tools reported in this workflow execution.");
+              }
             }
-            console.log('Total missing tools reported:', missingTools.length);
-            // Output results
-            core.setOutput('tools_reported', JSON.stringify(missingTools));
-            core.setOutput('total_count', missingTools.length.toString());
-            // Log details for debugging
-            if (missingTools.length > 0) {
-              console.log('Missing tools summary:');
-              missingTools.forEach((tool, index) => {
-                console.log('${index + 1}. Tool: ${tool.tool}');
-                console.log('   Reason: ${tool.reason}');
-                if (tool.alternatives) {
-                  console.log('   Alternatives: ${tool.alternatives}');
-                }
-                console.log('   Reported at: ${tool.timestamp}');
-                console.log('');
-              });
-            } else {
-              console.log('No missing tools reported in this workflow execution.');
-            }
+            main().catch(error => {
+              core.error(`Error processing missing-tool reports: ${error}`);
+              process.exit(1);
+            });
 

@@ -9,6 +9,8 @@ const mockCore = {
     addRaw: vi.fn().mockReturnThis(),
     write: vi.fn(),
   },
+  warning: vi.fn(),
+  error: vi.fn(),
 };
 
 const mockGithub = {
@@ -266,6 +268,46 @@ describe("create_discussion.cjs", () => {
       expect.objectContaining({
         category_id: "DIC_custom789",
       })
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("should handle repositories without discussions enabled gracefully", async () => {
+    // Mock the REST API to return 404 for discussion categories (simulating discussions not enabled)
+    const discussionError = new Error("Not Found");
+    discussionError.status = 404;
+    mockGithub.request.mockRejectedValue(discussionError);
+
+    const validOutput = {
+      items: [
+        {
+          type: "create-discussion",
+          title: "Test Discussion",
+          body: "Test discussion body",
+        },
+      ],
+    };
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(validOutput);
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    // Execute the script - should exit gracefully without throwing
+    await eval(`(async () => { ${createDiscussionScript} })()`);
+
+    // Should log appropriate warning message
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "⚠ Cannot create discussions: Discussions are not enabled for this repository"
+    );
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "Consider enabling discussions in repository settings if you want to create discussions automatically"
+    );
+
+    // Should not attempt to create any discussions
+    expect(mockGithub.request).toHaveBeenCalledTimes(1); // Only the categories call
+    expect(mockGithub.request).not.toHaveBeenCalledWith(
+      "POST /repos/{owner}/{repo}/discussions",
+      expect.any(Object)
     );
 
     consoleSpy.mockRestore();

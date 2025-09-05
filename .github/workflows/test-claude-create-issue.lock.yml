@@ -529,6 +529,10 @@ jobs:
                     return 1; // Only one push to branch allowed
                   case "create-discussion":
                     return 1; // Only one discussion allowed
+                  case "missing-tool":
+                    return 1000; // Allow many missing tool reports (default: unlimited)
+                  case "create-security-report":
+                    return 1000; // Allow many security reports (default: unlimited)
                   default:
                     return 1; // Default to single item for unknown types
                 }
@@ -947,6 +951,68 @@ jobs:
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
                       break;
+                    case "missing-tool":
+                      // Validate required tool field
+                      if (!item.tool || typeof item.tool !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'tool' string field`
+                        );
+                        continue;
+                      }
+                      // Validate required reason field
+                      if (!item.reason || typeof item.reason !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'reason' string field`
+                        );
+                        continue;
+                      }
+                      // Sanitize text content
+                      item.tool = sanitizeContent(item.tool);
+                      item.reason = sanitizeContent(item.reason);
+                      // Validate optional alternatives field
+                      if (item.alternatives !== undefined) {
+                        if (typeof item.alternatives !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: missing-tool 'alternatives' must be a string`
+                          );
+                          continue;
+                        }
+                        item.alternatives = sanitizeContent(item.alternatives);
+                      }
+                      break;
+                    case "create-security-report":
+                      // Validate required sarif field
+                      if (!item.sarif) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report requires a 'sarif' field`
+                        );
+                        continue;
+                      }
+                      // SARIF content can be object or string
+                      if (
+                        typeof item.sarif !== "object" &&
+                        typeof item.sarif !== "string"
+                      ) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report 'sarif' must be an object or string`
+                        );
+                        continue;
+                      }
+                      // If SARIF is a string, sanitize it
+                      if (typeof item.sarif === "string") {
+                        item.sarif = sanitizeContent(item.sarif);
+                      }
+                      // Validate optional category field
+                      if (item.category !== undefined) {
+                        if (typeof item.category !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: create-security-report 'category' must be a string`
+                          );
+                          continue;
+                        }
+                        item.category = sanitizeContent(item.category);
+                      }
+                      break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
                       continue;
@@ -959,8 +1025,8 @@ jobs:
               }
               // Report validation results
               if (errors.length > 0) {
-                console.log("Validation errors found:");
-                errors.forEach(error => console.log(`  - ${error}`));
+                core.warning("Validation errors found:");
+                errors.forEach(error => core.warning(`  - ${error}`));
                 // For now, we'll continue with valid items but log the errors
                 // In the future, we might want to fail the workflow for invalid items
               }
@@ -1030,7 +1096,7 @@ jobs:
                 // Append to GitHub step summary
                 core.summary.addRaw(markdown).write();
               } catch (error) {
-                console.error("Error parsing Claude log:", error.message);
+                core.error(`Error parsing Claude log: ${error.message}`);
                 core.setFailed(error.message);
               }
             }
@@ -1477,10 +1543,21 @@ jobs:
                     core.setOutput("issue_url", issue.html_url);
                   }
                 } catch (error) {
-                  console.error(
-                    `✗ Failed to create issue "${title}":`,
-                    error instanceof Error ? error.message : String(error)
-                  );
+                  const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                  // Special handling for disabled issues repository
+                  if (
+                    errorMessage.includes("Issues has been disabled in this repository")
+                  ) {
+                    console.log(
+                      `⚠ Cannot create issue "${title}": Issues are disabled for this repository`
+                    );
+                    console.log(
+                      "Consider enabling issues in repository settings if you want to create issues automatically"
+                    );
+                    continue; // Skip this issue but continue processing others
+                  }
+                  core.error(`✗ Failed to create issue "${title}": ${errorMessage}`);
                   throw error;
                 }
               }

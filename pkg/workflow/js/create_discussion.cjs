@@ -58,10 +58,20 @@ async function main() {
       discussionCategories.map(cat => ({ name: cat.name, id: cat.id }))
     );
   } catch (error) {
-    console.error(
-      "Failed to get discussion categories:",
-      error instanceof Error ? error.message : String(error)
-    );
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Special handling for repositories without discussions enabled
+    if (errorMessage.includes("Not Found") && error.status === 404) {
+      console.log(
+        "⚠ Cannot create discussions: Discussions are not enabled for this repository"
+      );
+      console.log(
+        "Consider enabling discussions in repository settings if you want to create discussions automatically"
+      );
+      return; // Exit gracefully without creating discussions
+    }
+
+    core.error(`Failed to get discussion categories: ${errorMessage}`);
     throw error;
   }
 
@@ -75,7 +85,7 @@ async function main() {
     );
   }
   if (!categoryId) {
-    console.error(
+    core.error(
       "No discussion category available and none specified in configuration"
     );
     throw new Error("Discussion category is required but not available");
@@ -154,9 +164,8 @@ async function main() {
         core.setOutput("discussion_url", discussion.html_url);
       }
     } catch (error) {
-      console.error(
-        `✗ Failed to create discussion "${title}":`,
-        error instanceof Error ? error.message : String(error)
+      core.error(
+        `✗ Failed to create discussion "${title}": ${error instanceof Error ? error.message : String(error)}`
       );
       throw error;
     }

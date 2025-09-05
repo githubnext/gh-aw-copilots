@@ -3,6 +3,9 @@ name: Format, Lint, Build and Commit
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   format-and-commit:
     name: Format, Lint, Build and Commit Changes
@@ -31,6 +34,8 @@ jobs:
         run: make deps-dev
       - name: Format code
         run: make fmt
+      - name: Format code js
+        run: make fmt-cjs
       - name: Lint code
         run: make lint
       - name: Build code
