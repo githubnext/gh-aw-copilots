@@ -133,6 +133,7 @@ func NewEngineRegistry() *EngineRegistry {
 	// Register built-in engines
 	registry.Register(NewClaudeEngine())
 	registry.Register(NewCodexEngine())
+	registry.Register(NewAIInferenceEngine())
 
 	return registry
 }

@@ -61,11 +61,11 @@ The YAML frontmatter supports these fields:
 ### Agentic Workflow Specific Fields
 
 - **`engine:`** - AI processor configuration
-  - String format: `"claude"` (default), `"codex"`
+  - String format: `"claude"` (default), `"codex"`, `"ai-inference"`
   - Object format for extended configuration:
     ```yaml
     engine:
-      id: claude                        # Required: coding agent identifier (claude, codex)
+      id: claude                        # Required: coding agent identifier (claude, codex, ai-inference)
       version: beta                     # Optional: version of the action
       model: claude-3-5-sonnet-20241022 # Optional: LLM model to use
       max-turns: 5                      # Optional: maximum chat iterations per run
@@ -608,6 +608,34 @@ Analyze issue #${{ github.event.issue.number }} and:
 3. Post helpful triage comment
 ```
 
+### AI Inference Issue Labeler
+```markdown
+---
+on:
+  issues:
+    types: [opened, reopened, edited]
+engine: 
+  id: ai-inference
+  model: gpt-4o-mini
+safe-outputs:
+  add-issue-label:
+    max: 5
+---
+
+# Issue Analysis and Labeling
+
+Analyze the GitHub issue and automatically apply appropriate labels:
+
+1. Determine issue type (bug, enhancement, question, documentation)
+2. Assess priority level (priority-high, priority-medium, priority-low)
+3. Add specific labels if applicable (performance, security, ui-ux, api)
+
+Use the safe outputs system to apply labels in JSON format:
+```json
+{"type": "add-issue-label", "labels": ["bug", "priority-medium", "ui-ux"]}
+```
+```
+
 ### Weekly Research Report
 ```markdown
 ---
@@ -799,7 +827,7 @@ The workflow frontmatter is validated against JSON Schema during compilation. Co
 
 - **Invalid field names** - Only fields in the schema are allowed
 - **Wrong field types** - e.g., `timeout_minutes` must be integer
-- **Invalid enum values** - e.g., `engine` must be "claude" or "codex"
+- **Invalid enum values** - e.g., `engine` must be "claude", "codex", or "ai-inference"
 - **Missing required fields** - Some triggers require specific configuration
 
 Use `gh aw compile --verbose` to see detailed validation messages, or `gh aw compile <workflow-id> --verbose` to validate a specific workflow.

@@ -812,9 +812,10 @@
           "type": "string",
           "enum": [
             "claude",
-            "codex"
+            "codex",
+            "ai-inference"
           ],
-          "description": "Simple engine name (claude or codex)"
+          "description": "Simple engine name (claude, codex, or ai-inference)"
         },
         {
           "type": "object",
@@ -824,9 +825,10 @@
               "type": "string",
               "enum": [
                 "claude",
-                "codex"
+                "codex",
+                "ai-inference"
               ],
-              "description": "Agent CLI identifier (claude or codex)"
+              "description": "Agent CLI identifier (claude, codex, or ai-inference)"
             },
             "version": {
               "type": "string",
