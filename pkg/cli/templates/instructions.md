@@ -61,15 +61,29 @@ The YAML frontmatter supports these fields:
 ### Agentic Workflow Specific Fields
 
 - **`engine:`** - AI processor configuration
-  - String format: `"claude"` (default), `"codex"`
+  - String format: `"claude"` (default), `"codex"`, `"custom"` (⚠️ experimental)
   - Object format for extended configuration:
     ```yaml
     engine:
-      id: claude                        # Required: coding agent identifier (claude, codex)
+      id: claude                        # Required: coding agent identifier (claude, codex, custom)
       version: beta                     # Optional: version of the action
       model: claude-3-5-sonnet-20241022 # Optional: LLM model to use
       max-turns: 5                      # Optional: maximum chat iterations per run
     ```
+  - **Custom engine format** (⚠️ experimental):
+    ```yaml
+    engine:
+      id: custom                        # Required: custom engine identifier
+      max-turns: 10                     # Optional: maximum iterations (for consistency)
+      steps:                            # Required: array of custom GitHub Actions steps
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: "18"
+        - name: Run tests
+          run: npm test
+    ```
+    The `custom` engine allows you to define your own GitHub Actions steps instead of using an AI processor. Each step in the `steps` array follows standard GitHub Actions step syntax with `name`, `uses`/`run`, `with`, `env`, etc. This is useful for deterministic workflows that don't require AI processing.
 
 - **`network:`** - Network access control for Claude Code engine (top-level field)
   - String format: `"defaults"` (curated allow-list of development domains)  
@@ -799,7 +813,7 @@ The workflow frontmatter is validated against JSON Schema during compilation. Co
 
 - **Invalid field names** - Only fields in the schema are allowed
 - **Wrong field types** - e.g., `timeout_minutes` must be integer
-- **Invalid enum values** - e.g., `engine` must be "claude" or "codex"
+- **Invalid enum values** - e.g., `engine` must be "claude", "codex", or "custom"
 - **Missing required fields** - Some triggers require specific configuration
 
 Use `gh aw compile --verbose` to see detailed validation messages, or `gh aw compile <workflow-id> --verbose` to validate a specific workflow.
