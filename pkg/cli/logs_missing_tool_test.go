@@ -176,3 +176,24 @@ func TestDisplayMissingToolsAnalysis(t *testing.T) {
 	// Test verbose mode (should not panic)
 	displayMissingToolsAnalysis(processedRuns, true)
 }
+
+// TestDisplayMissingToolsAnalysisEmpty tests display with no missing tools
+func TestDisplayMissingToolsAnalysisEmpty(t *testing.T) {
+	// Test with empty processed runs (should not display anything)
+	emptyRuns := []ProcessedRun{}
+	displayMissingToolsAnalysis(emptyRuns, false)
+	displayMissingToolsAnalysis(emptyRuns, true)
+	
+	// Test with runs that have no missing tools (should not display anything)
+	runsWithoutMissingTools := []ProcessedRun{
+		{
+			Run: WorkflowRun{
+				DatabaseID:   2001,
+				WorkflowName: "Clean Workflow",
+			},
+			MissingTools: []MissingToolReport{}, // Empty slice
+		},
+	}
+	displayMissingToolsAnalysis(runsWithoutMissingTools, false)
+	displayMissingToolsAnalysis(runsWithoutMissingTools, true)
+}
