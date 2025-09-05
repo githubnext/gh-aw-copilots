@@ -126,10 +126,7 @@ func (e *ClaudeEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 	}
 
 	// Apply default Claude tools
-	claudeTools := e.applyDefaultClaudeTools(workflowData.Tools, workflowData.SafeOutputs)
-
-	// Compute allowed tools
-	allowedTools := e.computeAllowedClaudeToolsString(claudeTools, workflowData.SafeOutputs)
+	allowedTools := e.computeAllowedClaudeToolsString(workflowData.Tools, workflowData.SafeOutputs)
 
 	var stepLines []string
 
@@ -269,8 +266,15 @@ func (e *ClaudeEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 	return strings.Join(stepYAML, "\n"), nil
 }
 
-// applyDefaultClaudeTools adds default Claude tools and git commands based on safe outputs configuration
-func (e *ClaudeEngine) applyDefaultClaudeTools(tools map[string]any, safeOutputs *SafeOutputsConfig) map[string]any {
+// needsGitCommands checks if safe outputs configuration requires Git commands
+func (e *ClaudeEngine) needsGitCommands(safeOutputs *SafeOutputsConfig) bool {
+	return safeOutputs.CreatePullRequests != nil || safeOutputs.PushToBranch != nil
+}
+
+// computeAllowedClaudeToolsString
+// 1. adds default Claude tools and git commands based on safe outputs configuration
+// 2. generates the allowed tools string for Claude
+func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig) string {
 	// Initialize tools map if nil
 	if tools == nil {
 		tools = make(map[string]any)
@@ -402,16 +406,6 @@ func (e *ClaudeEngine) applyDefaultClaudeTools(tools map[string]any, safeOutputs
 	claudeSection["allowed"] = claudeExistingAllowed
 	tools["claude"] = claudeSection
 
-	return tools
-}
-
-// needsGitCommands checks if safe outputs configuration requires Git commands
-func (e *ClaudeEngine) needsGitCommands(safeOutputs *SafeOutputsConfig) bool {
-	return safeOutputs.CreatePullRequests != nil || safeOutputs.PushToBranch != nil
-}
-
-// computeAllowedClaudeToolsString computes the comma-separated list of allowed tools for Claude
-func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig) string {
 	var allowedTools []string
 
 	// Process claude-specific tools from the claude section (new format only)
