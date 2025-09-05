@@ -1379,7 +1379,7 @@
           "oneOf": [
             {
               "type": "null",
-              "description": "Use default configuration (branch: 'triggering')"
+              "description": "Use default configuration (branch: 'triggering', if-no-changes: 'warn')"
             },
             {
               "type": "object",
@@ -1392,6 +1392,11 @@
                 "target": {
                   "type": "string",
                   "description": "Target for push operations: 'triggering' (default), '*' (any pull request), or explicit pull request number"
+                },
+                "if-no-changes": {
+                  "type": "string",
+                  "enum": ["warn", "error", "ignore"],
+                  "description": "Behavior when no changes to push: 'warn' (default - log warning but succeed), 'error' (fail the action), or 'ignore' (silent success)"
                 }
               },
               "additionalProperties": false

@@ -17,6 +17,7 @@ async function main() {
   }
 
   const target = process.env.GITHUB_AW_PUSH_TARGET || "triggering";
+  const ifNoChanges = process.env.GITHUB_AW_PUSH_IF_NO_CHANGES || "warn";
 
   // Check if patch file exists and has valid content
   if (!fs.existsSync("/tmp/aw.patch")) {
@@ -34,10 +35,26 @@ async function main() {
     return;
   }
 
-  // Empty patch is valid - it means no changes (noop operation)
+  // Empty patch is valid - behavior depends on if-no-changes configuration
   const isEmpty = !patchContent || !patchContent.trim();
   if (isEmpty) {
-    console.log("Patch file is empty - no changes to apply (noop operation)");
+    const message =
+      "Patch file is empty - no changes to apply (noop operation)";
+
+    switch (ifNoChanges) {
+      case "error":
+        core.setFailed(
+          "No changes to push - failing as configured by if-no-changes: error"
+        );
+        return;
+      case "ignore":
+        // Silent success - no console output
+        break;
+      case "warn":
+      default:
+        console.log(message);
+        break;
+    }
   }
 
   console.log("Agent output content length:", outputContent.length);
@@ -141,7 +158,26 @@ async function main() {
   let hasChanges = false;
   try {
     execSync("git diff --cached --exit-code", { stdio: "ignore" });
-    console.log("No changes to commit - noop operation completed successfully");
+
+    // No changes to commit - apply if-no-changes configuration
+    const message =
+      "No changes to commit - noop operation completed successfully";
+
+    switch (ifNoChanges) {
+      case "error":
+        core.setFailed(
+          "No changes to commit - failing as configured by if-no-changes: error"
+        );
+        return;
+      case "ignore":
+        // Silent success - no console output
+        break;
+      case "warn":
+      default:
+        console.log(message);
+        break;
+    }
+
     hasChanges = false;
   } catch (error) {
     // Exit code != 0 means there are changes to commit, which is what we want

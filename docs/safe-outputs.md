@@ -368,6 +368,10 @@ safe-outputs:
                                          # "triggering" (default) - only push in triggering PR context
                                          # "*" - allow pushes to any pull request (requires pull_request_number in agent output)
                                          # explicit number - push for specific pull request number
+    if-no-changes: "warn"                # Optional: behavior when no changes to push
+                                         # "warn" (default) - log warning but succeed
+                                         # "error" - fail the action
+                                         # "ignore" - silent success
 ```
 
 The agentic part of your workflow should describe the changes to be pushed and optionally provide a commit message.
@@ -383,13 +387,47 @@ Analyze the pull request and make necessary code improvements.
 2. Push changes to the feature branch with a descriptive commit message
 ```
 
+**Examples with different error level configurations:**
+
+```yaml
+# Always succeed, warn when no changes (default behavior)
+safe-outputs:
+  push-to-branch:
+    branch: feature-branch
+    if-no-changes: "warn"
+```
+
+```yaml
+# Fail when no changes are made (strict mode)
+safe-outputs:
+  push-to-branch:
+    branch: feature-branch
+    if-no-changes: "error"
+```
+
+```yaml
+# Silent success, no output when no changes
+safe-outputs:
+  push-to-branch:
+    branch: feature-branch
+    if-no-changes: "ignore"
+```
+
 **Safety Features:**
 
 - Changes are applied via git patches generated from the workflow's modifications
 - Only the specified branch can be modified
 - Target configuration controls which pull requests can trigger pushes for security
 - Push operations are limited to one per workflow execution
-- Requires valid patch content to proceed (empty patches are rejected)
+- Configurable error handling for empty changesets via `if-no-changes` option
+
+**Error Level Configuration:**
+
+Similar to GitHub's `actions/upload-artifact` action, you can configure how the action behaves when there are no changes to push:
+
+- **`warn` (default)**: Logs a warning message but the workflow succeeds. This is the recommended setting for most use cases.
+- **`error`**: Fails the workflow with an error message when no changes are detected. Useful when you always expect changes to be made.
+- **`ignore`**: Silent success with no console output. The workflow completes successfully but quietly.
 
 **Safety Features:**
 

@@ -220,8 +220,9 @@ type UpdateIssuesConfig struct {
 
 // PushToBranchConfig holds configuration for pushing changes to a specific branch from agent output
 type PushToBranchConfig struct {
-	Branch string `yaml:"branch"`           // The branch to push changes to (defaults to "triggering")
-	Target string `yaml:"target,omitempty"` // Target for push-to-branch: like add-issue-comment but for pull requests
+	Branch      string `yaml:"branch"`                  // The branch to push changes to (defaults to "triggering")
+	Target      string `yaml:"target,omitempty"`        // Target for push-to-branch: like add-issue-comment but for pull requests
+	IfNoChanges string `yaml:"if-no-changes,omitempty"` // Behavior when no changes to push: "warn", "error", or "ignore" (default: "warn")
 }
 
 // MissingToolConfig holds configuration for reporting missing tools or functionality
@@ -3631,7 +3632,8 @@ func (c *Compiler) parseUpdateIssuesConfig(outputMap map[string]any) *UpdateIssu
 func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBranchConfig {
 	if configData, exists := outputMap["push-to-branch"]; exists {
 		pushToBranchConfig := &PushToBranchConfig{
-			Branch: "triggering", // Default branch value
+			Branch:      "triggering", // Default branch value
+			IfNoChanges: "warn",       // Default behavior: warn when no changes
 		}
 
 		// Handle the case where configData is nil (push-to-branch: with no value)
@@ -3651,6 +3653,23 @@ func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBran
 			if target, exists := configMap["target"]; exists {
 				if targetStr, ok := target.(string); ok {
 					pushToBranchConfig.Target = targetStr
+				}
+			}
+
+			// Parse if-no-changes (optional, defaults to "warn")
+			if ifNoChanges, exists := configMap["if-no-changes"]; exists {
+				if ifNoChangesStr, ok := ifNoChanges.(string); ok {
+					// Validate the value
+					switch ifNoChangesStr {
+					case "warn", "error", "ignore":
+						pushToBranchConfig.IfNoChanges = ifNoChangesStr
+					default:
+						// Invalid value, use default and log warning
+						if c.verbose {
+							fmt.Printf("Warning: invalid if-no-changes value '%s', using default 'warn'\n", ifNoChangesStr)
+						}
+						pushToBranchConfig.IfNoChanges = "warn"
+					}
 				}
 			}
 		}

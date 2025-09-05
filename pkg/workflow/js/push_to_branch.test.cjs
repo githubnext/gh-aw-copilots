@@ -70,6 +70,9 @@ describe("push_to_branch.cjs", () => {
       expect(scriptContent).toContain("process.env.GITHUB_AW_PUSH_BRANCH");
       expect(scriptContent).toContain("process.env.GITHUB_AW_AGENT_OUTPUT");
       expect(scriptContent).toContain("process.env.GITHUB_AW_PUSH_TARGET");
+      expect(scriptContent).toContain(
+        "process.env.GITHUB_AW_PUSH_IF_NO_CHANGES"
+      );
     });
 
     it("should handle patch file operations", () => {
@@ -104,6 +107,18 @@ describe("push_to_branch.cjs", () => {
       expect(scriptContent).toContain(
         "No changes to commit - noop operation completed successfully"
       );
+    });
+
+    it("should handle if-no-changes configuration options", () => {
+      const scriptPath = path.join(__dirname, "push_to_branch.cjs");
+      const scriptContent = fs.readFileSync(scriptPath, "utf8");
+
+      // Check that environment variable is read
+      expect(scriptContent).toContain("GITHUB_AW_PUSH_IF_NO_CHANGES");
+      expect(scriptContent).toContain("switch (ifNoChanges)");
+      expect(scriptContent).toContain('case "error":');
+      expect(scriptContent).toContain('case "ignore":');
+      expect(scriptContent).toContain('case "warn":');
     });
 
     it("should still fail on actual error conditions", () => {
