@@ -45,6 +45,8 @@ func (c *Compiler) buildCreateOutputPushToBranchJob(data *WorkflowData, mainJobN
 	if data.SafeOutputs.PushToBranch.Target != "" {
 		steps = append(steps, fmt.Sprintf("          GITHUB_AW_PUSH_TARGET: %q\n", data.SafeOutputs.PushToBranch.Target))
 	}
+	// Pass the if-no-changes configuration
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PUSH_IF_NO_CHANGES: %q\n", data.SafeOutputs.PushToBranch.IfNoChanges))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")

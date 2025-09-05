@@ -109,28 +109,34 @@ describe("create_pull_request.cjs", () => {
     );
   });
 
-  it("should throw error when patch file does not exist", async () => {
+  it("should handle missing patch file with default warn behavior", async () => {
     mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
     mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
     mockDependencies.fs.existsSync.mockReturnValue(false);
 
     const mainFunction = createMainFunction(mockDependencies);
 
-    await expect(mainFunction()).rejects.toThrow(
+    await mainFunction();
+
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
       "No patch file found - cannot create pull request without changes"
     );
+    expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
   });
 
-  it("should throw error when patch file is empty", async () => {
+  it("should handle empty patch with default warn behavior when patch file is empty", async () => {
     mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
     mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
     mockDependencies.fs.readFileSync.mockReturnValue("   ");
 
     const mainFunction = createMainFunction(mockDependencies);
 
-    await expect(mainFunction()).rejects.toThrow(
-      "Patch file is empty or contains error message - cannot create pull request without changes"
+    await mainFunction();
+
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Patch file is empty - no changes to apply (noop operation)"
     );
+    expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
   });
 
   it("should create pull request successfully with valid input", async () => {
@@ -144,6 +150,21 @@ describe("create_pull_request.cjs", () => {
           body: "This adds a new feature to the codebase.",
         },
       ],
+    });
+
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      if (command === "git rev-parse HEAD") {
+        return "abc123456";
+      }
+      // For all other git commands, just return normally
+      return "";
     });
 
     const mockPullRequest = {
@@ -179,6 +200,10 @@ describe("create_pull_request.cjs", () => {
     expect(mockDependencies.execSync).toHaveBeenCalledWith("git add .", {
       stdio: "inherit",
     });
+    expect(mockDependencies.execSync).toHaveBeenCalledWith(
+      "git diff --cached --exit-code",
+      { stdio: "ignore" }
+    );
     expect(mockDependencies.execSync).toHaveBeenCalledWith(
       'git commit -m "Add agent output: New Feature"',
       { stdio: "inherit" }
@@ -228,6 +253,17 @@ describe("create_pull_request.cjs", () => {
     mockDependencies.process.env.GITHUB_AW_PR_LABELS =
       "enhancement, automated, needs-review";
 
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      return "";
+    });
+
     const mockPullRequest = {
       number: 456,
       html_url: "https://github.com/testowner/testrepo/pull/456",
@@ -265,6 +301,17 @@ describe("create_pull_request.cjs", () => {
     });
     mockDependencies.process.env.GITHUB_AW_PR_DRAFT = "false";
 
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      return "";
+    });
+
     const mockPullRequest = {
       number: 789,
       html_url: "https://github.com/testowner/testrepo/pull/789",
@@ -293,6 +340,17 @@ describe("create_pull_request.cjs", () => {
           body: "Test PR content with detailed body information.",
         },
       ],
+    });
+
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      return "";
     });
 
     const mockPullRequest = {
@@ -334,6 +392,17 @@ describe("create_pull_request.cjs", () => {
     });
     mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = "[BOT] ";
 
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      return "";
+    });
+
     const mockPullRequest = {
       number: 987,
       html_url: "https://github.com/testowner/testrepo/pull/987",
@@ -365,6 +434,17 @@ describe("create_pull_request.cjs", () => {
     });
     mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = "[BOT] ";
 
+    // Mock execSync to simulate git behavior with changes
+    mockDependencies.execSync.mockImplementation(command => {
+      if (command === "git diff --cached --exit-code") {
+        // Throw to indicate changes are present (non-zero exit code)
+        const error = new Error("Changes exist");
+        error.status = 1;
+        throw error;
+      }
+      return "";
+    });
+
     const mockPullRequest = {
       number: 988,
       html_url: "https://github.com/testowner/testrepo/pull/988",
@@ -380,5 +460,180 @@ describe("create_pull_request.cjs", () => {
 
     const callArgs = mockDependencies.github.rest.pulls.create.mock.calls[0][0];
     expect(callArgs.title).toBe("[BOT] PR title already prefixed"); // Should not be duplicated
+  });
+
+  describe("if-no-changes configuration", () => {
+    beforeEach(() => {
+      mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
+      mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
+      mockDependencies.process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
+        items: [
+          {
+            type: "create-pull-request",
+            title: "Test PR",
+            body: "Test PR body",
+          },
+        ],
+      });
+    });
+
+    it("should handle empty patch with warn (default) behavior", async () => {
+      mockDependencies.fs.readFileSync.mockReturnValue("");
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "warn";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).toHaveBeenCalledWith(
+        "Patch file is empty - no changes to apply (noop operation)"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle empty patch with ignore behavior", async () => {
+      mockDependencies.fs.readFileSync.mockReturnValue("");
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "ignore";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).not.toHaveBeenCalledWith(
+        expect.stringContaining("Patch file is empty")
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle empty patch with error behavior", async () => {
+      mockDependencies.fs.readFileSync.mockReturnValue("");
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "error";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await expect(mainFunction()).rejects.toThrow(
+        "No changes to push - failing as configured by if-no-changes: error"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle missing patch file with warn behavior", async () => {
+      mockDependencies.fs.existsSync.mockReturnValue(false);
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "warn";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).toHaveBeenCalledWith(
+        "No patch file found - cannot create pull request without changes"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle missing patch file with ignore behavior", async () => {
+      mockDependencies.fs.existsSync.mockReturnValue(false);
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "ignore";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).not.toHaveBeenCalledWith(
+        expect.stringContaining("No patch file found")
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle missing patch file with error behavior", async () => {
+      mockDependencies.fs.existsSync.mockReturnValue(false);
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "error";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await expect(mainFunction()).rejects.toThrow(
+        "No patch file found - cannot create pull request without changes"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle patch with error message with warn behavior", async () => {
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "Failed to generate patch: some error"
+      );
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "warn";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).toHaveBeenCalledWith(
+        "Patch file contains error message - cannot create pull request without changes"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle no changes to commit with warn behavior", async () => {
+      // Mock valid patch content but no changes after git add
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "diff --git a/file.txt b/file.txt\n+content"
+      );
+      mockDependencies.execSync.mockImplementation(command => {
+        if (command === "git diff --cached --exit-code") {
+          // Return with exit code 0 (no changes)
+          return "";
+        }
+        if (command.includes("git commit")) {
+          throw new Error("Should not reach commit");
+        }
+      });
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "warn";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).toHaveBeenCalledWith(
+        "No changes to commit - noop operation completed successfully"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should handle no changes to commit with error behavior", async () => {
+      // Mock valid patch content but no changes after git add
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "diff --git a/file.txt b/file.txt\n+content"
+      );
+      mockDependencies.execSync.mockImplementation(command => {
+        if (command === "git diff --cached --exit-code") {
+          // Return with exit code 0 (no changes) - don't throw an error
+          return "";
+        }
+        // For other git commands, return normally
+        return "";
+      });
+      mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "error";
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await expect(mainFunction()).rejects.toThrow(
+        "No changes to commit - failing as configured by if-no-changes: error"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
+
+    it("should default to warn when if-no-changes is not specified", async () => {
+      mockDependencies.fs.readFileSync.mockReturnValue("");
+      // Don't set GITHUB_AW_PR_IF_NO_CHANGES env var
+
+      const mainFunction = createMainFunction(mockDependencies);
+
+      await mainFunction();
+
+      expect(mockDependencies.console.log).toHaveBeenCalledWith(
+        "Patch file is empty - no changes to apply (noop operation)"
+      );
+      expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    });
   });
 });
