@@ -113,6 +113,7 @@ metrics including duration, token usage, and cost information.
 Downloaded artifacts include:
 - aw_info.json: Engine configuration and workflow metadata
 - safe_output.jsonl: Agent's final output content (available when non-empty)
+- agent_output.json: Full/raw agent output (if the workflow uploaded this artifact)
 - aw.patch: Git patch of changes made during execution
 - Various log files with execution details and metrics
 
@@ -693,6 +694,26 @@ func extractLogMetrics(logDir string, verbose bool) (LogMetrics, error) {
 		}
 	}
 
+	// Check for agent_output.json artifact (some workflows may store this under a nested directory)
+	agentOutputPath, agentOutputFound := findAgentOutputFile(logDir)
+	if agentOutputFound {
+		if verbose {
+			fileInfo, statErr := os.Stat(agentOutputPath)
+			if statErr == nil {
+				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agent output file: %s (%s)", filepath.Base(agentOutputPath), formatFileSize(fileInfo.Size()))))
+			}
+		}
+		// If the file is not already in the logDir root, copy it for convenience
+		if filepath.Dir(agentOutputPath) != logDir {
+			rootCopy := filepath.Join(logDir, "agent_output.json")
+			if _, err := os.Stat(rootCopy); errors.Is(err, os.ErrNotExist) {
+				if copyErr := copyFileSimple(agentOutputPath, rootCopy); copyErr == nil && verbose {
+					fmt.Println(console.FormatInfoMessage("Copied agent_output.json to run root for easy access"))
+				}
+			}
+		}
+	}
+
 	// Walk through all files in the log directory
 	err := filepath.Walk(logDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -992,6 +1013,44 @@ func formatFileSize(size int64) string {
 	return fmt.Sprintf("%.1f %s", float64(size)/float64(div), units[exp])
 }
 
+// findAgentOutputFile searches for a file named agent_output.json within the logDir tree.
+// Returns the first path found (depth-first) and a boolean indicating success.
+func findAgentOutputFile(logDir string) (string, bool) {
+	var foundPath string
+	_ = filepath.Walk(logDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		if !info.IsDir() && strings.EqualFold(info.Name(), "agent_output.json") {
+			foundPath = path
+			return errors.New("stop") // sentinel to stop walking early
+		}
+		return nil
+	})
+	if foundPath == "" {
+		return "", false
+	}
+	return foundPath, true
+}
+
+// copyFileSimple copies a file from src to dst using buffered IO.
+func copyFileSimple(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
+}
+
 // dirExists checks if a directory exists
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
@@ -1087,13 +1146,13 @@ func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([
 
 	// Look for the safe output artifact file that contains structured JSON with items array
 	// This file is created by the collect_ndjson_output.cjs script during workflow execution
-	safeOutputPath := filepath.Join(runDir, "safe_output.jsonl")
-	if _, err := os.Stat(safeOutputPath); err == nil {
+	agentOutputPath := filepath.Join(runDir, "agent_output.json")
+	if _, err := os.Stat(agentOutputPath); err == nil {
 		// Read the safe output artifact file
-		content, readErr := os.ReadFile(safeOutputPath)
+		content, readErr := os.ReadFile(agentOutputPath)
 		if readErr != nil {
 			if verbose {
-				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read safe output file %s: %v", safeOutputPath, readErr)))
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read safe output file %s: %v", agentOutputPath, readErr)))
 			}
 			return missingTools, nil // Continue processing without this file
 		}
@@ -1106,7 +1165,7 @@ func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([
 
 		if err := json.Unmarshal(content, &safeOutput); err != nil {
 			if verbose {
-				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse safe output JSON from %s: %v", safeOutputPath, err)))
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse safe output JSON from %s: %v", agentOutputPath, err)))
 			}
 			return missingTools, nil // Continue processing without this file
 		}
@@ -1151,7 +1210,7 @@ func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([
 		}
 	} else {
 		if verbose {
-			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No safe output artifact found at %s for run %d", safeOutputPath, run.DatabaseID)))
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No safe output artifact found at %s for run %d", agentOutputPath, run.DatabaseID)))
 		}
 	}
 
