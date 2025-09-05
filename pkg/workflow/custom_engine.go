@@ -36,10 +36,8 @@ func (e *CustomEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 
 	// Generate each custom step if they exist, with environment variables
 	if workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Steps) > 0 {
-		// Check if we need environment section for any step
-		hasEnvSection := workflowData.SafeOutputs != nil ||
-			(workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "") ||
-			(workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0)
+		// Check if we need environment section for any step - always true now for GITHUB_AW_PROMPT
+		hasEnvSection := true
 
 		for _, step := range workflowData.EngineConfig.Steps {
 			stepYAML, err := e.convertStepToYAML(step)
@@ -50,10 +48,13 @@ func (e *CustomEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 
 			// Check if this step needs environment variables injected
 			stepStr := stepYAML
-			if hasEnvSection && strings.Contains(stepYAML, "run:") {
-				// Add environment variables to run steps after the entire run block
+			if hasEnvSection {
+				// Add environment variables to all steps (both run and uses)
 				stepStr = strings.TrimRight(stepYAML, "\n")
 				stepStr += "\n        env:\n"
+
+				// Always add GITHUB_AW_PROMPT for agentic workflows
+				stepStr += "          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt\n"
 
 				// Add GITHUB_AW_SAFE_OUTPUTS if safe-outputs feature is used
 				if workflowData.SafeOutputs != nil {
@@ -103,6 +104,31 @@ func (e *CustomEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 		}
 	}
 
+	// Add id field if present
+	if id, hasID := stepMap["id"]; hasID {
+		if idStr, ok := id.(string); ok {
+			stepYAML = append(stepYAML, fmt.Sprintf("        id: %s", idStr))
+		}
+	}
+
+	// Add continue-on-error field if present
+	if continueOnError, hasContinueOnError := stepMap["continue-on-error"]; hasContinueOnError {
+		// Handle both string and boolean values for continue-on-error
+		switch v := continueOnError.(type) {
+		case bool:
+			stepYAML = append(stepYAML, fmt.Sprintf("        continue-on-error: %t", v))
+		case string:
+			stepYAML = append(stepYAML, fmt.Sprintf("        continue-on-error: %s", v))
+		}
+	}
+
+	// Add uses action
+	if uses, hasUses := stepMap["uses"]; hasUses {
+		if usesStr, ok := uses.(string); ok {
+			stepYAML = append(stepYAML, fmt.Sprintf("        uses: %s", usesStr))
+		}
+	}
+
 	// Add run command
 	if run, hasRun := stepMap["run"]; hasRun {
 		if runStr, ok := run.(string); ok {
@@ -112,13 +138,6 @@ func (e *CustomEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 			for _, line := range runLines {
 				stepYAML = append(stepYAML, "          "+line)
 			}
-		}
-	}
-
-	// Add uses action
-	if uses, hasUses := stepMap["uses"]; hasUses {
-		if usesStr, ok := uses.(string); ok {
-			stepYAML = append(stepYAML, fmt.Sprintf("        uses: %s", usesStr))
 		}
 	}
 

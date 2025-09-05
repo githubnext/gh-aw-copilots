@@ -126,10 +126,7 @@ func (e *ClaudeEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 	}
 
 	// Apply default Claude tools
-	claudeTools := e.applyDefaultClaudeTools(workflowData.Tools, workflowData.SafeOutputs)
-
-	// Compute allowed tools
-	allowedTools := e.computeAllowedClaudeToolsString(claudeTools, workflowData.SafeOutputs)
+	allowedTools := e.computeAllowedClaudeToolsString(workflowData.Tools, workflowData.SafeOutputs)
 
 	var stepLines []string
 
@@ -183,26 +180,23 @@ func (e *ClaudeEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 		}
 	}
 
-	// Add environment section if needed
-	hasEnvSection := workflowData.SafeOutputs != nil ||
-		(workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0) ||
-		(workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "")
+	// Add environment section - always include environment section for GITHUB_AW_PROMPT
+	stepLines = append(stepLines, "        env:")
 
-	if hasEnvSection {
-		stepLines = append(stepLines, "        env:")
+	// Always add GITHUB_AW_PROMPT for agentic workflows
+	stepLines = append(stepLines, "          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt")
 
-		if workflowData.SafeOutputs != nil {
-			stepLines = append(stepLines, "          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}")
-		}
+	if workflowData.SafeOutputs != nil {
+		stepLines = append(stepLines, "          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}")
+	}
 
-		if workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "" {
-			stepLines = append(stepLines, fmt.Sprintf("          GITHUB_AW_MAX_TURNS: %s", workflowData.EngineConfig.MaxTurns))
-		}
+	if workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "" {
+		stepLines = append(stepLines, fmt.Sprintf("          GITHUB_AW_MAX_TURNS: %s", workflowData.EngineConfig.MaxTurns))
+	}
 
-		if workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0 {
-			for key, value := range workflowData.EngineConfig.Env {
-				stepLines = append(stepLines, fmt.Sprintf("          %s: %s", key, value))
-			}
+	if workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0 {
+		for key, value := range workflowData.EngineConfig.Env {
+			stepLines = append(stepLines, fmt.Sprintf("          %s: %s", key, value))
 		}
 	}
 
@@ -272,8 +266,15 @@ func (e *ClaudeEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 	return strings.Join(stepYAML, "\n"), nil
 }
 
-// applyDefaultClaudeTools adds default Claude tools and git commands based on safe outputs configuration
-func (e *ClaudeEngine) applyDefaultClaudeTools(tools map[string]any, safeOutputs *SafeOutputsConfig) map[string]any {
+// needsGitCommands checks if safe outputs configuration requires Git commands
+func (e *ClaudeEngine) needsGitCommands(safeOutputs *SafeOutputsConfig) bool {
+	return safeOutputs.CreatePullRequests != nil || safeOutputs.PushToBranch != nil
+}
+
+// computeAllowedClaudeToolsString
+// 1. adds default Claude tools and git commands based on safe outputs configuration
+// 2. generates the allowed tools string for Claude
+func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig) string {
 	// Initialize tools map if nil
 	if tools == nil {
 		tools = make(map[string]any)
@@ -405,16 +406,6 @@ func (e *ClaudeEngine) applyDefaultClaudeTools(tools map[string]any, safeOutputs
 	claudeSection["allowed"] = claudeExistingAllowed
 	tools["claude"] = claudeSection
 
-	return tools
-}
-
-// needsGitCommands checks if safe outputs configuration requires Git commands
-func (e *ClaudeEngine) needsGitCommands(safeOutputs *SafeOutputsConfig) bool {
-	return safeOutputs.CreatePullRequests != nil || safeOutputs.PushToBranch != nil
-}
-
-// computeAllowedClaudeToolsString computes the comma-separated list of allowed tools for Claude
-func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig) string {
 	var allowedTools []string
 
 	// Process claude-specific tools from the claude section (new format only)

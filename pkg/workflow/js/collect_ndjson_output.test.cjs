@@ -21,6 +21,7 @@ describe("collect_ndjson_output.cjs", () => {
       setOutput: vi.fn(),
       warning: vi.fn(),
       error: vi.fn(),
+      exportVariable: vi.fn(),
     };
     global.core = mockCore;
 
@@ -34,7 +35,7 @@ describe("collect_ndjson_output.cjs", () => {
 
   afterEach(() => {
     // Clean up any test files
-    const testFiles = ["/tmp/test-ndjson-output.txt"];
+    const testFiles = ["/tmp/test-ndjson-output.txt", "agent_output.json"];
     testFiles.forEach(file => {
       try {
         if (fs.existsSync(file)) {
@@ -1067,5 +1068,79 @@ Line 3"}
       expect(parsedOutput.items[0].priority).toBe(1);
       expect(parsedOutput.errors).toHaveLength(0);
     });
+  });
+
+  it("should store validated output in agent_output.json file and set GITHUB_AW_AGENT_OUTPUT environment variable", async () => {
+    const testFile = "/tmp/test-ndjson-output.txt";
+    const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"}
+{"type": "add-issue-comment", "body": "Test comment"}`;
+
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+
+    await eval(`(async () => { ${collectScript} })()`);
+
+    // Verify agent_output.json file was created
+    expect(fs.existsSync("agent_output.json")).toBe(true);
+
+    // Verify the content of agent_output.json
+    const agentOutputContent = fs.readFileSync("agent_output.json", "utf8");
+    const agentOutputJson = JSON.parse(agentOutputContent);
+    
+    expect(agentOutputJson.items).toHaveLength(2);
+    expect(agentOutputJson.items[0].type).toBe("create-issue");
+    expect(agentOutputJson.items[1].type).toBe("add-issue-comment");
+    expect(agentOutputJson.errors).toHaveLength(0);
+
+    // Verify GITHUB_AW_AGENT_OUTPUT environment variable was set
+    expect(mockCore.exportVariable).toHaveBeenCalledWith("GITHUB_AW_AGENT_OUTPUT", "agent_output.json");
+
+    // Verify existing functionality still works (core.setOutput calls)
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === "output");
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(2);
+    expect(parsedOutput.errors).toHaveLength(0);
+  });
+
+  it("should handle errors when writing agent_output.json file gracefully", async () => {
+    const testFile = "/tmp/test-ndjson-output.txt";
+    const ndjsonContent = `{"type": "create-issue", "title": "Test Issue", "body": "Test body"}`;
+
+    fs.writeFileSync(testFile, ndjsonContent);
+    process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true}';
+
+    // Mock fs.writeFileSync to throw an error for the agent_output.json file
+    const originalWriteFileSync = fs.writeFileSync;
+    fs.writeFileSync = vi.fn((filePath, content, options) => {
+      if (filePath === "agent_output.json") {
+        throw new Error("Permission denied");
+      }
+      return originalWriteFileSync(filePath, content, options);
+    });
+
+    await eval(`(async () => { ${collectScript} })()`);
+
+    // Restore original fs.writeFileSync
+    fs.writeFileSync = originalWriteFileSync;
+
+    // Verify the error was logged but the script continued to work
+    expect(console.error).toHaveBeenCalledWith("Failed to write agent output file: Permission denied");
+
+    // Verify existing functionality still works (core.setOutput calls)
+    const setOutputCalls = mockCore.setOutput.mock.calls;
+    const outputCall = setOutputCalls.find(call => call[0] === "output");
+    expect(outputCall).toBeDefined();
+    
+    const parsedOutput = JSON.parse(outputCall[1]);
+    expect(parsedOutput.items).toHaveLength(1);
+    expect(parsedOutput.errors).toHaveLength(0);
+
+    // Verify exportVariable was not called if file writing failed
+    expect(mockCore.exportVariable).not.toHaveBeenCalled();
   });
 });
