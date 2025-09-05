@@ -102,8 +102,8 @@ Please do the following tasks:
 		t.Error("Expected 'Upload git patch' step to be in generated workflow")
 	}
 
-	// Verify the upload step uses actions/upload-artifact@v5
-	if !strings.Contains(lockContent, "uses: actions/upload-artifact@v5") {
+	// Verify the upload step uses actions/upload-artifact@v4
+	if !strings.Contains(lockContent, "uses: actions/upload-artifact@v4") {
 		t.Error("Expected upload-artifact action to be used for git patch upload step")
 	}
 
