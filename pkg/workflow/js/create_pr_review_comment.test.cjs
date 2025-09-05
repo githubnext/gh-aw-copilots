@@ -9,6 +9,8 @@ const mockCore = {
     addRaw: vi.fn().mockReturnThis(),
     write: vi.fn(),
   },
+  warning: vi.fn(),
+  error: vi.fn(),
 };
 
 const mockGithub = {
@@ -29,6 +31,9 @@ const mockContext = {
   payload: {
     pull_request: {
       number: 123,
+      head: {
+        sha: "abc123def456",
+      },
     },
     repository: {
       html_url: "https://github.com/testowner/testrepo",
@@ -94,6 +99,7 @@ describe("create_pr_review_comment.cjs", () => {
         "Consider using const instead of let here."
       ),
       path: "src/main.js",
+      commit_id: "abc123def456",
       line: 10,
       side: "RIGHT",
     });
@@ -142,6 +148,7 @@ describe("create_pr_review_comment.cjs", () => {
         "This entire function could be simplified using modern JS features."
       ),
       path: "src/utils.js",
+      commit_id: "abc123def456",
       line: 25,
       start_line: 20,
       side: "LEFT",

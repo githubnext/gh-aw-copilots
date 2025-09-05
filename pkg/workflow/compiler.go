@@ -185,8 +185,9 @@ type AddIssueCommentsConfig struct {
 type CreatePullRequestsConfig struct {
 	TitlePrefix string   `yaml:"title-prefix,omitempty"`
 	Labels      []string `yaml:"labels,omitempty"`
-	Draft       *bool    `yaml:"draft,omitempty"` // Pointer to distinguish between unset (nil) and explicitly false
-	Max         int      `yaml:"max,omitempty"`   // Maximum number of pull requests to create
+	Draft       *bool    `yaml:"draft,omitempty"`         // Pointer to distinguish between unset (nil) and explicitly false
+	Max         int      `yaml:"max,omitempty"`           // Maximum number of pull requests to create
+	IfNoChanges string   `yaml:"if-no-changes,omitempty"` // Behavior when no changes to push: "warn" (default), "error", or "ignore"
 }
 
 // CreatePullRequestReviewCommentsConfig holds configuration for creating GitHub pull request review comments from agent output
@@ -218,8 +219,9 @@ type UpdateIssuesConfig struct {
 
 // PushToBranchConfig holds configuration for pushing changes to a specific branch from agent output
 type PushToBranchConfig struct {
-	Branch string `yaml:"branch"`           // The branch to push changes to (defaults to "triggering")
-	Target string `yaml:"target,omitempty"` // Target for push-to-branch: like add-issue-comment but for pull requests
+	Branch      string `yaml:"branch"`                  // The branch to push changes to (defaults to "triggering")
+	Target      string `yaml:"target,omitempty"`        // Target for push-to-branch: like add-issue-comment but for pull requests
+	IfNoChanges string `yaml:"if-no-changes,omitempty"` // Behavior when no changes to push: "warn", "error", or "ignore" (default: "warn")
 }
 
 // MissingToolConfig holds configuration for reporting missing tools or functionality
@@ -2211,7 +2213,8 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 
 	// Step 1: Download patch artifact
 	steps = append(steps, "      - name: Download patch artifact\n")
-	steps = append(steps, "        uses: actions/download-artifact@v4\n")
+	steps = append(steps, "        continue-on-error: true\n")
+	steps = append(steps, "        uses: actions/download-artifact@v5\n")
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          name: aw.patch\n")
 	steps = append(steps, "          path: /tmp/\n")
@@ -2248,6 +2251,13 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 		draftValue = *data.SafeOutputs.CreatePullRequests.Draft
 	}
 	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_DRAFT: %q\n", fmt.Sprintf("%t", draftValue)))
+
+	// Pass the if-no-changes configuration
+	ifNoChanges := data.SafeOutputs.CreatePullRequests.IfNoChanges
+	if ifNoChanges == "" {
+		ifNoChanges = "warn" // Default value
+	}
+	steps = append(steps, fmt.Sprintf("          GITHUB_AW_PR_IF_NO_CHANGES: %q\n", ifNoChanges))
 
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          script: |\n")
@@ -3257,6 +3267,13 @@ func (c *Compiler) parsePullRequestsConfig(outputMap map[string]any) *CreatePull
 			}
 		}
 
+		// Parse if-no-changes
+		if ifNoChanges, exists := configMap["if-no-changes"]; exists {
+			if ifNoChangesStr, ok := ifNoChanges.(string); ok {
+				pullRequestsConfig.IfNoChanges = ifNoChangesStr
+			}
+		}
+
 		// Note: max parameter is not supported for pull requests (always limited to 1)
 		// If max is specified, it will be ignored as pull requests are singular only
 	}
@@ -3387,7 +3404,8 @@ func (c *Compiler) parseUpdateIssuesConfig(outputMap map[string]any) *UpdateIssu
 func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBranchConfig {
 	if configData, exists := outputMap["push-to-branch"]; exists {
 		pushToBranchConfig := &PushToBranchConfig{
-			Branch: "triggering", // Default branch value
+			Branch:      "triggering", // Default branch value
+			IfNoChanges: "warn",       // Default behavior: warn when no changes
 		}
 
 		// Handle the case where configData is nil (push-to-branch: with no value)
@@ -3407,6 +3425,23 @@ func (c *Compiler) parsePushToBranchConfig(outputMap map[string]any) *PushToBran
 			if target, exists := configMap["target"]; exists {
 				if targetStr, ok := target.(string); ok {
 					pushToBranchConfig.Target = targetStr
+				}
+			}
+
+			// Parse if-no-changes (optional, defaults to "warn")
+			if ifNoChanges, exists := configMap["if-no-changes"]; exists {
+				if ifNoChangesStr, ok := ifNoChanges.(string); ok {
+					// Validate the value
+					switch ifNoChangesStr {
+					case "warn", "error", "ignore":
+						pushToBranchConfig.IfNoChanges = ifNoChangesStr
+					default:
+						// Invalid value, use default and log warning
+						if c.verbose {
+							fmt.Printf("Warning: invalid if-no-changes value '%s', using default 'warn'\n", ifNoChangesStr)
+						}
+						pushToBranchConfig.IfNoChanges = "warn"
+					}
 				}
 			}
 		}
@@ -3678,8 +3713,36 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 			}
 			safeOutputsConfig["add-issue-comment"] = commentConfig
 		}
+		if data.SafeOutputs.CreateDiscussions != nil {
+			discussionConfig := map[string]interface{}{
+				"enabled": true,
+			}
+			if data.SafeOutputs.CreateDiscussions.Max > 0 {
+				discussionConfig["max"] = data.SafeOutputs.CreateDiscussions.Max
+			}
+			safeOutputsConfig["create-discussion"] = discussionConfig
+		}
 		if data.SafeOutputs.CreatePullRequests != nil {
 			safeOutputsConfig["create-pull-request"] = true
+		}
+		if data.SafeOutputs.CreatePullRequestReviewComments != nil {
+			prReviewCommentConfig := map[string]interface{}{
+				"enabled": true,
+			}
+			if data.SafeOutputs.CreatePullRequestReviewComments.Max > 0 {
+				prReviewCommentConfig["max"] = data.SafeOutputs.CreatePullRequestReviewComments.Max
+			}
+			safeOutputsConfig["create-pull-request-review-comment"] = prReviewCommentConfig
+		}
+		if data.SafeOutputs.CreateSecurityReports != nil {
+			securityReportConfig := map[string]interface{}{
+				"enabled": true,
+			}
+			// Security reports typically have unlimited max, but check if configured
+			if data.SafeOutputs.CreateSecurityReports.Max > 0 {
+				securityReportConfig["max"] = data.SafeOutputs.CreateSecurityReports.Max
+			}
+			safeOutputsConfig["create-security-report"] = securityReportConfig
 		}
 		if data.SafeOutputs.AddIssueLabels != nil {
 			safeOutputsConfig["add-issue-label"] = true

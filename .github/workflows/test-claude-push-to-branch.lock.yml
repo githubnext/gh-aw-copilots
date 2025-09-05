@@ -55,7 +55,7 @@ jobs:
               } catch (repoError) {
                 const errorMessage =
                   repoError instanceof Error ? repoError.message : String(repoError);
-                console.log(`Repository permission check failed: ${errorMessage}`);
+                core.warning(`Repository permission check failed: ${errorMessage}`);
               }
               core.setOutput("is_team_member", "false");
             }
@@ -635,6 +635,10 @@ jobs:
                     return 1; // Only one push to branch allowed
                   case "create-discussion":
                     return 1; // Only one discussion allowed
+                  case "missing-tool":
+                    return 1000; // Allow many missing tool reports (default: unlimited)
+                  case "create-security-report":
+                    return 1000; // Allow many security reports (default: unlimited)
                   default:
                     return 1; // Default to single item for unknown types
                 }
@@ -1053,6 +1057,68 @@ jobs:
                       item.title = sanitizeContent(item.title);
                       item.body = sanitizeContent(item.body);
                       break;
+                    case "missing-tool":
+                      // Validate required tool field
+                      if (!item.tool || typeof item.tool !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'tool' string field`
+                        );
+                        continue;
+                      }
+                      // Validate required reason field
+                      if (!item.reason || typeof item.reason !== "string") {
+                        errors.push(
+                          `Line ${i + 1}: missing-tool requires a 'reason' string field`
+                        );
+                        continue;
+                      }
+                      // Sanitize text content
+                      item.tool = sanitizeContent(item.tool);
+                      item.reason = sanitizeContent(item.reason);
+                      // Validate optional alternatives field
+                      if (item.alternatives !== undefined) {
+                        if (typeof item.alternatives !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: missing-tool 'alternatives' must be a string`
+                          );
+                          continue;
+                        }
+                        item.alternatives = sanitizeContent(item.alternatives);
+                      }
+                      break;
+                    case "create-security-report":
+                      // Validate required sarif field
+                      if (!item.sarif) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report requires a 'sarif' field`
+                        );
+                        continue;
+                      }
+                      // SARIF content can be object or string
+                      if (
+                        typeof item.sarif !== "object" &&
+                        typeof item.sarif !== "string"
+                      ) {
+                        errors.push(
+                          `Line ${i + 1}: create-security-report 'sarif' must be an object or string`
+                        );
+                        continue;
+                      }
+                      // If SARIF is a string, sanitize it
+                      if (typeof item.sarif === "string") {
+                        item.sarif = sanitizeContent(item.sarif);
+                      }
+                      // Validate optional category field
+                      if (item.category !== undefined) {
+                        if (typeof item.category !== "string") {
+                          errors.push(
+                            `Line ${i + 1}: create-security-report 'category' must be a string`
+                          );
+                          continue;
+                        }
+                        item.category = sanitizeContent(item.category);
+                      }
+                      break;
                     default:
                       errors.push(`Line ${i + 1}: Unknown output type '${itemType}'`);
                       continue;
@@ -1065,8 +1131,8 @@ jobs:
               }
               // Report validation results
               if (errors.length > 0) {
-                console.log("Validation errors found:");
-                errors.forEach(error => console.log(`  - ${error}`));
+                core.warning("Validation errors found:");
+                errors.forEach(error => core.warning(`  - ${error}`));
                 // For now, we'll continue with valid items but log the errors
                 // In the future, we might want to fail the workflow for invalid items
               }
@@ -1136,7 +1202,7 @@ jobs:
                 // Append to GitHub step summary
                 core.summary.addRaw(markdown).write();
               } catch (error) {
-                console.error("Error parsing Claude log:", error.message);
+                core.error(`Error parsing Claude log: ${error.message}`);
                 core.setFailed(error.message);
               }
             }
@@ -1570,7 +1636,8 @@ jobs:
       push_url: ${{ steps.push_to_branch.outputs.push_url }}
     steps:
       - name: Download patch artifact
-        uses: actions/download-artifact@v4
+        continue-on-error: true
+        uses: actions/download-artifact@v5
         with:
           name: aw.patch
           path: /tmp/
@@ -1585,6 +1652,7 @@ jobs:
           GITHUB_AW_AGENT_OUTPUT: ${{ needs.test-claude-push-to-branch.outputs.output }}
           GITHUB_AW_PUSH_BRANCH: "claude-test-branch"
           GITHUB_AW_PUSH_TARGET: "*"
+          GITHUB_AW_PUSH_IF_NO_CHANGES: "warn"
         with:
           script: |
             async function main() {
@@ -1603,24 +1671,65 @@ jobs:
                 return;
               }
               const target = process.env.GITHUB_AW_PUSH_TARGET || "triggering";
+              const ifNoChanges = process.env.GITHUB_AW_PUSH_IF_NO_CHANGES || "warn";
               // Check if patch file exists and has valid content
               if (!fs.existsSync("/tmp/aw.patch")) {
-                core.setFailed("No patch file found - cannot push without changes");
-                return;
+                const message = "No patch file found - cannot push without changes";
+                switch (ifNoChanges) {
+                  case "error":
+                    core.setFailed(message);
+                    return;
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
               }
               const patchContent = fs.readFileSync("/tmp/aw.patch", "utf8");
-              if (
-                !patchContent ||
-                !patchContent.trim() ||
-                patchContent.includes("Failed to generate patch")
-              ) {
-                core.setFailed(
-                  "Patch file is empty or contains error message - cannot push without changes"
-                );
-                return;
+              // Check for actual error conditions (but allow empty patches as valid noop)
+              if (patchContent.includes("Failed to generate patch")) {
+                const message =
+                  "Patch file contains error message - cannot push without changes";
+                switch (ifNoChanges) {
+                  case "error":
+                    core.setFailed(message);
+                    return;
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
+              }
+              // Empty patch is valid - behavior depends on if-no-changes configuration
+              const isEmpty = !patchContent || !patchContent.trim();
+              if (isEmpty) {
+                const message =
+                  "Patch file is empty - no changes to apply (noop operation)";
+                switch (ifNoChanges) {
+                  case "error":
+                    core.setFailed(
+                      "No changes to push - failing as configured by if-no-changes: error"
+                    );
+                    return;
+                  case "ignore":
+                    // Silent success - no console output
+                    break;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    break;
+                }
               }
               console.log("Agent output content length:", outputContent.length);
-              console.log("Patch content validation passed");
+              if (!isEmpty) {
+                console.log("Patch content validation passed");
+              }
               console.log("Target branch:", branchName);
               console.log("Target configuration:", target);
               // Parse the validated output JSON
@@ -1684,35 +1793,62 @@ jobs:
                 console.log("Branch does not exist, creating new branch:", branchName);
                 execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
               }
-              // Apply the patch using git CLI
-              console.log("Applying patch...");
-              try {
-                execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
-                console.log("Patch applied successfully");
-              } catch (error) {
-                console.error(
-                  "Failed to apply patch:",
-                  error instanceof Error ? error.message : String(error)
-                );
-                core.setFailed("Failed to apply patch");
-                return;
+              // Apply the patch using git CLI (skip if empty)
+              if (!isEmpty) {
+                console.log("Applying patch...");
+                try {
+                  execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
+                  console.log("Patch applied successfully");
+                } catch (error) {
+                  core.error(
+                    `Failed to apply patch: ${error instanceof Error ? error.message : String(error)}`
+                  );
+                  core.setFailed("Failed to apply patch");
+                  return;
+                }
+              } else {
+                console.log("Skipping patch application (empty patch)");
               }
               // Commit and push the changes
               execSync("git add .", { stdio: "inherit" });
               // Check if there are changes to commit
+              let hasChanges = false;
               try {
                 execSync("git diff --cached --exit-code", { stdio: "ignore" });
-                console.log("No changes to commit");
-                return;
+                // No changes to commit - apply if-no-changes configuration
+                const message =
+                  "No changes to commit - noop operation completed successfully";
+                switch (ifNoChanges) {
+                  case "error":
+                    core.setFailed(
+                      "No changes to commit - failing as configured by if-no-changes: error"
+                    );
+                    return;
+                  case "ignore":
+                    // Silent success - no console output
+                    break;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    break;
+                }
+                hasChanges = false;
               } catch (error) {
                 // Exit code != 0 means there are changes to commit, which is what we want
+                hasChanges = true;
               }
-              const commitMessage = pushItem.message || "Apply agent changes";
-              execSync(`git commit -m "${commitMessage}"`, { stdio: "inherit" });
-              execSync(`git push origin ${branchName}`, { stdio: "inherit" });
-              console.log("Changes committed and pushed to branch:", branchName);
-              // Get commit SHA
-              const commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+              let commitSha;
+              if (hasChanges) {
+                const commitMessage = pushItem.message || "Apply agent changes";
+                execSync(`git commit -m "${commitMessage}"`, { stdio: "inherit" });
+                execSync(`git push origin ${branchName}`, { stdio: "inherit" });
+                console.log("Changes committed and pushed to branch:", branchName);
+                commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+              } else {
+                // For noop operations, get the current HEAD commit
+                commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+              }
+              // Get commit SHA and push URL
               const pushUrl = context.payload.repository
                 ? `${context.payload.repository.html_url}/tree/${branchName}`
                 : `https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName}`;
@@ -1721,16 +1857,23 @@ jobs:
               core.setOutput("commit_sha", commitSha);
               core.setOutput("push_url", pushUrl);
               // Write summary to GitHub Actions summary
-              await core.summary
-                .addRaw(
-                  `
-            ## Push to Branch
+              const summaryTitle = hasChanges
+                ? "Push to Branch"
+                : "Push to Branch (No Changes)";
+              const summaryContent = hasChanges
+                ? `
+            ## ${summaryTitle}
             - **Branch**: \`${branchName}\`
             - **Commit**: [${commitSha.substring(0, 7)}](${pushUrl})
             - **URL**: [${pushUrl}](${pushUrl})
             `
-                )
-                .write();
+                : `
+            ## ${summaryTitle}
+            - **Branch**: \`${branchName}\`
+            - **Status**: No changes to apply (noop operation)
+            - **URL**: [${pushUrl}](${pushUrl})
+            `;
+              await core.summary.addRaw(summaryContent).write();
             }
             await main();
 
