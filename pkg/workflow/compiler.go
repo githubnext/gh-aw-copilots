@@ -2213,10 +2213,11 @@ func (c *Compiler) buildCreateOutputPullRequestJob(data *WorkflowData, mainJobNa
 
 	// Step 1: Download patch artifact
 	steps = append(steps, "      - name: Download patch artifact\n")
-	steps = append(steps, "        uses: actions/download-artifact@v4\n")
+	steps = append(steps, "        uses: actions/download-artifact@v5\n")
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          name: aw.patch\n")
 	steps = append(steps, "          path: /tmp/\n")
+	steps = append(steps, "          if-no-artifact-found: warn\n")
 
 	// Step 2: Checkout repository
 	steps = append(steps, "      - name: Checkout repository\n")

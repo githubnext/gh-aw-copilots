@@ -1975,10 +1975,11 @@ jobs:
       pull_request_url: ${{ steps.create_pull_request.outputs.pull_request_url }}
     steps:
       - name: Download patch artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: aw.patch
           path: /tmp/
+          if-no-artifact-found: warn
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -2697,10 +2698,11 @@ jobs:
       push_url: ${{ steps.push_to_branch.outputs.push_url }}
     steps:
       - name: Download patch artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: aw.patch
           path: /tmp/
+          if-no-artifact-found: warn
       - name: Checkout repository
         uses: actions/checkout@v5
         with:

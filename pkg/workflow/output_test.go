@@ -789,7 +789,7 @@ This workflow tests the create_pull_request job generation.
 		t.Error("Expected 'Download patch artifact' step in create_pull_request job")
 	}
 
-	if !strings.Contains(lockContentStr, "actions/download-artifact@v4") {
+	if !strings.Contains(lockContentStr, "actions/download-artifact@v5") {
 		t.Error("Expected download-artifact action to be used in create_pull_request job")
 	}
 
