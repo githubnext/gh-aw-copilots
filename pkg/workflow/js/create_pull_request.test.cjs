@@ -109,27 +109,62 @@ describe("create_pull_request.cjs", () => {
     );
   });
 
-  it("should throw error when patch file does not exist", async () => {
+  it("should exit gracefully when patch file does not exist", async () => {
     mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
     mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
     mockDependencies.fs.existsSync.mockReturnValue(false);
 
     const mainFunction = createMainFunction(mockDependencies);
 
-    await expect(mainFunction()).rejects.toThrow(
-      "No patch file found - cannot create pull request without changes"
+    await mainFunction(); // Should not throw
+
+    // Verify no pull request was created
+    expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "No patch file found - no changes to create pull request for"
+    );
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Exiting gracefully as no-op (no changes detected)"
     );
   });
 
-  it("should throw error when patch file is empty", async () => {
+  it("should exit gracefully when patch file is empty", async () => {
     mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
     mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
     mockDependencies.fs.readFileSync.mockReturnValue("   ");
 
     const mainFunction = createMainFunction(mockDependencies);
 
-    await expect(mainFunction()).rejects.toThrow(
-      "Patch file is empty or contains error message - cannot create pull request without changes"
+    await mainFunction(); // Should not throw
+
+    // Verify no pull request was created
+    expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Patch file is empty or indicates no changes - no pull request needed"
+    );
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Exiting gracefully as no-op (no changes detected)"
+    );
+  });
+
+  it("should exit gracefully when patch contains 'no changes' message", async () => {
+    mockDependencies.process.env.GITHUB_AW_WORKFLOW_ID = "test-workflow";
+    mockDependencies.process.env.GITHUB_AW_BASE_BRANCH = "main";
+    mockDependencies.fs.readFileSync.mockReturnValue(
+      "Skipping patch generation - no committed changes to create patch from"
+    );
+
+    const mainFunction = createMainFunction(mockDependencies);
+
+    await mainFunction(); // Should not throw
+
+    // Verify no pull request was created
+    expect(mockDependencies.github.rest.pulls.create).not.toHaveBeenCalled();
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Patch file is empty or indicates no changes - no pull request needed"
+    );
+    expect(mockDependencies.console.log).toHaveBeenCalledWith(
+      "Exiting gracefully as no-op (no changes detected)"
     );
   });
 

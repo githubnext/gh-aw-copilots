@@ -23,20 +23,25 @@ async function main() {
 
   // Check if patch file exists and has valid content
   if (!fs.existsSync("/tmp/aw.patch")) {
-    throw new Error(
-      "No patch file found - cannot create pull request without changes"
-    );
+    console.log("No patch file found - no changes to create pull request for");
+    console.log("Exiting gracefully as no-op (no changes detected)");
+    return;
   }
 
   const patchContent = fs.readFileSync("/tmp/aw.patch", "utf8");
   if (
     !patchContent ||
     !patchContent.trim() ||
-    patchContent.includes("Failed to generate patch")
+    patchContent.includes("Failed to generate patch") ||
+    patchContent.includes(
+      "Skipping patch generation - no committed changes to create patch from"
+    )
   ) {
-    throw new Error(
-      "Patch file is empty or contains error message - cannot create pull request without changes"
+    console.log(
+      "Patch file is empty or indicates no changes - no pull request needed"
     );
+    console.log("Exiting gracefully as no-op (no changes detected)");
+    return;
   }
 
   console.log("Agent output content length:", outputContent.length);
