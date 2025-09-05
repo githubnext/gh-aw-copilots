@@ -25,8 +25,9 @@ async function main() {
 
   // Check if patch file exists and has valid content
   if (!fs.existsSync("/tmp/aw.patch")) {
-    const message = "No patch file found - cannot create pull request without changes";
-    
+    const message =
+      "No patch file found - cannot create pull request without changes";
+
     switch (ifNoChanges) {
       case "error":
         throw new Error(message);
@@ -44,8 +45,9 @@ async function main() {
 
   // Check for actual error conditions (but allow empty patches as valid noop)
   if (patchContent.includes("Failed to generate patch")) {
-    const message = "Patch file contains error message - cannot create pull request without changes";
-    
+    const message =
+      "Patch file contains error message - cannot create pull request without changes";
+
     switch (ifNoChanges) {
       case "error":
         throw new Error(message);
@@ -62,11 +64,14 @@ async function main() {
   // Empty patch is valid - behavior depends on if-no-changes configuration
   const isEmpty = !patchContent || !patchContent.trim();
   if (isEmpty) {
-    const message = "Patch file is empty - no changes to apply (noop operation)";
+    const message =
+      "Patch file is empty - no changes to apply (noop operation)";
 
     switch (ifNoChanges) {
       case "error":
-        throw new Error("No changes to push - failing as configured by if-no-changes: error");
+        throw new Error(
+          "No changes to push - failing as configured by if-no-changes: error"
+        );
       case "ignore":
         // Silent success - no console output
         return;
@@ -224,7 +229,7 @@ async function main() {
   // Check if there are changes to commit
   let hasChanges = false;
   let gitError = null;
-  
+
   try {
     execSync("git diff --cached --exit-code", { stdio: "ignore" });
     // No changes - exit code 0
@@ -236,11 +241,14 @@ async function main() {
 
   if (!hasChanges) {
     // No changes to commit - apply if-no-changes configuration
-    const message = "No changes to commit - noop operation completed successfully";
+    const message =
+      "No changes to commit - noop operation completed successfully";
 
     switch (ifNoChanges) {
       case "error":
-        throw new Error("No changes to commit - failing as configured by if-no-changes: error");
+        throw new Error(
+          "No changes to commit - failing as configured by if-no-changes: error"
+        );
       case "ignore":
         // Silent success - no console output
         return;
@@ -252,7 +260,9 @@ async function main() {
   }
 
   if (hasChanges) {
-    execSync(`git commit -m "Add agent output: ${title}"`, { stdio: "inherit" });
+    execSync(`git commit -m "Add agent output: ${title}"`, {
+      stdio: "inherit",
+    });
     execSync(`git push origin ${branchName}`, { stdio: "inherit" });
     console.log("Changes committed and pushed");
   } else {

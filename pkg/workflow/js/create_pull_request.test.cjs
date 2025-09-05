@@ -153,7 +153,7 @@ describe("create_pull_request.cjs", () => {
     });
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -254,7 +254,7 @@ describe("create_pull_request.cjs", () => {
       "enhancement, automated, needs-review";
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -302,7 +302,7 @@ describe("create_pull_request.cjs", () => {
     mockDependencies.process.env.GITHUB_AW_PR_DRAFT = "false";
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -343,7 +343,7 @@ describe("create_pull_request.cjs", () => {
     });
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -393,7 +393,7 @@ describe("create_pull_request.cjs", () => {
     mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = "[BOT] ";
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -435,7 +435,7 @@ describe("create_pull_request.cjs", () => {
     mockDependencies.process.env.GITHUB_AW_PR_TITLE_PREFIX = "[BOT] ";
 
     // Mock execSync to simulate git behavior with changes
-    mockDependencies.execSync.mockImplementation((command) => {
+    mockDependencies.execSync.mockImplementation(command => {
       if (command === "git diff --cached --exit-code") {
         // Throw to indicate changes are present (non-zero exit code)
         const error = new Error("Changes exist");
@@ -558,7 +558,9 @@ describe("create_pull_request.cjs", () => {
     });
 
     it("should handle patch with error message with warn behavior", async () => {
-      mockDependencies.fs.readFileSync.mockReturnValue("Failed to generate patch: some error");
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "Failed to generate patch: some error"
+      );
       mockDependencies.process.env.GITHUB_AW_PR_IF_NO_CHANGES = "warn";
 
       const mainFunction = createMainFunction(mockDependencies);
@@ -573,8 +575,10 @@ describe("create_pull_request.cjs", () => {
 
     it("should handle no changes to commit with warn behavior", async () => {
       // Mock valid patch content but no changes after git add
-      mockDependencies.fs.readFileSync.mockReturnValue("diff --git a/file.txt b/file.txt\n+content");
-      mockDependencies.execSync.mockImplementation((command) => {
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "diff --git a/file.txt b/file.txt\n+content"
+      );
+      mockDependencies.execSync.mockImplementation(command => {
         if (command === "git diff --cached --exit-code") {
           // Return with exit code 0 (no changes)
           return "";
@@ -597,8 +601,10 @@ describe("create_pull_request.cjs", () => {
 
     it("should handle no changes to commit with error behavior", async () => {
       // Mock valid patch content but no changes after git add
-      mockDependencies.fs.readFileSync.mockReturnValue("diff --git a/file.txt b/file.txt\n+content");
-      mockDependencies.execSync.mockImplementation((command) => {
+      mockDependencies.fs.readFileSync.mockReturnValue(
+        "diff --git a/file.txt b/file.txt\n+content"
+      );
+      mockDependencies.execSync.mockImplementation(command => {
         if (command === "git diff --cached --exit-code") {
           // Return with exit code 0 (no changes) - don't throw an error
           return "";
