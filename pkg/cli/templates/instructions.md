@@ -61,15 +61,70 @@ The YAML frontmatter supports these fields:
 ### Agentic Workflow Specific Fields
 
 - **`engine:`** - AI processor configuration
-  - String format: `"claude"` (default), `"codex"`
+  - String format: `"claude"` (default), `"codex"`, `"custom"` (⚠️ experimental)
   - Object format for extended configuration:
     ```yaml
     engine:
-      id: claude                        # Required: coding agent identifier (claude, codex)
+      id: claude                        # Required: coding agent identifier (claude, codex, custom)
       version: beta                     # Optional: version of the action
       model: claude-3-5-sonnet-20241022 # Optional: LLM model to use
       max-turns: 5                      # Optional: maximum chat iterations per run
     ```
+  - **Custom engine format** (⚠️ experimental):
+    ```yaml
+    engine:
+      id: custom                        # Required: custom engine identifier
+      max-turns: 10                     # Optional: maximum iterations (for consistency)
+      steps:                            # Required: array of custom GitHub Actions steps
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: "18"
+        - name: Run tests
+          run: npm test
+    ```
+    The `custom` engine allows you to define your own GitHub Actions steps instead of using an AI processor. Each step in the `steps` array follows standard GitHub Actions step syntax with `name`, `uses`/`run`, `with`, `env`, etc. This is useful for deterministic workflows that don't require AI processing.
+
+    **Writing Safe Output Entries Manually (Custom Engines):**
+    
+    Custom engines can write safe output entries by appending JSON objects to the `$GITHUB_AW_SAFE_OUTPUTS` environment variable (a JSONL file). Each line should contain a complete JSON object with a `type` field and the relevant data for that output type.
+    
+    ```bash
+    # Create an issue
+    echo '{"type": "create-issue", "title": "Issue Title", "body": "Issue description", "labels": ["label1", "label2"]}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Add a comment to an issue/PR
+    echo '{"type": "add-issue-comment", "body": "Comment text"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Add labels to an issue/PR
+    echo '{"type": "add-issue-label", "labels": ["bug", "enhancement"]}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Update an issue
+    echo '{"type": "update-issue", "title": "New title", "body": "New body", "status": "closed"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Create a pull request (after making file changes)
+    echo '{"type": "create-pull-request", "title": "PR Title", "body": "PR description", "labels": ["automation"], "draft": true}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Create a PR review comment
+    echo '{"type": "create-pull-request-review-comment", "path": "file.js", "line": 10, "body": "Review comment"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Push to branch (after making file changes)
+    echo '{"type": "push-to-branch", "message": "Commit message"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Create a discussion
+    echo '{"type": "create-discussion", "title": "Discussion Title", "body": "Discussion content"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    
+    # Report missing tools
+    echo '{"type": "missing-tool", "tool": "tool-name", "reason": "Why it is needed", "alternatives": "Possible alternatives"}' >> $GITHUB_AW_SAFE_OUTPUTS
+    ```
+    
+    **Important Notes for Manual Safe Output Writing:**
+    - Each JSON object must be on a single line (JSONL format)
+    - All string values should be properly escaped JSON strings
+    - The `type` field is required and must match the configured safe output types
+    - File changes for `create-pull-request` and `push-to-branch` are collected automatically via `git add -A`
+    - Output entries are processed only if the corresponding safe output type is configured in the workflow frontmatter
+    - Invalid JSON entries are ignored with warnings in the workflow logs
 
 - **`network:`** - Network access control for Claude Code engine (top-level field)
   - String format: `"defaults"` (curated allow-list of development domains)  
@@ -799,7 +854,7 @@ The workflow frontmatter is validated against JSON Schema during compilation. Co
 
 - **Invalid field names** - Only fields in the schema are allowed
 - **Wrong field types** - e.g., `timeout_minutes` must be integer
-- **Invalid enum values** - e.g., `engine` must be "claude" or "codex"
+- **Invalid enum values** - e.g., `engine` must be "claude", "codex", or "custom"
 - **Missing required fields** - Some triggers require specific configuration
 
 Use `gh aw compile --verbose` to see detailed validation messages, or `gh aw compile <workflow-id> --verbose` to validate a specific workflow.
