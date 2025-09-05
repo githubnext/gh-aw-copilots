@@ -25,68 +25,28 @@ This is a test workflow that should automatically get Git commands when create-p
 `
 
 	compiler := NewCompiler(false, "", "test")
-	engine := NewClaudeEngine()
 
-	// Parse the workflow content and compile it
-	result, err := compiler.parseWorkflowMarkdownContent(workflowContent)
+	// Parse the workflow content and get both result and allowed tools string
+	_, allowedToolsStr, err := compiler.parseWorkflowMarkdownContentWithToolsString(workflowContent)
 	if err != nil {
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Check that Git commands were automatically added to the tools
-	claudeSection, hasClaudeSection := result.Tools["claude"]
-	if !hasClaudeSection {
-		t.Fatal("Expected claude section to be present")
-	}
+	// Verify that Git commands are present in the allowed tools string
+	expectedGitCommands := []string{"Bash(git checkout:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(git branch:*)", "Bash(git switch:*)", "Bash(git rm:*)", "Bash(git merge:*)"}
 
-	claudeConfig, ok := claudeSection.(map[string]any)
-	if !ok {
-		t.Fatal("Expected claude section to be a map")
-	}
-
-	allowed, hasAllowed := claudeConfig["allowed"]
-	if !hasAllowed {
-		t.Fatal("Expected claude section to have allowed tools")
-	}
-
-	allowedMap, ok := allowed.(map[string]any)
-	if !ok {
-		t.Fatal("Expected allowed to be a map")
-	}
-
-	bashTool, hasBash := allowedMap["Bash"]
-	if !hasBash {
-		t.Fatal("Expected Bash tool to be present when create-pull-request is enabled")
-	}
-
-	// Verify that Git commands are present
-	bashCommands, ok := bashTool.([]any)
-	if !ok {
-		t.Fatal("Expected Bash tool to have command list")
-	}
-
-	gitCommandsFound := 0
-	expectedGitCommands := []string{"git checkout:*", "git add:*", "git commit:*", "git branch:*", "git switch:*", "git rm:*", "git merge:*"}
-
-	for _, cmd := range bashCommands {
-		if cmdStr, ok := cmd.(string); ok {
-			for _, expectedCmd := range expectedGitCommands {
-				if cmdStr == expectedCmd {
-					gitCommandsFound++
-					break
-				}
-			}
+	for _, expectedCmd := range expectedGitCommands {
+		if !strings.Contains(allowedToolsStr, expectedCmd) {
+			t.Errorf("Expected allowed tools to contain %s, got: %s", expectedCmd, allowedToolsStr)
 		}
 	}
 
-	if gitCommandsFound != len(expectedGitCommands) {
-		t.Errorf("Expected %d Git commands, found %d. Commands: %v", len(expectedGitCommands), gitCommandsFound, bashCommands)
+	// Verify that the basic tools are also present
+	if !strings.Contains(allowedToolsStr, "Read") {
+		t.Errorf("Expected allowed tools to contain Read tool, got: %s", allowedToolsStr)
 	}
-
-	// Verify allowed tools include the Git commands
-	allowedToolsStr := engine.computeAllowedClaudeToolsString(result.Tools, result.SafeOutputs)
-	if !strings.Contains(allowedToolsStr, "Bash(git checkout:*)") {
-		t.Errorf("Expected allowed tools to contain Git commands, got: %s", allowedToolsStr)
+	if !strings.Contains(allowedToolsStr, "Write") {
+		t.Errorf("Expected allowed tools to contain Write tool, got: %s", allowedToolsStr)
 	}
 }
 
@@ -108,45 +68,27 @@ This workflow should NOT get Git commands since it doesn't use create-pull-reque
 `
 
 	compiler := NewCompiler(false, "", "test")
-	engine := NewClaudeEngine()
 
-	// Parse the workflow content
-	result, err := compiler.parseWorkflowMarkdownContent(workflowContent)
+	// Parse the workflow content and get allowed tools string
+	_, allowedToolsStr, err := compiler.parseWorkflowMarkdownContentWithToolsString(workflowContent)
 	if err != nil {
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Check that Git commands were NOT automatically added
-	claudeSection, hasClaudeSection := result.Tools["claude"]
-	if !hasClaudeSection {
-		t.Fatal("Expected claude section to be present")
-	}
-
-	claudeConfig, ok := claudeSection.(map[string]any)
-	if !ok {
-		t.Fatal("Expected claude section to be a map")
-	}
-
-	allowed, hasAllowed := claudeConfig["allowed"]
-	if !hasAllowed {
-		t.Fatal("Expected claude section to have allowed tools")
-	}
-
-	allowedMap, ok := allowed.(map[string]any)
-	if !ok {
-		t.Fatal("Expected allowed to be a map")
-	}
-
-	// Bash tool should NOT be present since no Git commands were needed
-	_, hasBash := allowedMap["Bash"]
-	if hasBash {
-		t.Error("Did not expect Bash tool to be present when only create-issue is enabled")
-	}
-
 	// Verify allowed tools do not include Git commands
-	allowedToolsStr := engine.computeAllowedClaudeToolsString(result.Tools, result.SafeOutputs)
-	if strings.Contains(allowedToolsStr, "Bash(git") {
-		t.Errorf("Did not expect allowed tools to contain Git commands, got: %s", allowedToolsStr)
+	gitCommands := []string{"Bash(git checkout:*)", "Bash(git add:*)", "Bash(git commit:*)", "Bash(git branch:*)", "Bash(git switch:*)", "Bash(git rm:*)", "Bash(git merge:*)"}
+	for _, gitCmd := range gitCommands {
+		if strings.Contains(allowedToolsStr, gitCmd) {
+			t.Errorf("Did not expect allowed tools to contain Git command %s, got: %s", gitCmd, allowedToolsStr)
+		}
+	}
+
+	// Verify basic tools are still present
+	if !strings.Contains(allowedToolsStr, "Read") {
+		t.Errorf("Expected allowed tools to contain Read tool, got: %s", allowedToolsStr)
+	}
+	if !strings.Contains(allowedToolsStr, "Write") {
+		t.Errorf("Expected allowed tools to contain Write tool, got: %s", allowedToolsStr)
 	}
 }
 
@@ -168,56 +110,34 @@ This is a test workflow that should automatically get additional Claude tools wh
 `
 
 	compiler := NewCompiler(false, "", "test")
-	engine := NewClaudeEngine()
 
-	// Parse the workflow content and compile it
-	result, err := compiler.parseWorkflowMarkdownContent(workflowContent)
+	// Parse the workflow content and get allowed tools string
+	_, allowedToolsStr, err := compiler.parseWorkflowMarkdownContentWithToolsString(workflowContent)
 	if err != nil {
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Check that additional Claude tools were automatically added
-	claudeSection, hasClaudeSection := result.Tools["claude"]
-	if !hasClaudeSection {
-		t.Fatal("Expected claude section to be present")
-	}
-
-	claudeConfig, ok := claudeSection.(map[string]any)
-	if !ok {
-		t.Fatal("Expected claude section to be a map")
-	}
-
-	allowed, hasAllowed := claudeConfig["allowed"]
-	if !hasAllowed {
-		t.Fatal("Expected claude section to have allowed tools")
-	}
-
-	allowedMap, ok := allowed.(map[string]any)
-	if !ok {
-		t.Fatal("Expected allowed to be a map")
-	}
-
-	// Verify that additional Claude tools are present
+	// Verify that additional Claude tools are present in the allowed tools string
 	expectedAdditionalTools := []string{"Edit", "MultiEdit", "Write", "NotebookEdit"}
 	for _, expectedTool := range expectedAdditionalTools {
-		if _, exists := allowedMap[expectedTool]; !exists {
-			t.Errorf("Expected additional Claude tool %s to be present", expectedTool)
+		if !strings.Contains(allowedToolsStr, expectedTool) {
+			t.Errorf("Expected allowed tools to contain %s, got: %s", expectedTool, allowedToolsStr)
 		}
 	}
 
 	// Verify that pre-existing tools are still there
-	if _, exists := allowedMap["Read"]; !exists {
+	if !strings.Contains(allowedToolsStr, "Read") {
 		t.Error("Expected pre-existing Read tool to be preserved")
 	}
-	if _, exists := allowedMap["Task"]; !exists {
+	if !strings.Contains(allowedToolsStr, "Task") {
 		t.Error("Expected pre-existing Task tool to be preserved")
 	}
 
-	// Verify allowed tools include the additional Claude tools
-	allowedToolsStr := engine.computeAllowedClaudeToolsString(result.Tools, result.SafeOutputs)
-	for _, expectedTool := range expectedAdditionalTools {
-		if !strings.Contains(allowedToolsStr, expectedTool) {
-			t.Errorf("Expected allowed tools to contain %s, got: %s", expectedTool, allowedToolsStr)
+	// Verify Git commands are also present (since create-pull-request is enabled)
+	expectedGitCommands := []string{"Bash(git checkout:*)", "Bash(git add:*)", "Bash(git commit:*)"}
+	for _, expectedCmd := range expectedGitCommands {
+		if !strings.Contains(allowedToolsStr, expectedCmd) {
+			t.Errorf("Expected allowed tools to contain %s, got: %s", expectedCmd, allowedToolsStr)
 		}
 	}
 }
@@ -240,38 +160,30 @@ This is a test workflow that should automatically get additional Claude tools wh
 
 	compiler := NewCompiler(false, "", "test")
 
-	// Parse the workflow content and compile it
-	result, err := compiler.parseWorkflowMarkdownContent(workflowContent)
+	// Parse the workflow content and get allowed tools string
+	_, allowedToolsStr, err := compiler.parseWorkflowMarkdownContentWithToolsString(workflowContent)
 	if err != nil {
 		t.Fatalf("Failed to parse workflow: %v", err)
 	}
 
-	// Check that additional Claude tools were automatically added
-	claudeSection, hasClaudeSection := result.Tools["claude"]
-	if !hasClaudeSection {
-		t.Fatal("Expected claude section to be present")
-	}
-
-	claudeConfig, ok := claudeSection.(map[string]any)
-	if !ok {
-		t.Fatal("Expected claude section to be a map")
-	}
-
-	allowed, hasAllowed := claudeConfig["allowed"]
-	if !hasAllowed {
-		t.Fatal("Expected claude section to have allowed tools")
-	}
-
-	allowedMap, ok := allowed.(map[string]any)
-	if !ok {
-		t.Fatal("Expected allowed to be a map")
-	}
-
-	// Verify that additional Claude tools are present
+	// Verify that additional Claude tools are present in the allowed tools string
 	expectedAdditionalTools := []string{"Edit", "MultiEdit", "Write", "NotebookEdit"}
 	for _, expectedTool := range expectedAdditionalTools {
-		if _, exists := allowedMap[expectedTool]; !exists {
-			t.Errorf("Expected additional Claude tool %s to be present", expectedTool)
+		if !strings.Contains(allowedToolsStr, expectedTool) {
+			t.Errorf("Expected additional Claude tool %s to be present, got: %s", expectedTool, allowedToolsStr)
+		}
+	}
+
+	// Verify that pre-existing tools are still there
+	if !strings.Contains(allowedToolsStr, "Read") {
+		t.Error("Expected pre-existing Read tool to be preserved")
+	}
+
+	// Verify Git commands are also present (since push-to-branch is enabled)
+	expectedGitCommands := []string{"Bash(git checkout:*)", "Bash(git add:*)", "Bash(git commit:*)"}
+	for _, expectedCmd := range expectedGitCommands {
+		if !strings.Contains(allowedToolsStr, expectedCmd) {
+			t.Errorf("Expected allowed tools to contain %s when push-to-branch is enabled, got: %s", expectedCmd, allowedToolsStr)
 		}
 	}
 }
@@ -302,4 +214,35 @@ func (c *Compiler) parseWorkflowMarkdownContent(content string) (*WorkflowData, 
 	}
 
 	return workflowData, nil
+}
+
+// Helper function to parse workflow content and return both WorkflowData and allowed tools string
+func (c *Compiler) parseWorkflowMarkdownContentWithToolsString(content string) (*WorkflowData, string, error) {
+	// This would normally be in parseWorkflowFile, but we'll extract the core logic for testing
+	result, err := parser.ExtractFrontmatterFromContent(content)
+	if err != nil {
+		return nil, "", err
+	}
+	engine := NewClaudeEngine()
+
+	// Extract SafeOutputs early
+	safeOutputs := c.extractSafeOutputsConfig(result.Frontmatter)
+
+	// Extract and process tools
+	topTools := extractToolsFromFrontmatter(result.Frontmatter)
+	topTools = c.applyDefaultGitHubMCPTools(topTools)
+	tools := engine.applyDefaultClaudeTools(topTools, safeOutputs)
+
+	// Build basic workflow data for testing
+	workflowData := &WorkflowData{
+		Name:        "Test Workflow",
+		Tools:       tools,
+		SafeOutputs: safeOutputs,
+		AI:          "claude",
+	}
+
+	// Compute allowed tools string
+	allowedToolsStr := engine.computeAllowedClaudeToolsString(tools, safeOutputs)
+
+	return workflowData, allowedToolsStr, nil
 }
