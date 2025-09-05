@@ -180,26 +180,23 @@ func (e *ClaudeEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 		}
 	}
 
-	// Add environment section if needed
-	hasEnvSection := workflowData.SafeOutputs != nil ||
-		(workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0) ||
-		(workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "")
+	// Add environment section - always include environment section for GITHUB_AW_PROMPT
+	stepLines = append(stepLines, "        env:")
 
-	if hasEnvSection {
-		stepLines = append(stepLines, "        env:")
+	// Always add GITHUB_AW_PROMPT for agentic workflows
+	stepLines = append(stepLines, "          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt")
 
-		if workflowData.SafeOutputs != nil {
-			stepLines = append(stepLines, "          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}")
-		}
+	if workflowData.SafeOutputs != nil {
+		stepLines = append(stepLines, "          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}")
+	}
 
-		if workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "" {
-			stepLines = append(stepLines, fmt.Sprintf("          GITHUB_AW_MAX_TURNS: %s", workflowData.EngineConfig.MaxTurns))
-		}
+	if workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "" {
+		stepLines = append(stepLines, fmt.Sprintf("          GITHUB_AW_MAX_TURNS: %s", workflowData.EngineConfig.MaxTurns))
+	}
 
-		if workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0 {
-			for key, value := range workflowData.EngineConfig.Env {
-				stepLines = append(stepLines, fmt.Sprintf("          %s: %s", key, value))
-			}
+	if workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0 {
+		for key, value := range workflowData.EngineConfig.Env {
+			stepLines = append(stepLines, fmt.Sprintf("          %s: %s", key, value))
 		}
 	}
 

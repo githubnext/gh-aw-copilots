@@ -84,6 +84,7 @@ codex exec \
 	env := map[string]string{
 		"OPENAI_API_KEY":      "${{ secrets.OPENAI_API_KEY }}",
 		"GITHUB_STEP_SUMMARY": "${{ env.GITHUB_STEP_SUMMARY }}",
+		"GITHUB_AW_PROMPT":    "/tmp/aw-prompts/prompt.txt",
 	}
 
 	// Add GITHUB_AW_SAFE_OUTPUTS if output is needed
@@ -145,6 +146,31 @@ func (e *CodexEngine) convertStepToYAML(stepMap map[string]any) (string, error) 
 		}
 	}
 
+	// Add id field if present
+	if id, hasID := stepMap["id"]; hasID {
+		if idStr, ok := id.(string); ok {
+			stepYAML = append(stepYAML, fmt.Sprintf("        id: %s", idStr))
+		}
+	}
+
+	// Add continue-on-error field if present
+	if continueOnError, hasContinueOnError := stepMap["continue-on-error"]; hasContinueOnError {
+		// Handle both string and boolean values for continue-on-error
+		switch v := continueOnError.(type) {
+		case bool:
+			stepYAML = append(stepYAML, fmt.Sprintf("        continue-on-error: %t", v))
+		case string:
+			stepYAML = append(stepYAML, fmt.Sprintf("        continue-on-error: %s", v))
+		}
+	}
+
+	// Add uses action
+	if uses, hasUses := stepMap["uses"]; hasUses {
+		if usesStr, ok := uses.(string); ok {
+			stepYAML = append(stepYAML, fmt.Sprintf("        uses: %s", usesStr))
+		}
+	}
+
 	// Add run command
 	if run, hasRun := stepMap["run"]; hasRun {
 		if runStr, ok := run.(string); ok {
@@ -154,13 +180,6 @@ func (e *CodexEngine) convertStepToYAML(stepMap map[string]any) (string, error) 
 			for _, line := range runLines {
 				stepYAML = append(stepYAML, "          "+line)
 			}
-		}
-	}
-
-	// Add uses action
-	if uses, hasUses := stepMap["uses"]; hasUses {
-		if usesStr, ok := uses.(string); ok {
-			stepYAML = append(stepYAML, fmt.Sprintf("        uses: %s", usesStr))
 		}
 	}
 
