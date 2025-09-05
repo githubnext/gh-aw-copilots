@@ -1313,6 +1313,7 @@ jobs:
           GITHUB_AW_PR_TITLE_PREFIX: "[codex-test] "
           GITHUB_AW_PR_LABELS: "codex,automation,bot"
           GITHUB_AW_PR_DRAFT: "true"
+          GITHUB_AW_PR_IF_NO_CHANGES: "warn"
         with:
           script: |
             /** @type {typeof import("fs")} */
@@ -1334,24 +1335,65 @@ jobs:
               if (outputContent.trim() === "") {
                 console.log("Agent output content is empty");
               }
+              const ifNoChanges = process.env.GITHUB_AW_PR_IF_NO_CHANGES || "warn";
               // Check if patch file exists and has valid content
               if (!fs.existsSync("/tmp/aw.patch")) {
-                throw new Error(
-                  "No patch file found - cannot create pull request without changes"
-                );
+                const message =
+                  "No patch file found - cannot create pull request without changes";
+                switch (ifNoChanges) {
+                  case "error":
+                    throw new Error(message);
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
               }
               const patchContent = fs.readFileSync("/tmp/aw.patch", "utf8");
-              if (
-                !patchContent ||
-                !patchContent.trim() ||
-                patchContent.includes("Failed to generate patch")
-              ) {
-                throw new Error(
-                  "Patch file is empty or contains error message - cannot create pull request without changes"
-                );
+              // Check for actual error conditions (but allow empty patches as valid noop)
+              if (patchContent.includes("Failed to generate patch")) {
+                const message =
+                  "Patch file contains error message - cannot create pull request without changes";
+                switch (ifNoChanges) {
+                  case "error":
+                    throw new Error(message);
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
+              }
+              // Empty patch is valid - behavior depends on if-no-changes configuration
+              const isEmpty = !patchContent || !patchContent.trim();
+              if (isEmpty) {
+                const message =
+                  "Patch file is empty - no changes to apply (noop operation)";
+                switch (ifNoChanges) {
+                  case "error":
+                    throw new Error(
+                      "No changes to push - failing as configured by if-no-changes: error"
+                    );
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
               }
               console.log("Agent output content length:", outputContent.length);
-              console.log("Patch content validation passed");
+              if (!isEmpty) {
+                console.log("Patch content validation passed");
+              } else {
+                console.log("Patch file is empty - processing noop operation");
+              }
               // Parse the validated output JSON
               let validatedOutput;
               try {
@@ -1460,16 +1502,56 @@ jobs:
                 execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
                 console.log("Created and checked out new branch:", branchName);
               }
-              // Apply the patch using git CLI
-              console.log("Applying patch...");
-              // Apply the patch using git apply
-              execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
-              console.log("Patch applied successfully");
+              // Apply the patch using git CLI (skip if empty)
+              if (!isEmpty) {
+                console.log("Applying patch...");
+                execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
+                console.log("Patch applied successfully");
+              } else {
+                console.log("Skipping patch application (empty patch)");
+              }
               // Commit and push the changes
               execSync("git add .", { stdio: "inherit" });
-              execSync(`git commit -m "Add agent output: ${title}"`, { stdio: "inherit" });
-              execSync(`git push origin ${branchName}`, { stdio: "inherit" });
-              console.log("Changes committed and pushed");
+              // Check if there are changes to commit
+              let hasChanges = false;
+              let gitError = null;
+              try {
+                execSync("git diff --cached --exit-code", { stdio: "ignore" });
+                // No changes - exit code 0
+                hasChanges = false;
+              } catch (error) {
+                // Exit code != 0 means there are changes to commit, which is what we want
+                hasChanges = true;
+              }
+              if (!hasChanges) {
+                // No changes to commit - apply if-no-changes configuration
+                const message =
+                  "No changes to commit - noop operation completed successfully";
+                switch (ifNoChanges) {
+                  case "error":
+                    throw new Error(
+                      "No changes to commit - failing as configured by if-no-changes: error"
+                    );
+                  case "ignore":
+                    // Silent success - no console output
+                    return;
+                  case "warn":
+                  default:
+                    console.log(message);
+                    return;
+                }
+              }
+              if (hasChanges) {
+                execSync(`git commit -m "Add agent output: ${title}"`, {
+                  stdio: "inherit",
+                });
+                execSync(`git push origin ${branchName}`, { stdio: "inherit" });
+                console.log("Changes committed and pushed");
+              } else {
+                // This should not happen due to the early return above, but keeping for safety
+                console.log("No changes to commit");
+                return;
+              }
               // Create the pull request
               const { data: pullRequest } = await github.rest.pulls.create({
                 owner: context.repo.owner,

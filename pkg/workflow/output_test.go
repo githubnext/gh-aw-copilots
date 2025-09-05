@@ -1696,3 +1696,109 @@ This workflow tests that missing allowed field is now optional.
 		t.Fatal("Expected lock file to be created")
 	}
 }
+
+func TestCreatePullRequestIfNoChangesConfig(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "create-pr-if-no-changes-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Test case with create-pull-request if-no-changes configuration
+	testContent := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+engine: claude
+safe-outputs:
+  create-pull-request:
+    title-prefix: "[agent] "
+    labels: [automation]
+    if-no-changes: "error"
+---
+
+# Test Create Pull Request If-No-Changes Configuration
+
+This workflow tests the create-pull-request if-no-changes configuration parsing.
+`
+
+	testFile := filepath.Join(tmpDir, "test-create-pr-if-no-changes.md")
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	compiler := NewCompiler(false, "", "test")
+
+	// Parse the workflow data
+	workflowData, err := compiler.parseWorkflowFile(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with create-pull-request if-no-changes config: %v", err)
+	}
+
+	// Verify create-pull-request configuration is parsed correctly
+	if workflowData.SafeOutputs == nil {
+		t.Fatal("Expected safe-outputs configuration to be present")
+	}
+
+	if workflowData.SafeOutputs.CreatePullRequests == nil {
+		t.Fatal("Expected create-pull-request configuration to be parsed")
+	}
+
+	if workflowData.SafeOutputs.CreatePullRequests.IfNoChanges != "error" {
+		t.Errorf("Expected if-no-changes to be 'error', got '%s'", workflowData.SafeOutputs.CreatePullRequests.IfNoChanges)
+	}
+
+	// Test with default value
+	testContentDefault := `---
+on: push
+permissions:
+  contents: read
+  pull-requests: write
+engine: claude
+safe-outputs:
+  create-pull-request:
+    title-prefix: "[agent] "
+---
+
+# Test Create Pull Request Default If-No-Changes
+
+This workflow tests the default if-no-changes behavior.
+`
+
+	testFileDefault := filepath.Join(tmpDir, "test-create-pr-if-no-changes-default.md")
+	if err := os.WriteFile(testFileDefault, []byte(testContentDefault), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the workflow data for default case
+	workflowDataDefault, err := compiler.parseWorkflowFile(testFileDefault)
+	if err != nil {
+		t.Fatalf("Unexpected error parsing workflow with default if-no-changes config: %v", err)
+	}
+
+	// Verify default if-no-changes is empty (will default to "warn" at runtime)
+	if workflowDataDefault.SafeOutputs.CreatePullRequests.IfNoChanges != "" {
+		t.Errorf("Expected default if-no-changes to be empty, got '%s'", workflowDataDefault.SafeOutputs.CreatePullRequests.IfNoChanges)
+	}
+
+	// Test compilation with the if-no-changes configuration
+	err = compiler.CompileWorkflow(testFile)
+	if err != nil {
+		t.Fatalf("Unexpected error compiling workflow with if-no-changes config: %v", err)
+	}
+
+	// Read the generated lock file
+	lockFile := strings.TrimSuffix(testFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated lock file: %v", err)
+	}
+
+	// Verify the if-no-changes configuration is passed to the environment
+	lockContentStr := string(lockContent)
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PR_IF_NO_CHANGES: \"error\"") {
+		t.Error("Expected GITHUB_AW_PR_IF_NO_CHANGES environment variable to be set in generated workflow")
+	}
+}
