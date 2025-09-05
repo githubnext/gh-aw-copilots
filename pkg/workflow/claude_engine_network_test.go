@@ -9,28 +9,31 @@ func TestClaudeEngineNetworkPermissions(t *testing.T) {
 	engine := NewClaudeEngine()
 
 	t.Run("InstallationSteps without network permissions", func(t *testing.T) {
-		config := &EngineConfig{
-			ID:    "claude",
-			Model: "claude-3-5-sonnet-20241022",
+		workflowData := &WorkflowData{
+			EngineConfig: &EngineConfig{
+				ID:    "claude",
+				Model: "claude-3-5-sonnet-20241022",
+			},
 		}
 
-		steps := engine.GetInstallationSteps(config, nil)
+		steps := engine.GetInstallationSteps(workflowData)
 		if len(steps) != 0 {
 			t.Errorf("Expected 0 installation steps without network permissions, got %d", len(steps))
 		}
 	})
 
 	t.Run("InstallationSteps with network permissions", func(t *testing.T) {
-		config := &EngineConfig{
-			ID:    "claude",
-			Model: "claude-3-5-sonnet-20241022",
+		workflowData := &WorkflowData{
+			EngineConfig: &EngineConfig{
+				ID:    "claude",
+				Model: "claude-3-5-sonnet-20241022",
+			},
+			NetworkPermissions: &NetworkPermissions{
+				Allowed: []string{"example.com", "*.trusted.com"},
+			},
 		}
 
-		networkPermissions := &NetworkPermissions{
-			Allowed: []string{"example.com", "*.trusted.com"},
-		}
-
-		steps := engine.GetInstallationSteps(config, networkPermissions)
+		steps := engine.GetInstallationSteps(workflowData)
 		if len(steps) != 2 {
 			t.Errorf("Expected 2 installation steps with network permissions, got %d", len(steps))
 		}
@@ -61,51 +64,66 @@ func TestClaudeEngineNetworkPermissions(t *testing.T) {
 
 	})
 
-	t.Run("ExecutionConfig without network permissions", func(t *testing.T) {
-		config := &EngineConfig{
-			ID:    "claude",
-			Model: "claude-3-5-sonnet-20241022",
+	t.Run("ExecutionSteps without network permissions", func(t *testing.T) {
+		workflowData := &WorkflowData{
+			Name: "test-workflow",
+			EngineConfig: &EngineConfig{
+				ID:    "claude",
+				Model: "claude-3-5-sonnet-20241022",
+			},
 		}
 
-		execConfig := engine.GetExecutionConfig("test-workflow", "test-log", config, nil, false)
+		steps := engine.GetExecutionSteps(workflowData, "test-log")
+		if len(steps) == 0 {
+			t.Fatal("Expected at least one execution step")
+		}
+
+		// Convert steps to string for analysis
+		stepYAML := strings.Join(steps[0], "\n")
 
 		// Verify settings parameter is not present
-		if settings, exists := execConfig.Inputs["settings"]; exists {
-			t.Errorf("Settings parameter should not be present without network permissions, got '%s'", settings)
+		if strings.Contains(stepYAML, "settings:") {
+			t.Error("Settings parameter should not be present without network permissions")
 		}
 
-		// Verify other inputs are still correct
-		if execConfig.Inputs["model"] != "claude-3-5-sonnet-20241022" {
-			t.Errorf("Expected model 'claude-3-5-sonnet-20241022', got '%s'", execConfig.Inputs["model"])
+		// Verify model parameter is present
+		if !strings.Contains(stepYAML, "model: claude-3-5-sonnet-20241022") {
+			t.Error("Expected model 'claude-3-5-sonnet-20241022' in step YAML")
 		}
 	})
 
-	t.Run("ExecutionConfig with network permissions", func(t *testing.T) {
-		config := &EngineConfig{
-			ID:    "claude",
-			Model: "claude-3-5-sonnet-20241022",
+	t.Run("ExecutionSteps with network permissions", func(t *testing.T) {
+		workflowData := &WorkflowData{
+			Name: "test-workflow",
+			EngineConfig: &EngineConfig{
+				ID:    "claude",
+				Model: "claude-3-5-sonnet-20241022",
+			},
+			NetworkPermissions: &NetworkPermissions{
+				Allowed: []string{"example.com"},
+			},
 		}
 
-		networkPermissions := &NetworkPermissions{
-			Allowed: []string{"example.com"},
+		steps := engine.GetExecutionSteps(workflowData, "test-log")
+		if len(steps) == 0 {
+			t.Fatal("Expected at least one execution step")
 		}
 
-		execConfig := engine.GetExecutionConfig("test-workflow", "test-log", config, networkPermissions, false)
+		// Convert steps to string for analysis
+		stepYAML := strings.Join(steps[0], "\n")
 
 		// Verify settings parameter is present
-		if settings, exists := execConfig.Inputs["settings"]; !exists {
+		if !strings.Contains(stepYAML, "settings: .claude/settings.json") {
 			t.Error("Settings parameter should be present with network permissions")
-		} else if settings != ".claude/settings.json" {
-			t.Errorf("Expected settings parameter '.claude/settings.json', got '%s'", settings)
 		}
 
-		// Verify other inputs are still correct
-		if execConfig.Inputs["model"] != "claude-3-5-sonnet-20241022" {
-			t.Errorf("Expected model 'claude-3-5-sonnet-20241022', got '%s'", execConfig.Inputs["model"])
+		// Verify model parameter is present
+		if !strings.Contains(stepYAML, "model: claude-3-5-sonnet-20241022") {
+			t.Error("Expected model 'claude-3-5-sonnet-20241022' in step YAML")
 		}
 	})
 
-	t.Run("ExecutionConfig with empty allowed domains (deny all)", func(t *testing.T) {
+	t.Run("ExecutionSteps with empty allowed domains (deny all)", func(t *testing.T) {
 		config := &EngineConfig{
 			ID:    "claude",
 			Model: "claude-3-5-sonnet-20241022",
@@ -115,17 +133,21 @@ func TestClaudeEngineNetworkPermissions(t *testing.T) {
 			Allowed: []string{}, // Empty list means deny all
 		}
 
-		execConfig := engine.GetExecutionConfig("test-workflow", "test-log", config, networkPermissions, false)
+		steps := engine.GetExecutionSteps(&WorkflowData{Name: "test-workflow", EngineConfig: config, NetworkPermissions: networkPermissions}, "test-log")
+		if len(steps) == 0 {
+			t.Fatal("Expected at least one execution step")
+		}
+
+		// Convert steps to string for analysis
+		stepYAML := strings.Join(steps[0], "\n")
 
 		// Verify settings parameter is present even with deny-all policy
-		if settings, exists := execConfig.Inputs["settings"]; !exists {
+		if !strings.Contains(stepYAML, "settings: .claude/settings.json") {
 			t.Error("Settings parameter should be present with deny-all network permissions")
-		} else if settings != ".claude/settings.json" {
-			t.Errorf("Expected settings parameter '.claude/settings.json', got '%s'", settings)
 		}
 	})
 
-	t.Run("ExecutionConfig with non-Claude engine", func(t *testing.T) {
+	t.Run("ExecutionSteps with non-Claude engine", func(t *testing.T) {
 		config := &EngineConfig{
 			ID:    "codex", // Non-Claude engine
 			Model: "gpt-4",
@@ -135,11 +157,17 @@ func TestClaudeEngineNetworkPermissions(t *testing.T) {
 			Allowed: []string{"example.com"},
 		}
 
-		execConfig := engine.GetExecutionConfig("test-workflow", "test-log", config, networkPermissions, false)
+		steps := engine.GetExecutionSteps(&WorkflowData{Name: "test-workflow", EngineConfig: config, NetworkPermissions: networkPermissions}, "test-log")
+		if len(steps) == 0 {
+			t.Fatal("Expected at least one execution step")
+		}
+
+		// Convert steps to string for analysis
+		stepYAML := strings.Join(steps[0], "\n")
 
 		// Verify settings parameter is not present for non-Claude engines
-		if settings, exists := execConfig.Inputs["settings"]; exists {
-			t.Errorf("Settings parameter should not be present for non-Claude engine, got '%s'", settings)
+		if strings.Contains(stepYAML, "settings:") {
+			t.Error("Settings parameter should not be present for non-Claude engine")
 		}
 	})
 }
@@ -157,7 +185,7 @@ func TestNetworkPermissionsIntegration(t *testing.T) {
 		}
 
 		// Get installation steps
-		steps := engine.GetInstallationSteps(config, networkPermissions)
+		steps := engine.GetInstallationSteps(&WorkflowData{EngineConfig: config, NetworkPermissions: networkPermissions})
 		if len(steps) != 2 {
 			t.Fatalf("Expected 2 installation steps, got %d", len(steps))
 		}
@@ -171,14 +199,18 @@ func TestNetworkPermissionsIntegration(t *testing.T) {
 			}
 		}
 
-		// Get execution config
-		execConfig := engine.GetExecutionConfig("test-workflow", "test-log", config, networkPermissions, false)
+		// Get execution steps
+		execSteps := engine.GetExecutionSteps(&WorkflowData{Name: "test-workflow", EngineConfig: config, NetworkPermissions: networkPermissions}, "test-log")
+		if len(execSteps) == 0 {
+			t.Fatal("Expected at least one execution step")
+		}
+
+		// Convert steps to string for analysis
+		stepYAML := strings.Join(execSteps[0], "\n")
 
 		// Verify settings is configured
-		if settings, exists := execConfig.Inputs["settings"]; !exists {
+		if !strings.Contains(stepYAML, "settings: .claude/settings.json") {
 			t.Error("Settings parameter should be present")
-		} else if settings != ".claude/settings.json" {
-			t.Errorf("Expected settings parameter '.claude/settings.json', got '%s'", settings)
 		}
 
 		// Test the GetAllowedDomains function
@@ -208,18 +240,27 @@ func TestNetworkPermissionsIntegration(t *testing.T) {
 			Allowed: []string{"example.com"},
 		}
 
-		steps1 := engine1.GetInstallationSteps(config, networkPermissions)
-		steps2 := engine2.GetInstallationSteps(config, networkPermissions)
+		steps1 := engine1.GetInstallationSteps(&WorkflowData{EngineConfig: config, NetworkPermissions: networkPermissions})
+		steps2 := engine2.GetInstallationSteps(&WorkflowData{EngineConfig: config, NetworkPermissions: networkPermissions})
 
 		if len(steps1) != len(steps2) {
 			t.Errorf("Engine instances should produce same number of steps, got %d and %d", len(steps1), len(steps2))
 		}
 
-		execConfig1 := engine1.GetExecutionConfig("test", "log", config, networkPermissions, false)
-		execConfig2 := engine2.GetExecutionConfig("test", "log", config, networkPermissions, false)
+		execSteps1 := engine1.GetExecutionSteps(&WorkflowData{Name: "test", EngineConfig: config, NetworkPermissions: networkPermissions}, "log")
+		execSteps2 := engine2.GetExecutionSteps(&WorkflowData{Name: "test", EngineConfig: config, NetworkPermissions: networkPermissions}, "log")
 
-		if execConfig1.Action != execConfig2.Action {
-			t.Errorf("Engine instances should produce same action, got '%s' and '%s'", execConfig1.Action, execConfig2.Action)
+		if len(execSteps1) != len(execSteps2) {
+			t.Errorf("Engine instances should produce same number of execution steps, got %d and %d", len(execSteps1), len(execSteps2))
+		}
+
+		// Compare the first execution step if they exist
+		if len(execSteps1) > 0 && len(execSteps2) > 0 {
+			step1YAML := strings.Join(execSteps1[0], "\n")
+			step2YAML := strings.Join(execSteps2[0], "\n")
+			if step1YAML != step2YAML {
+				t.Error("Engine instances should produce identical execution steps")
+			}
 		}
 	})
 }

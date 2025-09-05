@@ -11,6 +11,7 @@ type EngineConfig struct {
 	Model    string
 	MaxTurns string
 	Env      map[string]string
+	Steps    []map[string]any
 }
 
 // NetworkPermissions represents network access permissions
@@ -81,6 +82,18 @@ func (c *Compiler) extractEngineConfig(frontmatter map[string]any) (string, *Eng
 				}
 			}
 
+			// Extract optional 'steps' field (array of step objects)
+			if steps, hasSteps := engineObj["steps"]; hasSteps {
+				if stepsArray, ok := steps.([]any); ok {
+					config.Steps = make([]map[string]any, 0, len(stepsArray))
+					for _, step := range stepsArray {
+						if stepMap, ok := step.(map[string]any); ok {
+							config.Steps = append(config.Steps, stepMap)
+						}
+					}
+				}
+			}
+
 			// Return the ID as the engineSetting for backwards compatibility
 			return config.ID, config
 		}
@@ -107,7 +120,7 @@ func (c *Compiler) validateEngine(engineID string) error {
 }
 
 // getAgenticEngine returns the agentic engine for the given engine setting
-func (c *Compiler) getAgenticEngine(engineSetting string) (AgenticEngine, error) {
+func (c *Compiler) getAgenticEngine(engineSetting string) (CodingAgentEngine, error) {
 	if engineSetting == "" {
 		return c.engineRegistry.GetDefaultEngine(), nil
 	}

@@ -6,6 +6,7 @@ import (
 
 func TestApplyDefaultGitCommandsForSafeOutputs(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
+	engine := NewClaudeEngine()
 
 	tests := []struct {
 		name        string
@@ -95,7 +96,9 @@ func TestApplyDefaultGitCommandsForSafeOutputs(t *testing.T) {
 				tools[k] = v
 			}
 
-			result := compiler.applyDefaultGitHubMCPAndClaudeTools(tools, tt.safeOutputs)
+			// Apply both default tool functions in sequence
+			tools = compiler.applyDefaultGitHubMCPTools(tools)
+			result := engine.applyDefaultClaudeTools(tools, tt.safeOutputs)
 
 			// Check if claude section exists and has bash tool
 			claudeSection, hasClaudeSection := result["claude"]
@@ -167,6 +170,7 @@ func TestApplyDefaultGitCommandsForSafeOutputs(t *testing.T) {
 
 func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
+	engine := NewClaudeEngine()
 
 	tests := []struct {
 		name               string
@@ -231,7 +235,9 @@ func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 				tools[k] = v
 			}
 
-			result := compiler.applyDefaultGitHubMCPAndClaudeTools(tools, tt.safeOutputs)
+			// Apply both default tool functions in sequence
+			tools = compiler.applyDefaultGitHubMCPTools(tools)
+			result := engine.applyDefaultClaudeTools(tools, tt.safeOutputs)
 
 			// Check if claude section exists
 			claudeSection, hasClaudeSection := result["claude"]
