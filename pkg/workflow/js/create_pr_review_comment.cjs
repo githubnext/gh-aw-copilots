@@ -25,13 +25,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find all create-pull-request-review-comment items
-  const reviewCommentItems = validatedOutput.items.filter(
+  const reviewCommentItems = validatedOutput.filter(
     /** @param {any} item */ item =>
       item.type === "create-pull-request-review-comment"
   );

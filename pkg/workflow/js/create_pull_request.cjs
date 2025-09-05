@@ -54,13 +54,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find the create-pull-request item
-  const pullRequestItem = validatedOutput.items.find(
+  const pullRequestItem = validatedOutput.find(
     /** @param {any} item */ item => item.type === "create-pull-request"
   );
   if (!pullRequestItem) {

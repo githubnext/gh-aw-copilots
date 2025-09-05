@@ -25,13 +25,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find all create-security-report items
-  const securityItems = validatedOutput.items.filter(
+  const securityItems = validatedOutput.filter(
     /** @param {any} item */ item => item.type === "create-security-report"
   );
   if (securityItems.length === 0) {

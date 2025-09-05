@@ -24,13 +24,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find all create-issue items
-  const createIssueItems = validatedOutput.items.filter(
+  const createIssueItems = validatedOutput.filter(
     /** @param {any} item */ item => item.type === "create-issue"
   );
   if (createIssueItems.length === 0) {

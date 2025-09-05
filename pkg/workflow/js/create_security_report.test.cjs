@@ -115,9 +115,7 @@ describe("create_security_report.cjs", () => {
     });
 
     it("should handle no security report items", async () => {
-      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-        items: [{ type: "create-issue", title: "Test Issue" }],
-      });
+      process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify([{ type: "create-issue", title: "Test Issue" }]);
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       await eval(`(async () => { ${securityReportScript} })()`);
@@ -130,24 +128,22 @@ describe("create_security_report.cjs", () => {
     });
 
     it("should create SARIF file for valid security findings", async () => {
-      const securityFindings = {
-        items: [
-          {
-            type: "create-security-report",
-            file: "src/app.js",
-            line: 42,
-            severity: "error",
-            message: "SQL injection vulnerability detected",
-          },
-          {
-            type: "create-security-report",
-            file: "src/utils.js",
-            line: 15,
-            severity: "warning",
-            message: "Potential XSS vulnerability",
-          },
-        ],
-      };
+      const securityFindings = [
+        {
+          type: "create-security-report",
+          file: "src/app.js",
+          line: 42,
+          severity: "error",
+          message: "SQL injection vulnerability detected",
+        },
+        {
+          type: "create-security-report",
+          file: "src/utils.js",
+          line: 15,
+          severity: "warning",
+          message: "Potential XSS vulnerability",
+        },
+      ];
 
       process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify(securityFindings);
       const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
