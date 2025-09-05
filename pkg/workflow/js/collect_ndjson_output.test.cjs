@@ -1077,7 +1077,8 @@ Line 3"}
 
     fs.writeFileSync(testFile, ndjsonContent);
     process.env.GITHUB_AW_SAFE_OUTPUTS = testFile;
-    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG = '{"create-issue": true, "add-issue-comment": true}';
+    process.env.GITHUB_AW_SAFE_OUTPUTS_CONFIG =
+      '{"create-issue": true, "add-issue-comment": true}';
 
     await eval(`(async () => { ${collectScript} })()`);
 
@@ -1087,20 +1088,23 @@ Line 3"}
     // Verify the content of agent_output.json
     const agentOutputContent = fs.readFileSync("agent_output.json", "utf8");
     const agentOutputJson = JSON.parse(agentOutputContent);
-    
+
     expect(agentOutputJson.items).toHaveLength(2);
     expect(agentOutputJson.items[0].type).toBe("create-issue");
     expect(agentOutputJson.items[1].type).toBe("add-issue-comment");
     expect(agentOutputJson.errors).toHaveLength(0);
 
     // Verify GITHUB_AW_AGENT_OUTPUT environment variable was set
-    expect(mockCore.exportVariable).toHaveBeenCalledWith("GITHUB_AW_AGENT_OUTPUT", "agent_output.json");
+    expect(mockCore.exportVariable).toHaveBeenCalledWith(
+      "GITHUB_AW_AGENT_OUTPUT",
+      "agent_output.json"
+    );
 
     // Verify existing functionality still works (core.setOutput calls)
     const setOutputCalls = mockCore.setOutput.mock.calls;
     const outputCall = setOutputCalls.find(call => call[0] === "output");
     expect(outputCall).toBeDefined();
-    
+
     const parsedOutput = JSON.parse(outputCall[1]);
     expect(parsedOutput.items).toHaveLength(2);
     expect(parsedOutput.errors).toHaveLength(0);
@@ -1129,13 +1133,15 @@ Line 3"}
     fs.writeFileSync = originalWriteFileSync;
 
     // Verify the error was logged but the script continued to work
-    expect(console.error).toHaveBeenCalledWith("Failed to write agent output file: Permission denied");
+    expect(console.error).toHaveBeenCalledWith(
+      "Failed to write agent output file: Permission denied"
+    );
 
     // Verify existing functionality still works (core.setOutput calls)
     const setOutputCalls = mockCore.setOutput.mock.calls;
     const outputCall = setOutputCalls.find(call => call[0] === "output");
     expect(outputCall).toBeDefined();
-    
+
     const parsedOutput = JSON.parse(outputCall[1]);
     expect(parsedOutput.items).toHaveLength(1);
     expect(parsedOutput.errors).toHaveLength(0);

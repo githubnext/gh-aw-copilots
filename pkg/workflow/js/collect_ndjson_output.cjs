@@ -731,11 +731,11 @@ async function main() {
   // Store validatedOutput JSON in "agent_output.json" file
   const agentOutputFile = "agent_output.json";
   const validatedOutputJson = JSON.stringify(validatedOutput);
-  
+
   try {
     fs.writeFileSync(agentOutputFile, validatedOutputJson, "utf8");
     console.log(`Stored validated output to: ${agentOutputFile}`);
-    
+
     // Set the environment variable GITHUB_AW_AGENT_OUTPUT to the file path
     core.exportVariable("GITHUB_AW_AGENT_OUTPUT", agentOutputFile);
   } catch (error) {
