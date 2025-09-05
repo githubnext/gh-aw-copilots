@@ -25,13 +25,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find all add-issue-comment items
-  const commentItems = validatedOutput.items.filter(
+  const commentItems = validatedOutput.filter(
     /** @param {any} item */ item => item.type === "add-issue-comment"
   );
   if (commentItems.length === 0) {

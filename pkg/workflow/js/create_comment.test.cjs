@@ -95,14 +95,12 @@ describe("create_comment.cjs", () => {
   });
 
   it("should skip when not in issue or PR context", async () => {
-    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-      items: [
-        {
-          type: "add-issue-comment",
-          body: "Test comment content",
-        },
-      ],
-    });
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify([
+      {
+        type: "add-issue-comment",
+        body: "Test comment content",
+      },
+    ]);
     global.context.eventName = "push"; // Not an issue or PR event
 
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -119,14 +117,12 @@ describe("create_comment.cjs", () => {
   });
 
   it("should create comment on issue successfully", async () => {
-    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-      items: [
-        {
-          type: "add-issue-comment",
-          body: "Test comment content",
-        },
-      ],
-    });
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify([
+      {
+        type: "add-issue-comment",
+        body: "Test comment content",
+      },
+    ]);
     global.context.eventName = "issues";
 
     const mockComment = {
@@ -163,14 +159,12 @@ describe("create_comment.cjs", () => {
   });
 
   it("should create comment on pull request successfully", async () => {
-    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-      items: [
-        {
-          type: "add-issue-comment",
-          body: "Test PR comment content",
-        },
-      ],
-    });
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify([
+      {
+        type: "add-issue-comment",
+        body: "Test PR comment content",
+      },
+    ]);
     global.context.eventName = "pull_request";
     global.context.payload.pull_request = { number: 789 };
     delete global.context.payload.issue; // Remove issue from payload
@@ -201,14 +195,12 @@ describe("create_comment.cjs", () => {
   });
 
   it("should include run information in comment body", async () => {
-    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify({
-      items: [
-        {
-          type: "add-issue-comment",
-          body: "Test content",
-        },
-      ],
-    });
+    process.env.GITHUB_AW_AGENT_OUTPUT = JSON.stringify([
+      {
+        type: "add-issue-comment",
+        body: "Test content",
+      },
+    ]);
     global.context.eventName = "issues";
     global.context.payload.issue = { number: 123 }; // Make sure issue context is properly set
 

@@ -25,13 +25,13 @@ async function main() {
     return;
   }
 
-  if (!validatedOutput.items || !Array.isArray(validatedOutput.items)) {
+  if (!Array.isArray(validatedOutput)) {
     console.log("No valid items found in agent output");
     return;
   }
 
   // Find the add-issue-label item
-  const labelsItem = validatedOutput.items.find(
+  const labelsItem = validatedOutput.find(
     /** @param {any} item */ item => item.type === "add-issue-label"
   );
   if (!labelsItem) {
