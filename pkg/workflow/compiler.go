@@ -20,7 +20,7 @@ import (
 
 const (
 	// OutputArtifactName is the standard name for GITHUB_AW_SAFE_OUTPUTS artifact
-	OutputArtifactName = "aw_output.txt"
+	OutputArtifactName = "safe_output.jsonl"
 )
 
 // FileTracker interface for tracking files created during compilation
@@ -3815,6 +3815,13 @@ func (c *Compiler) generateOutputCollectionStep(yaml *strings.Builder, data *Wor
 	yaml.WriteString("        with:\n")
 	fmt.Fprintf(yaml, "          name: %s\n", OutputArtifactName)
 	yaml.WriteString("          path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
+	yaml.WriteString("          if-no-files-found: warn\n")
+	yaml.WriteString("      - name: Upload agent output JSON\n")
+	yaml.WriteString("        if: always() && env.GITHUB_AW_AGENT_OUTPUT\n")
+	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
+	yaml.WriteString("        with:\n")
+	yaml.WriteString("          name: agent_output.json\n")
+	yaml.WriteString("          path: ${{ env.GITHUB_AW_AGENT_OUTPUT }}\n")
 	yaml.WriteString("          if-no-files-found: warn\n")
 
 }

@@ -728,6 +728,22 @@ async function main() {
     errors: errors,
   };
 
+  // Store validatedOutput JSON in "agent_output.json" file
+  const agentOutputFile = "/tmp/agent_output.json";
+  const validatedOutputJson = JSON.stringify(validatedOutput);
+
+  try {
+    // Ensure the /tmp directory exists
+    fs.mkdirSync("/tmp", { recursive: true });
+    fs.writeFileSync(agentOutputFile, validatedOutputJson, "utf8");
+    console.log(`Stored validated output to: ${agentOutputFile}`);
+
+    // Set the environment variable GITHUB_AW_AGENT_OUTPUT to the file path
+    core.exportVariable("GITHUB_AW_AGENT_OUTPUT", agentOutputFile);
+  } catch (error) {
+    console.error(`Failed to write agent output file: ${error.message}`);
+  }
+
   core.setOutput("output", JSON.stringify(validatedOutput));
   core.setOutput("raw_output", outputContent);
 }
