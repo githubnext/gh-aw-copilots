@@ -72,45 +72,77 @@ safe-outputs:
 
 # AI Inference with GitHub Models
 
-This agentic workflow demonstrates how to use the actions/ai-inference custom action with GitHub Models to provide AI-powered responses to various GitHub events.
+This agentic workflow demonstrates integration with GitHub's AI inference capabilities using the `actions/ai-inference` custom action and GitHub Models. It provides AI-powered responses to GitHub events like new issues and supports manual execution with custom prompts.
+
+## Purpose
+
+This workflow showcases how to leverage GitHub's AI infrastructure within the agentic workflow framework, demonstrating:
+- Integration with GitHub Models through the AI inference action
+- Safe output handling for AI-generated responses  
+- Event-driven AI analysis of repository activity
+- Configurable AI model selection and parameters
 
 ## Features
 
-- **Multi-Model Support**: Configure different GitHub Models (GPT-4o-mini, GPT-4, etc.)
-- **Event-Driven**: Responds to workflow dispatch and new issues
-- **Context-Aware**: Provides relevant AI responses based on the triggering event
-- **Safe Outputs**: Automatically posts AI responses as comments on issues
-- **Configurable**: Allows customization of prompts and models via workflow dispatch
+- **Multi-Model Support**: Configure different GitHub Models (GPT-4o-mini, GPT-4o, GPT-3.5-turbo)
+- **Event-Driven**: Automatically responds to new issues with AI analysis
+- **Manual Execution**: Supports custom prompts via workflow dispatch
+- **Safe Outputs**: Uses safe output system to post AI responses as issue comments
+- **Configurable Parameters**: Adjustable temperature (0.7) and max_tokens (1000)
 
-## Usage
+## Usage Examples
 
-### Manual Execution
-1. Go to the Actions tab in your repository
-2. Select "AI Inference with GitHub Models"
+### Manual Execution with Custom Prompt
+1. Navigate to Actions tab in your repository
+2. Select "AI Inference with GitHub Models" workflow  
 3. Click "Run workflow"
-4. Optionally customize the prompt and model
+4. Configure inputs:
+   - **Prompt**: "Analyze the security implications of using environment variables in GitHub Actions"
+   - **Model**: "gpt-4o" (for more advanced analysis)
 5. Click "Run workflow" to execute
 
-### Automatic Execution
-- **New Issues**: When an issue is opened, the AI analyzes it and provides suggestions
+### Automatic Issue Analysis
+When a new issue is created, the workflow automatically:
+- Analyzes the issue title and description using AI
+- Generates potential root causes and resolution suggestions  
+- Posts the AI analysis as a comment on the issue via safe outputs
 
-## Models Available
-- `gpt-4o-mini` (default) - Fast and efficient for most tasks
-- `gpt-4o` - More capable model for complex analysis
-- `gpt-3.5-turbo` - Cost-effective option for simple tasks
+## Available Models
 
-## Customization
+- **`gpt-4o-mini`** (default) - Fast and cost-effective for most tasks
+- **`gpt-4o`** - More capable model for complex analysis and reasoning
+- **`gpt-3.5-turbo`** - Basic analysis and simple responses
 
-You can customize the behavior by:
-1. Modifying the `model` parameter in the workflow dispatch
-2. Updating the prompts in the engine steps
-3. Adjusting the `max_tokens` and `temperature` parameters
-4. Adding additional processing steps
+## Configuration Options
 
-## Security
+### Model Parameters
+- **Temperature**: 0.7 (controls response creativity/randomness)
+- **Max Tokens**: 1000 (maximum response length)
+- **Model**: Configurable via workflow dispatch input
 
-This workflow uses:
-- GitHub's secure AI inference infrastructure
-- Safe outputs to prevent unauthorized actions
-- Proper permission scoping for GitHub API access
-- Content filtering and safety measures built into GitHub Models
+### Customization
+Edit this workflow file to:
+- Modify default prompts for different events
+- Change model parameters (temperature, max_tokens)  
+- Add additional processing steps
+- Adjust safe output configurations
+- Add new trigger events
+
+## Implementation Details
+
+### Custom Engine
+Uses the custom engine with these key components:
+- **AI Inference Action**: `actions/ai-inference@v1` for GitHub Models integration
+- **Prompt File**: Uses `${{ env.GITHUB_AW_PROMPT }}` for dynamic prompt handling
+- **Response Processing**: Formats AI output and creates GitHub Actions summaries
+
+### Safe Outputs
+Implements safe output handling for:
+- **add-issue-comment**: Posts AI responses as issue comments (max: 1)
+- **Target**: "*" (applies to any issue)
+
+### Security Features
+- **Minimal Permissions**: Only `contents: read` and `models: read`
+- **GitHub's AI Infrastructure**: Uses secure GitHub Models backend
+- **Content Filtering**: Built-in safety measures in GitHub Models
+- **Safe Output System**: Prevents unauthorized repository actions
