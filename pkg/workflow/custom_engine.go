@@ -41,7 +41,26 @@ func (e *CustomEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 			(workflowData.EngineConfig != nil && workflowData.EngineConfig.MaxTurns != "") ||
 			(workflowData.EngineConfig != nil && len(workflowData.EngineConfig.Env) > 0)
 
-		for _, step := range workflowData.EngineConfig.Steps {
+		// Pre-process steps to identify which ones need prompt files
+		promptFiles := make(map[int]string) // step index -> prompt file name
+		for i, step := range workflowData.EngineConfig.Steps {
+			if promptFile := e.extractPromptForFile(step); promptFile != "" {
+				promptFiles[i] = promptFile
+			}
+		}
+
+		// Create prompt files step if any prompts were found
+		if len(promptFiles) > 0 {
+			createPromptStep := e.createPromptFilesStep(workflowData.EngineConfig.Steps, promptFiles)
+			steps = append(steps, createPromptStep)
+		}
+
+		for i, step := range workflowData.EngineConfig.Steps {
+			// If this step has a prompt file, modify the step to use prompt-file instead of prompt
+			if promptFileName, hasPromptFile := promptFiles[i]; hasPromptFile {
+				step = e.modifyStepForPromptFile(step, promptFileName)
+			}
+
 			stepYAML, err := e.convertStepToYAML(step)
 			if err != nil {
 				// Log error but continue with other steps
@@ -50,10 +69,21 @@ func (e *CustomEngine) GetExecutionSteps(workflowData *WorkflowData, logFile str
 
 			// Check if this step needs environment variables injected
 			stepStr := stepYAML
-			if hasEnvSection && strings.Contains(stepYAML, "run:") {
+			needsEnv := hasEnvSection && strings.Contains(stepYAML, "run:")
+			// Also add environment variables to actions/ai-inference steps for GITHUB_AW_PROMPT
+			if _, hasPromptFile := promptFiles[i]; hasPromptFile && strings.Contains(stepYAML, "uses: actions/ai-inference") {
+				needsEnv = true
+			}
+
+			if needsEnv {
 				// Add environment variables to run steps after the entire run block
 				stepStr = strings.TrimRight(stepYAML, "\n")
 				stepStr += "\n        env:\n"
+
+				// Add GITHUB_AW_PROMPT if this step has a prompt file
+				if promptFileName, hasPromptFile := promptFiles[i]; hasPromptFile {
+					stepStr += fmt.Sprintf("          GITHUB_AW_PROMPT: %s\n", promptFileName)
+				}
 
 				// Add GITHUB_AW_SAFE_OUTPUTS if safe-outputs feature is used
 				if workflowData.SafeOutputs != nil {
@@ -140,6 +170,146 @@ func (e *CustomEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 	}
 
 	return strings.Join(stepYAML, "\n"), nil
+}
+
+// extractPromptForFile checks if a step uses actions/ai-inference with a prompt parameter
+// and returns the prompt file name if found
+func (e *CustomEngine) extractPromptForFile(stepMap map[string]any) string {
+	// Check if this step uses actions/ai-inference
+	uses, hasUses := stepMap["uses"]
+	if !hasUses {
+		return ""
+	}
+
+	usesStr, ok := uses.(string)
+	if !ok || !strings.Contains(usesStr, "actions/ai-inference") {
+		return ""
+	}
+
+	// Check if it has a prompt parameter
+	with, hasWith := stepMap["with"]
+	if !hasWith {
+		return ""
+	}
+
+	withMap, ok := with.(map[string]any)
+	if !ok {
+		return ""
+	}
+
+	// Check if it has a prompt parameter
+	prompt, hasPrompt := withMap["prompt"]
+	if !hasPrompt {
+		return ""
+	}
+
+	// Ensure prompt is a string
+	_, ok = prompt.(string)
+	if !ok {
+		return ""
+	}
+
+	// Generate a unique prompt file name based on step name or id
+	var stepIdentifier string
+	if name, hasName := stepMap["name"]; hasName {
+		if nameStr, ok := name.(string); ok {
+			stepIdentifier = strings.ToLower(strings.ReplaceAll(nameStr, " ", "_"))
+		}
+	}
+	if stepIdentifier == "" {
+		if id, hasID := stepMap["id"]; hasID {
+			if idStr, ok := id.(string); ok {
+				stepIdentifier = idStr
+			}
+		}
+	}
+	if stepIdentifier == "" {
+		stepIdentifier = "ai_inference"
+	}
+
+	return fmt.Sprintf("/tmp/aw-prompts/%s.txt", stepIdentifier)
+}
+
+// modifyStepForPromptFile modifies a step to use prompt-file instead of prompt
+func (e *CustomEngine) modifyStepForPromptFile(stepMap map[string]any, promptFileName string) map[string]any {
+	// Make a copy of the step map
+	modifiedStep := make(map[string]any)
+	for k, v := range stepMap {
+		modifiedStep[k] = v
+	}
+
+	// Modify the with parameters
+	with, hasWith := modifiedStep["with"]
+	if !hasWith {
+		return modifiedStep
+	}
+
+	withMap, ok := with.(map[string]any)
+	if !ok {
+		return modifiedStep
+	}
+
+	// Make a copy of the with map
+	modifiedWith := make(map[string]any)
+	for k, v := range withMap {
+		if k != "prompt" { // Skip the prompt parameter
+			modifiedWith[k] = v
+		}
+	}
+
+	// Add the prompt-file parameter
+	modifiedWith["prompt-file"] = promptFileName
+	modifiedStep["with"] = modifiedWith
+
+	return modifiedStep
+}
+
+// createPromptFilesStep creates a step that writes all prompt files to disk
+func (e *CustomEngine) createPromptFilesStep(steps []map[string]any, promptFiles map[int]string) GitHubActionStep {
+	var stepLines []string
+	stepLines = append(stepLines, "      - name: Create AI inference prompt files")
+	stepLines = append(stepLines, "        run: |")
+	stepLines = append(stepLines, "          mkdir -p /tmp/aw-prompts")
+
+	// Write each prompt file
+	for i, promptFileName := range promptFiles {
+		step := steps[i]
+
+		// Extract the prompt content
+		with, hasWith := step["with"]
+		if !hasWith {
+			continue
+		}
+
+		withMap, ok := with.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		prompt, hasPrompt := withMap["prompt"]
+		if !hasPrompt {
+			continue
+		}
+
+		promptStr, ok := prompt.(string)
+		if !ok {
+			continue
+		}
+
+		// Write the prompt to the file using a here-document
+		stepLines = append(stepLines, fmt.Sprintf("          cat > %s << 'EOF'", promptFileName))
+
+		// Add the prompt content, preserving formatting and special characters
+		promptLines := strings.Split(promptStr, "\n")
+		for _, line := range promptLines {
+			stepLines = append(stepLines, "          "+line)
+		}
+
+		stepLines = append(stepLines, "          EOF")
+		stepLines = append(stepLines, "")
+	}
+
+	return GitHubActionStep(stepLines)
 }
 
 // RenderMCPConfig renders MCP configuration using shared logic with Claude engine

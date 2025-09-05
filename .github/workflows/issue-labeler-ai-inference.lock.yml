@@ -374,26 +374,37 @@ jobs:
           name: aw_info.json
           path: /tmp/aw_info.json
           if-no-files-found: warn
+      - name: Create AI inference prompt files
+        run: |
+          mkdir -p /tmp/aw-prompts
+          cat > /tmp/aw-prompts/analyze_issue_with_ai_inference.txt << 'EOF'
+          Analyze this GitHub issue and suggest appropriate labels based on the content.
+          
+          Issue Title: ${{ github.event.issue.title }}
+          Issue Body: ${{ github.event.issue.body }}
+          
+          Based on the content, suggest 1-3 relevant labels from common categories like:
+          - Type: bug, feature, enhancement, documentation, question
+          - Priority: low, medium, high, critical
+          - Component: frontend, backend, api, ui, tests, ci
+          - Status: needs-triage, needs-info, ready-to-work
+          
+          Respond with only a JSON array of label names, no additional text.
+          Example: ["bug", "high", "backend"]
+          
+          EOF
+
       - name: Analyze Issue with AI Inference
         id: analyze_issue
         uses: actions/ai-inference@v1
         with:
           model: gpt-4
-          prompt: Analyze this GitHub issue and suggest appropriate labels based on the content.
-
-Issue Title: ${{ github.event.issue.title }}
-Issue Body: ${{ github.event.issue.body }}
-
-Based on the content, suggest 1-3 relevant labels from common categories like:
-- Type: bug, feature, enhancement, documentation, question
-- Priority: low, medium, high, critical
-- Component: frontend, backend, api, ui, tests, ci
-- Status: needs-triage, needs-info, ready-to-work
-
-Respond with only a JSON array of label names, no additional text.
-Example: ["bug", "high", "backend"]
-
           temperature: 0.1
+          prompt-file: /tmp/aw-prompts/analyze_issue_with_ai_inference.txt
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/analyze_issue_with_ai_inference.txt
+          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
+
       - name: Generate Issue Labels Output
         run: |
           # Get the AI inference result
