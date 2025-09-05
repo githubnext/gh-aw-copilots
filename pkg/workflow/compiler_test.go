@@ -3988,7 +3988,7 @@ post-steps:
   - name: Post AI Step
     run: echo "This runs after AI"
   - name: Another Post Step
-    uses: actions/upload-artifact@v4
+    uses: actions/upload-artifact@v5
     with:
       name: test-artifact
       path: test-file.txt

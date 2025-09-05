@@ -215,7 +215,7 @@ jobs:
             console.log(JSON.stringify(awInfo, null, 2));
       - name: Upload agentic run info
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: aw_info.json
           path: /tmp/aw_info.json
@@ -311,12 +311,12 @@ jobs:
           fi
       - name: Upload workflow-complete.txt
         if: steps.check_file.outputs.upload == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: workflow-complete
           path: workflow-complete.txt
       - name: Upload engine output files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: agent_outputs
           path: |
@@ -644,7 +644,7 @@ jobs:
             main();
       - name: Upload agent logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: secure-web-research-task.log
           path: /tmp/secure-web-research-task.log

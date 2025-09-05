@@ -345,7 +345,7 @@ jobs:
             console.log(JSON.stringify(awInfo, null, 2));
       - name: Upload agentic run info
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: aw_info.json
           path: /tmp/aw_info.json
@@ -380,7 +380,7 @@ jobs:
           fi
       - name: Upload workflow-complete.txt
         if: steps.check_file.outputs.upload == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: workflow-complete
           path: workflow-complete.txt
@@ -1097,10 +1097,17 @@ jobs:
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Upload agentic output file
         if: always() && steps.collect_output.outputs.output != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: safe_output.jsonl
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
+          if-no-files-found: warn
+      - name: Upload agent output JSON
+        if: always() && env.GITHUB_AW_AGENT_OUTPUT
+        uses: actions/upload-artifact@v5
+        with:
+          name: agent_output.json
+          path: ${{ env.GITHUB_AW_AGENT_OUTPUT }}
           if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()
@@ -1361,7 +1368,7 @@ jobs:
             main();
       - name: Upload agent logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-codex-add-issue-labels.log
           path: /tmp/test-codex-add-issue-labels.log

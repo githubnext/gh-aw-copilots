@@ -122,7 +122,7 @@ func (c *Compiler) generateGitPatchStep(yaml *strings.Builder, data *WorkflowDat
 	yaml.WriteString("          fi\n")
 	yaml.WriteString("      - name: Upload git patch\n")
 	yaml.WriteString("        if: always()\n")
-	yaml.WriteString("        uses: actions/upload-artifact@v4\n")
+	yaml.WriteString("        uses: actions/upload-artifact@v5\n")
 	yaml.WriteString("        with:\n")
 	yaml.WriteString("          name: aw.patch\n")
 	yaml.WriteString("          path: /tmp/aw.patch\n")
