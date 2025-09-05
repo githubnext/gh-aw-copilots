@@ -6,81 +6,7 @@ import (
 	"testing"
 )
 
-// TestParseMissingToolsFromLog tests parsing missing tool reports from log content
-func TestParseMissingToolsFromLog(t *testing.T) {
-	testRun := WorkflowRun{
-		DatabaseID:   12345,
-		WorkflowName: "Test Workflow",
-	}
-
-	tests := []struct {
-		name         string
-		logContent   string
-		expected     int
-		expectTool   string
-		expectReason string
-	}{
-		{
-			name: "single_missing_tool",
-			logContent: `
-2024-01-01T10:00:00Z Step output: tools_reported=[{"tool":"docker","reason":"Need containerization","alternatives":"VM setup","timestamp":"2024-01-01T10:00:00Z"}]
-`,
-			expected:     1,
-			expectTool:   "docker",
-			expectReason: "Need containerization",
-		},
-		{
-			name: "multiple_missing_tools",
-			logContent: `
-2024-01-01T10:00:00Z Step output: tools_reported=[{"tool":"docker","reason":"Need containerization","timestamp":"2024-01-01T10:00:00Z"},{"tool":"kubectl","reason":"K8s management","timestamp":"2024-01-01T10:00:00Z"}]
-`,
-			expected:   2,
-			expectTool: "docker",
-		},
-		{
-			name:       "no_missing_tools",
-			logContent: "This is a regular log line with no missing tool reports",
-			expected:   0,
-		},
-		{
-			name:       "empty_log",
-			logContent: "",
-			expected:   0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tools := parseMissingToolsFromLog(tt.logContent, testRun, false)
-
-			if len(tools) != tt.expected {
-				t.Errorf("Expected %d tools, got %d", tt.expected, len(tools))
-				return
-			}
-
-			if tt.expected > 0 && len(tools) > 0 {
-				if tools[0].Tool != tt.expectTool {
-					t.Errorf("Expected tool %s, got %s", tt.expectTool, tools[0].Tool)
-				}
-
-				if tt.expectReason != "" && tools[0].Reason != tt.expectReason {
-					t.Errorf("Expected reason %s, got %s", tt.expectReason, tools[0].Reason)
-				}
-
-				// Check that run information was populated
-				if tools[0].WorkflowName != testRun.WorkflowName {
-					t.Errorf("Expected workflow name %s, got %s", testRun.WorkflowName, tools[0].WorkflowName)
-				}
-
-				if tools[0].RunID != testRun.DatabaseID {
-					t.Errorf("Expected run ID %d, got %d", testRun.DatabaseID, tools[0].RunID)
-				}
-			}
-		})
-	}
-}
-
-// TestExtractMissingToolsFromRun tests extracting missing tools from a run directory
+// TestExtractMissingToolsFromRun tests extracting missing tools from safe output artifact files
 func TestExtractMissingToolsFromRun(t *testing.T) {
 	// Create a temporary directory structure
 	tmpDir := t.TempDir()
@@ -90,42 +16,144 @@ func TestExtractMissingToolsFromRun(t *testing.T) {
 		WorkflowName: "Integration Test",
 	}
 
-	// Create a log file with missing tool reports
-	logContent := `Step completed successfully
-tools_reported=[{"tool":"terraform","reason":"Infrastructure automation needed","alternatives":"Manual setup","timestamp":"2024-01-01T12:00:00Z"}]
-Process completed with exit code 0`
-
-	logFile := filepath.Join(tmpDir, "workflow.log")
-	err := os.WriteFile(logFile, []byte(logContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test log file: %v", err)
+	tests := []struct {
+		name               string
+		safeOutputContent  string
+		expected           int
+		expectTool         string
+		expectReason       string
+		expectAlternatives string
+	}{
+		{
+			name: "single_missing_tool_in_safe_output",
+			safeOutputContent: `{
+				"items": [
+					{
+						"type": "missing-tool",
+						"tool": "terraform",
+						"reason": "Infrastructure automation needed",
+						"alternatives": "Manual setup",
+						"timestamp": "2024-01-01T12:00:00Z"
+					}
+				],
+				"errors": []
+			}`,
+			expected:           1,
+			expectTool:         "terraform",
+			expectReason:       "Infrastructure automation needed",
+			expectAlternatives: "Manual setup",
+		},
+		{
+			name: "multiple_missing_tools_in_safe_output",
+			safeOutputContent: `{
+				"items": [
+					{
+						"type": "missing-tool",
+						"tool": "docker",
+						"reason": "Need containerization",
+						"alternatives": "VM setup",
+						"timestamp": "2024-01-01T10:00:00Z"
+					},
+					{
+						"type": "missing-tool",
+						"tool": "kubectl",
+						"reason": "K8s management",
+						"timestamp": "2024-01-01T10:01:00Z"
+					},
+					{
+						"type": "create-issue",
+						"title": "Test Issue",
+						"body": "This should be ignored"
+					}
+				],
+				"errors": []
+			}`,
+			expected:   2,
+			expectTool: "docker",
+		},
+		{
+			name: "no_missing_tools_in_safe_output",
+			safeOutputContent: `{
+				"items": [
+					{
+						"type": "create-issue",
+						"title": "Test Issue",
+						"body": "No missing tools here"
+					}
+				],
+				"errors": []
+			}`,
+			expected: 0,
+		},
+		{
+			name: "empty_safe_output",
+			safeOutputContent: `{
+				"items": [],
+				"errors": []
+			}`,
+			expected: 0,
+		},
+		{
+			name: "malformed_json",
+			safeOutputContent: `{
+				"items": [
+					{
+						"type": "missing-tool"
+						"tool": "docker"
+					}
+				]
+			}`,
+			expected: 0, // Should handle gracefully
+		},
 	}
 
-	// Extract missing tools
-	tools, err := extractMissingToolsFromRun(tmpDir, testRun, false)
-	if err != nil {
-		t.Fatalf("Error extracting missing tools: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create the safe output artifact file
+			safeOutputFile := filepath.Join(tmpDir, "aw_output.txt")
+			err := os.WriteFile(safeOutputFile, []byte(tt.safeOutputContent), 0644)
+			if err != nil {
+				t.Fatalf("Failed to create test safe output file: %v", err)
+			}
 
-	if len(tools) != 1 {
-		t.Fatalf("Expected 1 tool, got %d", len(tools))
-	}
+			// Extract missing tools
+			tools, err := extractMissingToolsFromRun(tmpDir, testRun, false)
+			if err != nil {
+				t.Fatalf("Error extracting missing tools: %v", err)
+			}
 
-	tool := tools[0]
-	if tool.Tool != "terraform" {
-		t.Errorf("Expected tool 'terraform', got '%s'", tool.Tool)
-	}
+			if len(tools) != tt.expected {
+				t.Errorf("Expected %d tools, got %d", tt.expected, len(tools))
+				return
+			}
 
-	if tool.Reason != "Infrastructure automation needed" {
-		t.Errorf("Expected reason 'Infrastructure automation needed', got '%s'", tool.Reason)
-	}
+			if tt.expected > 0 && len(tools) > 0 {
+				tool := tools[0]
+				if tool.Tool != tt.expectTool {
+					t.Errorf("Expected tool '%s', got '%s'", tt.expectTool, tool.Tool)
+				}
 
-	if tool.WorkflowName != testRun.WorkflowName {
-		t.Errorf("Expected workflow name '%s', got '%s'", testRun.WorkflowName, tool.WorkflowName)
-	}
+				if tt.expectReason != "" && tool.Reason != tt.expectReason {
+					t.Errorf("Expected reason '%s', got '%s'", tt.expectReason, tool.Reason)
+				}
 
-	if tool.RunID != testRun.DatabaseID {
-		t.Errorf("Expected run ID %d, got %d", testRun.DatabaseID, tool.RunID)
+				if tt.expectAlternatives != "" && tool.Alternatives != tt.expectAlternatives {
+					t.Errorf("Expected alternatives '%s', got '%s'", tt.expectAlternatives, tool.Alternatives)
+				}
+
+				// Check that run information was populated
+				if tool.WorkflowName != testRun.WorkflowName {
+					t.Errorf("Expected workflow name '%s', got '%s'", testRun.WorkflowName, tool.WorkflowName)
+				}
+
+				if tool.RunID != testRun.DatabaseID {
+					t.Errorf("Expected run ID %d, got %d", testRun.DatabaseID, tool.RunID)
+				}
+			}
+
+			// Clean up for next test
+			os.Remove(safeOutputFile)
+		})
 	}
 }
 
@@ -183,7 +211,7 @@ func TestDisplayMissingToolsAnalysisEmpty(t *testing.T) {
 	emptyRuns := []ProcessedRun{}
 	displayMissingToolsAnalysis(emptyRuns, false)
 	displayMissingToolsAnalysis(emptyRuns, true)
-	
+
 	// Test with runs that have no missing tools (should not display anything)
 	runsWithoutMissingTools := []ProcessedRun{
 		{

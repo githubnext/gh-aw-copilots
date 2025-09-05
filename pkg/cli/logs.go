@@ -1085,84 +1085,77 @@ func contains(slice []string, item string) bool {
 func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([]MissingToolReport, error) {
 	var missingTools []MissingToolReport
 
-	// Check if this run has GitHub Actions workflow run logs with missing tool outputs
-	// The missing-tool job creates job outputs that are stored as workflow outputs
-	// We need to check for GitHub Actions step outputs or log files
-
-	// First, check for missing_tool job logs or step outputs
-	err := filepath.Walk(runDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	// Look for the safe output artifact file that contains structured JSON with items array
+	// This file is created by the collect_ndjson_output.cjs script during workflow execution
+	safeOutputPath := filepath.Join(runDir, "aw_output.txt")
+	if _, err := os.Stat(safeOutputPath); err == nil {
+		// Read the safe output artifact file
+		content, readErr := os.ReadFile(safeOutputPath)
+		if readErr != nil {
+			if verbose {
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read safe output file %s: %v", safeOutputPath, readErr)))
+			}
+			return missingTools, nil // Continue processing without this file
 		}
 
-		// Skip directories
-		if info.IsDir() {
-			return nil
+		// Parse the structured JSON output from the collect script
+		var safeOutput struct {
+			Items  []json.RawMessage `json:"items"`
+			Errors []string          `json:"errors,omitempty"`
 		}
 
-		// Look for workflow run logs that might contain missing tool outputs
-		// GitHub Actions logs are typically in files with "log" in the name
-		fileName := strings.ToLower(info.Name())
-		if strings.Contains(fileName, "log") || strings.HasSuffix(fileName, ".txt") {
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
+		if err := json.Unmarshal(content, &safeOutput); err != nil {
+			if verbose {
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse safe output JSON from %s: %v", safeOutputPath, err)))
+			}
+			return missingTools, nil // Continue processing without this file
+		}
+
+		// Extract missing-tool entries from the items array
+		for _, itemRaw := range safeOutput.Items {
+			var item struct {
+				Type         string `json:"type"`
+				Tool         string `json:"tool,omitempty"`
+				Reason       string `json:"reason,omitempty"`
+				Alternatives string `json:"alternatives,omitempty"`
+				Timestamp    string `json:"timestamp,omitempty"`
+			}
+
+			if err := json.Unmarshal(itemRaw, &item); err != nil {
 				if verbose {
-					fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read %s: %v", path, readErr)))
+					fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse item from safe output: %v", err)))
 				}
-				return nil // Continue processing other files
+				continue // Skip malformed items
 			}
 
-			// Look for missing tool output patterns in the log content
-			tools := parseMissingToolsFromLog(string(content), run, verbose)
-			missingTools = append(missingTools, tools...)
-		}
+			// Check if this is a missing-tool entry
+			if item.Type == "missing-tool" {
+				missingTool := MissingToolReport{
+					Tool:         item.Tool,
+					Reason:       item.Reason,
+					Alternatives: item.Alternatives,
+					Timestamp:    item.Timestamp,
+					WorkflowName: run.WorkflowName,
+					RunID:        run.DatabaseID,
+				}
+				missingTools = append(missingTools, missingTool)
 
-		return nil
-	})
-
-	if verbose && len(missingTools) > 0 {
-		fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found %d missing tool reports in run %d", len(missingTools), run.DatabaseID)))
-	}
-
-	return missingTools, err
-}
-
-// parseMissingToolsFromLog parses missing tool reports from log content
-func parseMissingToolsFromLog(logContent string, run WorkflowRun, verbose bool) []MissingToolReport {
-	var tools []MissingToolReport
-
-	// Look for the missing tool output patterns that the JavaScript script would produce
-	// The script outputs JSON via core.setOutput, so we look for these patterns
-	lines := strings.Split(logContent, "\n")
-
-	for _, line := range lines {
-		// Look for GitHub Actions output that contains tools_reported
-		if strings.Contains(line, "tools_reported") {
-			// Try to extract the JSON from the output line
-			if jsonStart := strings.Index(line, "["); jsonStart != -1 {
-				if jsonEnd := strings.LastIndex(line, "]"); jsonEnd > jsonStart {
-					jsonStr := line[jsonStart : jsonEnd+1]
-					var toolReports []MissingToolReport
-					if err := json.Unmarshal([]byte(jsonStr), &toolReports); err == nil {
-						// Enrich the reports with run information
-						for i := range toolReports {
-							toolReports[i].WorkflowName = run.WorkflowName
-							toolReports[i].RunID = run.DatabaseID
-						}
-						tools = append(tools, toolReports...)
-						if verbose {
-							fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Parsed %d missing tools from workflow output in run %d", len(toolReports), run.DatabaseID)))
-						}
-					} else if verbose {
-						// Log parsing error for debugging
-						fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse JSON from line: %s, error: %v", jsonStr, err)))
-					}
+				if verbose {
+					fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found missing-tool entry: %s (%s)", item.Tool, item.Reason)))
 				}
 			}
 		}
+
+		if verbose && len(missingTools) > 0 {
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found %d missing tool reports in safe output artifact for run %d", len(missingTools), run.DatabaseID)))
+		}
+	} else {
+		if verbose {
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No safe output artifact found at %s for run %d", safeOutputPath, run.DatabaseID)))
+		}
 	}
 
-	return tools
+	return missingTools, nil
 }
 
 // displayMissingToolsAnalysis displays a summary of missing tools across all runs
