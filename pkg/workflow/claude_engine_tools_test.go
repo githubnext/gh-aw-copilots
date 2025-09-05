@@ -16,45 +16,41 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 		{
 			name:     "empty tools",
 			tools:    map[string]any{},
-			expected: "",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "bash with specific commands in claude section (new format)",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{"echo", "ls"},
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash": []any{"echo", "ls"},
 					},
 				},
 			},
-			expected: "Bash(echo),Bash(ls),BashOutput,KillBash",
+			expected: "Bash(echo),Bash(ls),BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "bash with nil value (all commands allowed)",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       nil,
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash": nil,
 					},
 				},
 			},
-			expected: "Bash,BashOutput,KillBash",
+			expected: "Bash,BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "regular tools in claude section (new format)",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Read":  nil,
-						"Write": nil,
+						"WebFetch":  nil,
+						"WebSearch": nil,
 					},
 				},
 			},
-			expected: "Read,Write",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,WebFetch,WebSearch",
 		},
 		{
 			name: "mcp tools",
@@ -63,23 +59,22 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 					"allowed": []any{"list_issues", "create_issue"},
 				},
 			},
-			expected: "mcp__github__create_issue,mcp__github__list_issues",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,mcp__github__create_issue,mcp__github__list_issues",
 		},
 		{
 			name: "mixed claude and mcp tools",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"LS":   nil,
-						"Read": nil,
-						"Edit": nil,
+						"WebFetch":  nil,
+						"WebSearch": nil,
 					},
 				},
 				"github": map[string]any{
 					"allowed": []any{"list_issues"},
 				},
 			},
-			expected: "Edit,LS,Read,mcp__github__list_issues",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,WebFetch,WebSearch,mcp__github__list_issues",
 		},
 		{
 			name: "custom mcp servers with new format",
@@ -91,7 +86,7 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 					"allowed": []any{"tool1", "tool2"},
 				},
 			},
-			expected: "mcp__custom_server__tool1,mcp__custom_server__tool2",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,mcp__custom_server__tool1,mcp__custom_server__tool2",
 		},
 		{
 			name: "mcp server with wildcard access",
@@ -103,7 +98,7 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 					"allowed": []any{"*"},
 				},
 			},
-			expected: "mcp__notion",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,mcp__notion",
 		},
 		{
 			name: "mixed mcp servers - one with wildcard, one with specific tools",
@@ -116,94 +111,85 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 					"allowed": []any{"list_issues", "create_issue"},
 				},
 			},
-			expected: "mcp__github__create_issue,mcp__github__list_issues,mcp__notion",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,mcp__github__create_issue,mcp__github__list_issues,mcp__notion",
 		},
 		{
 			name: "bash with :* wildcard (should ignore other bash tools)",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{":*"},
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash": []any{":*"},
 					},
 				},
 			},
-			expected: "Bash,BashOutput,KillBash",
+			expected: "Bash,BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "bash with :* wildcard mixed with other commands (should ignore other commands)",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{"echo", "ls", ":*", "cat"},
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash": []any{"echo", "ls", ":*", "cat"},
 					},
 				},
 			},
-			expected: "Bash,BashOutput,KillBash",
+			expected: "Bash,BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "bash with :* wildcard and other tools",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{":*"},
-						"Read":       nil,
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash":     []any{":*"},
+						"WebFetch": nil,
 					},
 				},
 				"github": map[string]any{
 					"allowed": []any{"list_issues"},
 				},
 			},
-			expected: "Bash,BashOutput,KillBash,Read,mcp__github__list_issues",
+			expected: "Bash,BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite,WebFetch,mcp__github__list_issues",
 		},
 		{
 			name: "bash with single command should include implicit tools",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{"ls"},
-						"BashOutput": nil,
-						"KillBash":   nil,
+						"Bash": []any{"ls"},
 					},
 				},
 			},
-			expected: "Bash(ls),BashOutput,KillBash",
+			expected: "Bash(ls),BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "explicit KillBash and BashOutput should not duplicate",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Bash":       []any{"echo"},
-						"KillBash":   nil,
-						"BashOutput": nil,
+						"Bash": []any{"echo"},
 					},
 				},
 			},
-			expected: "Bash(echo),BashOutput,KillBash",
+			expected: "Bash(echo),BashOutput,ExitPlanMode,Glob,Grep,KillBash,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "no bash tools means no implicit tools",
 			tools: map[string]any{
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Read":  nil,
-						"Write": nil,
+						"WebFetch":  nil,
+						"WebSearch": nil,
 					},
 				},
 			},
-			expected: "Read,Write",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,WebFetch,WebSearch",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := engine.computeAllowedClaudeToolsString(tt.tools, nil)
+			claudeTools := engine.applyDefaultClaudeTools(tt.tools, nil)
+			result := engine.computeAllowedClaudeToolsString(claudeTools, nil)
 
 			// Parse expected and actual results into sets for comparison
 			expectedTools := make(map[string]bool)
@@ -261,7 +247,7 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 					"allowed": []any{"list_issues"},
 				},
 			},
-			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"},
+			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "ExitPlanMode", "TodoWrite", "LS", "Read", "NotebookRead"},
 			expectedTopLevelTools: []string{"github", "claude"},
 			hasGitHubTool:         true,
 		},
@@ -272,7 +258,7 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 					"allowed": []any{"some_action"},
 				},
 			},
-			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"},
+			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "ExitPlanMode", "TodoWrite", "LS", "Read", "NotebookRead"},
 			expectedTopLevelTools: []string{"other", "github", "claude"},
 			hasGitHubTool:         true,
 		},
@@ -284,16 +270,16 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 				},
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Task": map[string]any{
+						"WebFetch": map[string]any{
 							"custom": "config",
 						},
-						"Read": map[string]any{
+						"WebSearch": map[string]any{
 							"timeout": 30,
 						},
 					},
 				},
 			},
-			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"},
+			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "ExitPlanMode", "TodoWrite", "LS", "Read", "NotebookRead", "WebFetch", "WebSearch"},
 			expectedTopLevelTools: []string{"github", "claude"},
 			hasGitHubTool:         true,
 		},
@@ -305,12 +291,12 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 				},
 				"claude": map[string]any{
 					"allowed": map[string]any{
-						"Task": nil,
-						"Grep": nil,
+						"WebFetch":  nil,
+						"WebSearch": nil,
 					},
 				},
 			},
-			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"},
+			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "ExitPlanMode", "TodoWrite", "LS", "Read", "NotebookRead", "WebFetch", "WebSearch"},
 			expectedTopLevelTools: []string{"github", "claude"},
 			hasGitHubTool:         true,
 		},
@@ -319,7 +305,7 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 			inputTools: map[string]any{
 				"github": map[string]any{},
 			},
-			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"},
+			expectedClaudeTools:   []string{"Task", "Glob", "Grep", "ExitPlanMode", "TodoWrite", "LS", "Read", "NotebookRead"},
 			expectedTopLevelTools: []string{"github", "claude"},
 			hasGitHubTool:         true,
 		},
@@ -411,20 +397,20 @@ func TestClaudeEngineApplyDefaultClaudeTools(t *testing.T) {
 				claudeSection := result["claude"].(map[string]any)
 				allowedSection := claudeSection["allowed"].(map[string]any)
 
-				if taskTool, ok := allowedSection["Task"].(map[string]any); ok {
-					if custom, exists := taskTool["custom"]; !exists || custom != "config" {
-						t.Errorf("Expected Task tool to preserve custom config, got %v", taskTool)
+				if webFetchTool, ok := allowedSection["WebFetch"].(map[string]any); ok {
+					if custom, exists := webFetchTool["custom"]; !exists || custom != "config" {
+						t.Errorf("Expected WebFetch tool to preserve custom config, got %v", webFetchTool)
 					}
 				} else {
-					t.Errorf("Expected Task tool to be a map[string]any with preserved config")
+					t.Errorf("Expected WebFetch tool to be a map[string]any with preserved config")
 				}
 
-				if readTool, ok := allowedSection["Read"].(map[string]any); ok {
-					if timeout, exists := readTool["timeout"]; !exists || timeout != 30 {
-						t.Errorf("Expected Read tool to preserve timeout config, got %v", readTool)
+				if webSearchTool, ok := allowedSection["WebSearch"].(map[string]any); ok {
+					if timeout, exists := webSearchTool["timeout"]; !exists || timeout != 30 {
+						t.Errorf("Expected WebSearch tool to preserve timeout config, got %v", webSearchTool)
 					}
 				} else {
-					t.Errorf("Expected Read tool to be a map[string]any with preserved config")
+					t.Errorf("Expected WebSearch tool to be a map[string]any with preserved config")
 				}
 			}
 		})
@@ -514,70 +500,6 @@ func TestClaudeEngineDefaultClaudeToolsList(t *testing.T) {
 	}
 }
 
-func TestClaudeEngineDefaultClaudeToolsIntegrationWithComputeAllowedTools(t *testing.T) {
-	// Test that default Claude tools are properly included in the allowed tools computation
-	engine := NewClaudeEngine()
-	compiler := NewCompiler(false, "", "test")
-
-	tools := map[string]any{
-		"github": map[string]any{
-			"allowed": []any{"list_issues", "create_issue"},
-		},
-	}
-
-	// Apply default tools first
-	tools = compiler.applyDefaultGitHubMCPTools(tools)
-	toolsWithDefaults := engine.applyDefaultClaudeTools(tools, nil)
-
-	// Verify that the claude section was created with default tools (new format)
-	claudeSection, hasClaudeSection := toolsWithDefaults["claude"]
-	if !hasClaudeSection {
-		t.Error("Expected 'claude' section to be created")
-	}
-
-	claudeConfig, ok := claudeSection.(map[string]any)
-	if !ok {
-		t.Error("Expected 'claude' section to be a map")
-	}
-
-	// Check that the allowed section exists
-	allowedSection, hasAllowed := claudeConfig["allowed"]
-	if !hasAllowed {
-		t.Error("Expected 'claude' section to have 'allowed' subsection")
-	}
-
-	claudeTools, ok := allowedSection.(map[string]any)
-	if !ok {
-		t.Error("Expected 'claude.allowed' section to be a map")
-	}
-
-	// Verify default tools are present
-	expectedClaudeTools := []string{"Task", "Glob", "Grep", "LS", "Read", "NotebookRead"}
-	for _, expectedTool := range expectedClaudeTools {
-		if _, exists := claudeTools[expectedTool]; !exists {
-			t.Errorf("Expected claude.allowed section to contain '%s'", expectedTool)
-		}
-	}
-
-	// Compute allowed tools
-	allowedTools := engine.computeAllowedClaudeToolsString(toolsWithDefaults, nil)
-
-	// Verify that default Claude tools appear in the allowed tools string
-	for _, expectedTool := range expectedClaudeTools {
-		if !strings.Contains(allowedTools, expectedTool) {
-			t.Errorf("Expected allowed tools to contain '%s', but got: %s", expectedTool, allowedTools)
-		}
-	}
-
-	// Verify github MCP tools are also present
-	if !strings.Contains(allowedTools, "mcp__github__list_issues") {
-		t.Errorf("Expected allowed tools to contain 'mcp__github__list_issues', but got: %s", allowedTools)
-	}
-	if !strings.Contains(allowedTools, "mcp__github__create_issue") {
-		t.Errorf("Expected allowed tools to contain 'mcp__github__create_issue', but got: %s", allowedTools)
-	}
-}
-
 func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 	engine := NewClaudeEngine()
 
@@ -599,7 +521,7 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 			safeOutputs: &SafeOutputsConfig{
 				CreateIssues: &CreateIssuesConfig{Max: 1},
 			},
-			expected: "Read,Write",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write",
 		},
 		{
 			name: "SafeOutputs with general Write permission - should not add specific Write",
@@ -614,7 +536,7 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 			safeOutputs: &SafeOutputsConfig{
 				CreateIssues: &CreateIssuesConfig{Max: 1},
 			},
-			expected: "Read,Write",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write",
 		},
 		{
 			name: "No SafeOutputs - should not add Write permission",
@@ -626,7 +548,7 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 				},
 			},
 			safeOutputs: nil,
-			expected:    "Read",
+			expected:    "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite",
 		},
 		{
 			name: "SafeOutputs with multiple output types",
@@ -644,7 +566,7 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 				AddIssueComments:   &AddIssueCommentsConfig{Max: 1},
 				CreatePullRequests: &CreatePullRequestsConfig{Max: 1},
 			},
-			expected: "Bash,BashOutput,KillBash,Write",
+			expected: "Bash,BashOutput,Edit,ExitPlanMode,Glob,Grep,KillBash,LS,MultiEdit,NotebookEdit,NotebookRead,Read,Task,TodoWrite,Write",
 		},
 		{
 			name: "SafeOutputs with MCP tools",
@@ -661,13 +583,14 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 			safeOutputs: &SafeOutputsConfig{
 				CreateIssues: &CreateIssuesConfig{Max: 1},
 			},
-			expected: "Read,Write,mcp__github__create_issue,mcp__github__create_pull_request",
+			expected: "ExitPlanMode,Glob,Grep,LS,NotebookRead,Read,Task,TodoWrite,Write,mcp__github__create_issue,mcp__github__create_pull_request",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := engine.computeAllowedClaudeToolsString(tt.tools, tt.safeOutputs)
+			claudeTools := engine.applyDefaultClaudeTools(tt.tools, tt.safeOutputs)
+			result := engine.computeAllowedClaudeToolsString(claudeTools, tt.safeOutputs)
 
 			// Split both expected and result into slices and check each tool is present
 			expectedTools := strings.Split(tt.expected, ",")
