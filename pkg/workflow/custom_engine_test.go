@@ -61,6 +61,54 @@ func TestCustomEngineGetExecutionSteps(t *testing.T) {
 	}
 }
 
+func TestCustomEngineStepIDHandling(t *testing.T) {
+	engine := NewCustomEngine()
+
+	// Create engine config with steps that have IDs
+	engineConfig := &EngineConfig{
+		ID: "custom",
+		Steps: []map[string]any{
+			{
+				"name": "Step with ID",
+				"id":   "step_with_id",
+				"run":  "echo 'test'",
+			},
+			{
+				"name": "Step without ID",
+				"run":  "echo 'no id'",
+			},
+		},
+	}
+
+	workflowData := &WorkflowData{
+		Name:         "test-workflow",
+		EngineConfig: engineConfig,
+	}
+
+	config := engine.GetExecutionSteps(workflowData, "/tmp/test.log")
+
+	// Should have 2 custom steps + 1 log step
+	if len(config) != 3 {
+		t.Errorf("Expected 3 steps (2 custom + 1 log), got %d", len(config))
+	}
+
+	// Check the first step has the ID
+	if len(config) > 0 {
+		firstStepContent := strings.Join([]string(config[0]), "\n")
+		if !strings.Contains(firstStepContent, "id: step_with_id") {
+			t.Errorf("Expected first step to contain 'id: step_with_id', got:\n%s", firstStepContent)
+		}
+	}
+
+	// Check the second step doesn't have an ID line
+	if len(config) > 1 {
+		secondStepContent := strings.Join([]string(config[1]), "\n")
+		if strings.Contains(secondStepContent, "id:") {
+			t.Errorf("Expected second step to NOT contain 'id:' since none was provided, got:\n%s", secondStepContent)
+		}
+	}
+}
+
 func TestCustomEngineGetExecutionStepsWithSteps(t *testing.T) {
 	engine := NewCustomEngine()
 

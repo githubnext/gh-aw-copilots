@@ -103,6 +103,13 @@ func (e *CustomEngine) convertStepToYAML(stepMap map[string]any) (string, error)
 		}
 	}
 
+	// Add step id
+	if id, hasID := stepMap["id"]; hasID {
+		if idStr, ok := id.(string); ok {
+			stepYAML = append(stepYAML, fmt.Sprintf("        id: %s", idStr))
+		}
+	}
+
 	// Add run command
 	if run, hasRun := stepMap["run"]; hasRun {
 		if runStr, ok := run.(string); ok {
