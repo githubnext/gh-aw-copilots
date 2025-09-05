@@ -61,6 +61,72 @@ func TestCustomEngineGetExecutionSteps(t *testing.T) {
 	}
 }
 
+func TestCustomEngineGetExecutionStepsWithIdAndContinueOnError(t *testing.T) {
+	engine := NewCustomEngine()
+
+	// Create engine config with steps that include id and continue-on-error fields
+	engineConfig := &EngineConfig{
+		ID: "custom",
+		Steps: []map[string]any{
+			{
+				"name":              "Setup with ID",
+				"id":                "setup-step",
+				"continue-on-error": true,
+				"uses":              "actions/setup-node@v4",
+				"with": map[string]any{
+					"node-version": "18",
+				},
+			},
+			{
+				"name":              "Run command with continue-on-error string",
+				"id":                "run-step",
+				"continue-on-error": "false",
+				"run":               "npm test",
+			},
+		},
+	}
+
+	workflowData := &WorkflowData{
+		Name:         "test-workflow",
+		EngineConfig: engineConfig,
+	}
+
+	steps := engine.GetExecutionSteps(workflowData, "/tmp/test.log")
+
+	// Test with engine config - steps should be populated (2 custom steps + 1 log step)
+	if len(steps) != 3 {
+		t.Errorf("Expected 3 steps when engine config has 2 steps (2 custom + 1 log), got %d", len(steps))
+	}
+
+	// Check the first step content includes id and continue-on-error
+	if len(steps) > 0 {
+		firstStepContent := strings.Join([]string(steps[0]), "\n")
+		if !strings.Contains(firstStepContent, "id: setup-step") {
+			t.Errorf("Expected first step to contain 'id: setup-step', got:\n%s", firstStepContent)
+		}
+		if !strings.Contains(firstStepContent, "continue-on-error: true") {
+			t.Errorf("Expected first step to contain 'continue-on-error: true', got:\n%s", firstStepContent)
+		}
+		if !strings.Contains(firstStepContent, "GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt") {
+			t.Errorf("Expected first step to contain 'GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt', got:\n%s", firstStepContent)
+		}
+	}
+
+	// Check the second step content
+	if len(steps) > 1 {
+		secondStepContent := strings.Join([]string(steps[1]), "\n")
+		if !strings.Contains(secondStepContent, "id: run-step") {
+			t.Errorf("Expected second step to contain 'id: run-step', got:\n%s", secondStepContent)
+		}
+		if !strings.Contains(secondStepContent, "continue-on-error: false") {
+			t.Errorf("Expected second step to contain 'continue-on-error: false', got:\n%s", secondStepContent)
+		}
+		if !strings.Contains(secondStepContent, "GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt") {
+			t.Errorf("Expected second step to contain 'GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt', got:\n%s", secondStepContent)
+		}
+	}
+}
+
 func TestCustomEngineGetExecutionStepsWithSteps(t *testing.T) {
 	engine := NewCustomEngine()
 
@@ -105,7 +171,7 @@ func TestCustomEngineGetExecutionStepsWithSteps(t *testing.T) {
 		}
 	}
 
-	// Check the second step content
+	// Check the second step content includes GITHUB_AW_PROMPT
 	if len(config) > 1 {
 		secondStepContent := strings.Join([]string(config[1]), "\n")
 		if !strings.Contains(secondStepContent, "name: Run tests") {
@@ -113,6 +179,9 @@ func TestCustomEngineGetExecutionStepsWithSteps(t *testing.T) {
 		}
 		if !strings.Contains(secondStepContent, "run:") && !strings.Contains(secondStepContent, "npm test") {
 			t.Errorf("Expected second step to contain run command 'npm test', got:\n%s", secondStepContent)
+		}
+		if !strings.Contains(secondStepContent, "GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt") {
+			t.Errorf("Expected second step to contain 'GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt', got:\n%s", secondStepContent)
 		}
 	}
 }

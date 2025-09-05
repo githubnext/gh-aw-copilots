@@ -179,6 +179,7 @@ jobs:
           EOF
       - name: Create prompt
         env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
         run: |
           mkdir -p /tmp/aw-prompts
@@ -350,6 +351,7 @@ jobs:
           settings: .claude/settings.json
           timeout_minutes: 5
         env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
       - name: Capture Agentic Action logs
         if: always()

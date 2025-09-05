@@ -165,6 +165,8 @@ jobs:
           }
           EOF
       - name: Create prompt
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
         run: |
           mkdir -p /tmp/aw-prompts
           cat > /tmp/aw-prompts/prompt.txt << 'EOF'
@@ -283,6 +285,8 @@ jobs:
           prompt_file: /tmp/aw-prompts/prompt.txt
           settings: .claude/settings.json
           timeout_minutes: 5
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
       - name: Capture Agentic Action logs
         if: always()
         run: |

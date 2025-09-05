@@ -125,3 +125,78 @@ func TestCodexEngineWithVersion(t *testing.T) {
 		t.Error("Expected versioned npm install command with @openai/codex@3.0.1")
 	}
 }
+
+func TestCodexEngineConvertStepToYAMLWithIdAndContinueOnError(t *testing.T) {
+	engine := NewCodexEngine()
+
+	// Test step with id and continue-on-error fields
+	stepMap := map[string]any{
+		"name":              "Test step with id and continue-on-error",
+		"id":                "test-step",
+		"continue-on-error": true,
+		"run":               "echo 'test'",
+	}
+
+	yaml, err := engine.convertStepToYAML(stepMap)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Check that id field is included
+	if !strings.Contains(yaml, "id: test-step") {
+		t.Errorf("Expected YAML to contain 'id: test-step', got:\n%s", yaml)
+	}
+
+	// Check that continue-on-error field is included
+	if !strings.Contains(yaml, "continue-on-error: true") {
+		t.Errorf("Expected YAML to contain 'continue-on-error: true', got:\n%s", yaml)
+	}
+
+	// Test with string continue-on-error
+	stepMap2 := map[string]any{
+		"name":              "Test step with string continue-on-error",
+		"id":                "test-step-2",
+		"continue-on-error": "false",
+		"uses":              "actions/checkout@v4",
+	}
+
+	yaml2, err := engine.convertStepToYAML(stepMap2)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Check that continue-on-error field is included as string
+	if !strings.Contains(yaml2, "continue-on-error: false") {
+		t.Errorf("Expected YAML to contain 'continue-on-error: false', got:\n%s", yaml2)
+	}
+}
+
+func TestCodexEngineExecutionIncludesGitHubAWPrompt(t *testing.T) {
+	engine := NewCodexEngine()
+
+	workflowData := &WorkflowData{
+		Name: "test-workflow",
+	}
+
+	steps := engine.GetExecutionSteps(workflowData, "/tmp/test.log")
+
+	// Should have at least one step
+	if len(steps) == 0 {
+		t.Error("Expected at least one execution step")
+		return
+	}
+
+	// Check that GITHUB_AW_PROMPT environment variable is included
+	foundPromptEnv := false
+	for _, step := range steps {
+		stepContent := strings.Join([]string(step), "\n")
+		if strings.Contains(stepContent, "GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt") {
+			foundPromptEnv = true
+			break
+		}
+	}
+
+	if !foundPromptEnv {
+		t.Error("Expected GITHUB_AW_PROMPT environment variable in codex execution steps")
+	}
+}
