@@ -1039,9 +1039,11 @@ jobs:
                 errors: errors,
               };
               // Store validatedOutput JSON in "agent_output.json" file
-              const agentOutputFile = "agent_output.json";
+              const agentOutputFile = "/tmp/agent_output.json";
               const validatedOutputJson = JSON.stringify(validatedOutput);
               try {
+                // Ensure the /tmp directory exists
+                fs.mkdirSync("/tmp", { recursive: true });
                 fs.writeFileSync(agentOutputFile, validatedOutputJson, "utf8");
                 console.log(`Stored validated output to: ${agentOutputFile}`);
                 // Set the environment variable GITHUB_AW_AGENT_OUTPUT to the file path
