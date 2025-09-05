@@ -113,6 +113,29 @@ func TestMissingToolSafeOutput(t *testing.T) {
 	}
 }
 
+func TestGeneratePromptIncludesGitHubAWPrompt(t *testing.T) {
+	compiler := NewCompiler(false, "", "test")
+
+	data := &WorkflowData{
+		MarkdownContent: "Test workflow content",
+	}
+
+	var yaml strings.Builder
+	compiler.generatePrompt(&yaml, data, &ClaudeEngine{})
+
+	output := yaml.String()
+
+	// Check that GITHUB_AW_PROMPT environment variable is always included
+	if !strings.Contains(output, "GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt") {
+		t.Error("Expected 'GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt' in prompt generation step")
+	}
+
+	// Check that env section is always present now
+	if !strings.Contains(output, "env:") {
+		t.Error("Expected 'env:' section in prompt generation step")
+	}
+}
+
 func TestMissingToolPromptGeneration(t *testing.T) {
 	compiler := NewCompiler(false, "", "test")
 
