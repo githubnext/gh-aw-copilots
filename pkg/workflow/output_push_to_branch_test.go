@@ -309,6 +309,150 @@ This workflow has minimal push-to-branch configuration.
 	}
 }
 
+func TestPushToBranchWithIfNoChangesError(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	// Create a test markdown file with if-no-changes: error
+	testMarkdown := `---
+on:
+  pull_request:
+    types: [opened, synchronize]
+safe-outputs:
+  push-to-branch:
+    branch: feature-updates
+    target: "triggering"
+    if-no-changes: "error"
+---
+
+# Test Push to Branch with if-no-changes: error
+
+This workflow fails when there are no changes.
+`
+
+	// Write the test file
+	mdFile := filepath.Join(tmpDir, "test-push-to-branch-error.md")
+	if err := os.WriteFile(mdFile, []byte(testMarkdown), 0644); err != nil {
+		t.Fatalf("Failed to write test markdown file: %v", err)
+	}
+
+	// Create compiler and compile the workflow
+	compiler := NewCompiler(false, "", "test")
+
+	if err := compiler.CompileWorkflow(mdFile); err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Read the generated .lock.yml file
+	lockFile := strings.TrimSuffix(mdFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read lock file: %v", err)
+	}
+
+	lockContentStr := string(lockContent)
+
+	// Verify that if-no-changes configuration is passed correctly
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PUSH_IF_NO_CHANGES: \"error\"") {
+		t.Errorf("Generated workflow should contain if-no-changes configuration")
+	}
+}
+
+func TestPushToBranchWithIfNoChangesIgnore(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	// Create a test markdown file with if-no-changes: ignore
+	testMarkdown := `---
+on:
+  pull_request:
+    types: [opened, synchronize]
+safe-outputs:
+  push-to-branch:
+    branch: feature-updates
+    if-no-changes: "ignore"
+---
+
+# Test Push to Branch with if-no-changes: ignore
+
+This workflow ignores when there are no changes.
+`
+
+	// Write the test file
+	mdFile := filepath.Join(tmpDir, "test-push-to-branch-ignore.md")
+	if err := os.WriteFile(mdFile, []byte(testMarkdown), 0644); err != nil {
+		t.Fatalf("Failed to write test markdown file: %v", err)
+	}
+
+	// Create compiler and compile the workflow
+	compiler := NewCompiler(false, "", "test")
+
+	if err := compiler.CompileWorkflow(mdFile); err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Read the generated .lock.yml file
+	lockFile := strings.TrimSuffix(mdFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read lock file: %v", err)
+	}
+
+	lockContentStr := string(lockContent)
+
+	// Verify that if-no-changes configuration is passed correctly
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PUSH_IF_NO_CHANGES: \"ignore\"") {
+		t.Errorf("Generated workflow should contain if-no-changes ignore configuration")
+	}
+}
+
+func TestPushToBranchDefaultIfNoChanges(t *testing.T) {
+	// Create a temporary directory for the test
+	tmpDir := t.TempDir()
+
+	// Create a test markdown file without if-no-changes (should default to "warn")
+	testMarkdown := `---
+on:
+  pull_request:
+    types: [opened, synchronize]
+safe-outputs:
+  push-to-branch:
+    branch: feature-updates
+---
+
+# Test Push to Branch Default if-no-changes
+
+This workflow uses default if-no-changes behavior.
+`
+
+	// Write the test file
+	mdFile := filepath.Join(tmpDir, "test-push-to-branch-default-if-no-changes.md")
+	if err := os.WriteFile(mdFile, []byte(testMarkdown), 0644); err != nil {
+		t.Fatalf("Failed to write test markdown file: %v", err)
+	}
+
+	// Create compiler and compile the workflow
+	compiler := NewCompiler(false, "", "test")
+
+	if err := compiler.CompileWorkflow(mdFile); err != nil {
+		t.Fatalf("Failed to compile workflow: %v", err)
+	}
+
+	// Read the generated .lock.yml file
+	lockFile := strings.TrimSuffix(mdFile, ".md") + ".lock.yml"
+	lockContent, err := os.ReadFile(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to read lock file: %v", err)
+	}
+
+	lockContentStr := string(lockContent)
+
+	// Verify that default if-no-changes configuration ("warn") is passed correctly
+	if !strings.Contains(lockContentStr, "GITHUB_AW_PUSH_IF_NO_CHANGES: \"warn\"") {
+		t.Errorf("Generated workflow should contain default if-no-changes configuration (warn)")
+	}
+}
+
 func TestPushToBranchExplicitTriggering(t *testing.T) {
 	// Create a temporary directory for the test
 	tmpDir := t.TempDir()
