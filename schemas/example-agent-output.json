@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "type": "create-issue",
+      "title": "Bug: Application crashes on startup",
+      "body": "The application consistently crashes when attempting to start on macOS 15.1.\n\n**Steps to reproduce:**\n1. Download latest release\n2. Double-click to launch\n3. Crash occurs immediately\n\n**Expected behavior:**\nApplication should start normally\n\n**System info:**\n- macOS 15.1\n- Intel processor",
+      "labels": ["bug", "needs-investigation", "macos"]
+    },
+    {
+      "type": "add-issue-comment",
+      "body": "I've reproduced this issue and it appears to be related to missing dependencies. Investigating further."
+    },
+    {
+      "type": "create-security-report",
+      "sarif": {
+        "version": "2.1.0",
+        "runs": [
+          {
+            "tool": {
+              "driver": {
+                "name": "security-scanner",
+                "version": "1.0.0"
+              }
+            },
+            "results": [
+              {
+                "ruleId": "sql-injection",
+                "message": {
+                  "text": "Potential SQL injection vulnerability detected"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "src/database.js"
+                      },
+                      "region": {
+                        "startLine": 42,
+                        "startColumn": 15
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "category": "security-audit"
+    },
+    {
+      "type": "missing-tool",
+      "tool": "code-coverage",
+      "reason": "Need to generate test coverage reports for quality metrics",
+      "alternatives": "Consider using jest --coverage or c8 for Node.js projects"
+    }
+  ],
+  "errors": [
+    "Line 15: create-issue requires a 'title' string field",
+    "Line 23: Unexpected output type 'invalid-action'"
+  ]
+}
