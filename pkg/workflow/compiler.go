@@ -520,18 +520,13 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		return nil, fmt.Errorf("failed to expand includes for engines: %w", err)
 	}
 
-	// Validate engine conflicts before applying defaults
-	if err := c.validateEngineConflicts(engineSetting, includedEngines); err != nil {
+	// Validate that only one engine field exists across all files
+	finalEngineSetting, err := c.validateSingleEngineSpecification(engineSetting, includedEngines)
+	if err != nil {
 		return nil, err
 	}
-
-	// Merge engine configurations (main workflow takes precedence)
-	mergedEngineSetting, err := c.mergeEngineConfigs(engineSetting, includedEngines)
-	if err != nil {
-		return nil, fmt.Errorf("failed to merge engine configurations: %w", err)
-	}
-	if mergedEngineSetting != "" {
-		engineSetting = mergedEngineSetting
+	if finalEngineSetting != "" {
+		engineSetting = finalEngineSetting
 	}
 
 	// Apply the default AI engine setting if not specified

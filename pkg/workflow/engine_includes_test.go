@@ -109,7 +109,7 @@ engine: claude
 
 @include include-codex.md
 
-This should fail due to engine conflict.
+This should fail due to multiple engine specifications.
 `
 	mainFile := filepath.Join(workflowsDir, "main-conflict.md")
 	if err := os.WriteFile(mainFile, []byte(mainContent), 0644); err != nil {
@@ -120,16 +120,13 @@ This should fail due to engine conflict.
 	compiler := NewCompiler(false, "", "test")
 	err := compiler.CompileWorkflow(mainFile)
 	if err == nil {
-		t.Fatal("Expected compilation to fail due to engine conflict")
+		t.Fatal("Expected compilation to fail due to multiple engine specifications")
 	}
 
 	// Check error message contains expected content
 	errMsg := err.Error()
-	if !strings.Contains(errMsg, "engine conflict") {
-		t.Errorf("Expected error message to contain 'engine conflict', got: %s", errMsg)
-	}
-	if !strings.Contains(errMsg, "claude") && !strings.Contains(errMsg, "codex") {
-		t.Errorf("Expected error message to mention both engines, got: %s", errMsg)
+	if !strings.Contains(errMsg, "multiple engine fields found") {
+		t.Errorf("Expected error message to contain 'multiple engine fields found', got: %s", errMsg)
 	}
 }
 
@@ -253,7 +250,7 @@ This should use the default engine.
 	}
 }
 
-func TestMainEngineOverridesInclude(t *testing.T) {
+func TestMainEngineWithoutIncludes(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir := t.TempDir()
 	workflowsDir := filepath.Join(tmpDir, ".github", "workflows")
@@ -261,23 +258,7 @@ func TestMainEngineOverridesInclude(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create include file with codex engine
-	includeContent := `---
-engine: codex
-tools:
-  github:
-    allowed: ["list_issues"]
----
-
-# Include with Codex Engine
-`
-	includeFile := filepath.Join(workflowsDir, "include-codex.md")
-	if err := os.WriteFile(includeFile, []byte(includeContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create main workflow with claude engine (this should take precedence if conflict check is disabled)
-	// But since we have conflict checking, this should fail. Let's test without conflict
+	// Create main workflow with claude engine (no includes, so no conflict)
 	mainContent := `---
 on: push
 engine: claude
@@ -285,7 +266,7 @@ engine: claude
 
 # Main Workflow with Claude Engine
 
-This workflow specifies claude engine directly.
+This workflow specifies claude engine directly without any includes.
 `
 	mainFile := filepath.Join(workflowsDir, "main-claude.md")
 	if err := os.WriteFile(mainFile, []byte(mainContent), 0644); err != nil {
@@ -310,5 +291,74 @@ This workflow specifies claude engine directly.
 	// Should contain references to claude action
 	if !strings.Contains(lockStr, "anthropics/claude-code-base-action") {
 		t.Error("Expected lock file to contain claude action reference")
+	}
+}
+
+func TestMultipleIncludesWithEnginesFailure(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir := t.TempDir()
+	workflowsDir := filepath.Join(tmpDir, ".github", "workflows")
+	if err := os.MkdirAll(workflowsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create first include file with codex engine
+	includeContent1 := `---
+engine: codex
+tools:
+  github:
+    allowed: ["list_issues"]
+---
+
+# Include with Codex Engine
+`
+	includeFile1 := filepath.Join(workflowsDir, "include-codex.md")
+	if err := os.WriteFile(includeFile1, []byte(includeContent1), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create second include file with claude engine
+	includeContent2 := `---
+engine: claude
+tools:
+  github:
+    allowed: ["create_issue"]
+---
+
+# Include with Claude Engine
+`
+	includeFile2 := filepath.Join(workflowsDir, "include-claude.md")
+	if err := os.WriteFile(includeFile2, []byte(includeContent2), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create main workflow without engine specification but with multiple includes
+	mainContent := `---
+on: push
+---
+
+# Main Workflow
+
+@include include-codex.md
+@include include-claude.md
+
+This should fail due to multiple engine specifications in includes.
+`
+	mainFile := filepath.Join(workflowsDir, "main-multiple-engines.md")
+	if err := os.WriteFile(mainFile, []byte(mainContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Compile the workflow - should fail
+	compiler := NewCompiler(false, "", "test")
+	err := compiler.CompileWorkflow(mainFile)
+	if err == nil {
+		t.Fatal("Expected compilation to fail due to multiple engine specifications")
+	}
+
+	// Check error message contains expected content
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "multiple engine fields found") {
+		t.Errorf("Expected error message to contain 'multiple engine fields found', got: %s", errMsg)
 	}
 }

@@ -135,74 +135,53 @@ func (c *Compiler) getAgenticEngine(engineSetting string) (CodingAgentEngine, er
 	return c.engineRegistry.GetEngineByPrefix(engineSetting)
 }
 
-// validateEngineConflicts validates that included engines don't conflict with the main engine
-func (c *Compiler) validateEngineConflicts(mainEngineSetting string, includedEnginesJSON []string) error {
-	if len(includedEnginesJSON) == 0 {
-		return nil // No included engines to check
-	}
+// validateSingleEngineSpecification validates that only one engine field exists across all files
+func (c *Compiler) validateSingleEngineSpecification(mainEngineSetting string, includedEnginesJSON []string) (string, error) {
+	var allEngines []string
 
-	// Parse main engine configuration
-	mainConfig := &EngineConfig{}
+	// Add main engine if specified
 	if mainEngineSetting != "" {
-		mainConfig.ID = mainEngineSetting
+		allEngines = append(allEngines, mainEngineSetting)
 	}
 
-	// Check each included engine
+	// Add included engines
 	for _, engineJSON := range includedEnginesJSON {
-		var includedEngine interface{}
-		if err := json.Unmarshal([]byte(engineJSON), &includedEngine); err != nil {
-			return fmt.Errorf("failed to parse included engine configuration: %w", err)
-		}
-
-		includedConfig := &EngineConfig{}
-
-		// Handle string format
-		if engineStr, ok := includedEngine.(string); ok {
-			includedConfig.ID = engineStr
-		} else if engineObj, ok := includedEngine.(map[string]interface{}); ok {
-			// Handle object format
-			if id, hasID := engineObj["id"]; hasID {
-				if idStr, ok := id.(string); ok {
-					includedConfig.ID = idStr
-				}
-			}
-		}
-
-		// Check for conflicts
-		if mainEngineSetting != "" && includedConfig.ID != "" && mainConfig.ID != includedConfig.ID {
-			return fmt.Errorf("engine conflict: main workflow specifies engine '%s' but included workflow specifies engine '%s'. Remove the engine specification from either the main workflow or the included workflow", mainConfig.ID, includedConfig.ID)
+		if engineJSON != "" {
+			allEngines = append(allEngines, engineJSON)
 		}
 	}
 
-	return nil
-}
+	// Check count
+	if len(allEngines) == 0 {
+		return "", nil // No engine specified anywhere, will use default
+	}
 
-// mergeEngineConfigs merges engine configurations, preferring the main workflow's engine
-func (c *Compiler) mergeEngineConfigs(mainEngineSetting string, includedEnginesJSON []string) (string, error) {
-	// If main workflow has engine setting, use it
+	if len(allEngines) > 1 {
+		return "", fmt.Errorf("multiple engine fields found. Only one engine field is allowed across the main workflow and all included files. Remove engine specifications to have only one")
+	}
+
+	// Exactly one engine found - parse and return it
 	if mainEngineSetting != "" {
 		return mainEngineSetting, nil
 	}
 
-	// If no main engine but we have included engines, use the first one
-	if len(includedEnginesJSON) > 0 {
-		var firstEngine interface{}
-		if err := json.Unmarshal([]byte(includedEnginesJSON[0]), &firstEngine); err != nil {
-			return "", fmt.Errorf("failed to parse included engine configuration: %w", err)
-		}
+	// Must be from included file
+	var firstEngine interface{}
+	if err := json.Unmarshal([]byte(includedEnginesJSON[0]), &firstEngine); err != nil {
+		return "", fmt.Errorf("failed to parse included engine configuration: %w", err)
+	}
 
-		// Handle string format
-		if engineStr, ok := firstEngine.(string); ok {
-			return engineStr, nil
-		} else if engineObj, ok := firstEngine.(map[string]interface{}); ok {
-			// Handle object format - return the ID
-			if id, hasID := engineObj["id"]; hasID {
-				if idStr, ok := id.(string); ok {
-					return idStr, nil
-				}
+	// Handle string format
+	if engineStr, ok := firstEngine.(string); ok {
+		return engineStr, nil
+	} else if engineObj, ok := firstEngine.(map[string]interface{}); ok {
+		// Handle object format - return the ID
+		if id, hasID := engineObj["id"]; hasID {
+			if idStr, ok := id.(string); ok {
+				return idStr, nil
 			}
 		}
 	}
 
-	return "", nil // No engine specified anywhere
+	return "", fmt.Errorf("invalid engine configuration in included file")
 }
