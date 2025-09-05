@@ -2731,7 +2731,7 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 
 	yaml.WriteString("        run: |\n")
 	yaml.WriteString("          mkdir -p /tmp/aw-prompts\n")
-	yaml.WriteString("          cat > /tmp/aw-prompts/prompt.txt << 'EOF'\n")
+	yaml.WriteString("          cat > /tmp/aw-prompts/prompt.txt << 'GITHUB_AW_PROMPT_END'\n")
 
 	// Add markdown content with proper indentation
 	for _, line := range strings.Split(data.MarkdownContent, "\n") {
@@ -2962,7 +2962,7 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 		yaml.WriteString("          \n")
 	}
 
-	yaml.WriteString("          EOF\n")
+	yaml.WriteString("          GITHUB_AW_PROMPT_END\n")
 
 	// Add step to print prompt to GitHub step summary for debugging
 	yaml.WriteString("      - name: Print prompt to step summary\n")

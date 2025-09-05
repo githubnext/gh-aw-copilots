@@ -169,12 +169,12 @@ jobs:
           GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'EOF'
+          cat > /tmp/aw-prompts/prompt.txt << 'GITHUB_AW_PROMPT_END'
           # Secure Web Research Task
           
           Please research the GitHub API documentation or Stack Overflow and find information about repository topics. Summarize them in a brief report.
           
-          EOF
+          GITHUB_AW_PROMPT_END
       - name: Print prompt to step summary
         run: |
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY

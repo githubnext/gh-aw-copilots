@@ -88,7 +88,7 @@ jobs:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'EOF'
+          cat > /tmp/aw-prompts/prompt.txt << 'GITHUB_AW_PROMPT_END'
           # Test Safe Outputs - Custom Engine
           
           This workflow validates all safe output types using the custom engine implementation. It demonstrates the ability to use GitHub Actions steps directly in agentic workflows while leveraging the safe output processing system.
@@ -218,7 +218,7 @@ jobs:
           - Only include output types that are configured for this workflow
           - The content of this file will be automatically processed and executed
           
-          EOF
+          GITHUB_AW_PROMPT_END
       - name: Print prompt to step summary
         run: |
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY
