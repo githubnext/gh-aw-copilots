@@ -39,12 +39,21 @@ async function main() {
     return;
   }
 
-  // Process the first item for backward compatibility
-  const labelsItem = labelItems[0];
+  // Process all items and collect labels from all of them
+  const allLabels = [];
+  for (const labelsItem of labelItems) {
+    console.log("Found add-issue-label item:", {
+      labelsCount: labelsItem.labels.length,
+    });
 
-  console.log("Found add-issue-label item:", {
-    labelsCount: labelsItem.labels.length,
-  });
+    // Extract labels from this item
+    const itemLabels = labelsItem.labels || [];
+    allLabels.push(...itemLabels);
+  }
+
+  console.log(
+    `Processed ${labelItems.length} add-issue-label items, collected ${allLabels.length} labels total`
+  );
 
   // Read the allowed labels from environment variable (optional)
   const allowedLabelsEnv = process.env.GITHUB_AW_LABELS_ALLOWED;
@@ -122,8 +131,8 @@ async function main() {
     return;
   }
 
-  // Extract labels from the JSON item
-  const requestedLabels = labelsItem.labels || [];
+  // Extract labels from all items (already collected above)
+  const requestedLabels = allLabels;
   console.log("Requested labels:", requestedLabels);
 
   // Check for label removal attempts (labels starting with '-')

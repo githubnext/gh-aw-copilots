@@ -113,11 +113,9 @@ async function main() {
     return;
   }
 
-  // Process the first item for backward compatibility
-  const pushItem = pushItems[0];
-  console.log("Found push-to-branch item");
+  console.log("Found push-to-branch items:", pushItems.length);
 
-  // Validate target configuration for pull request context
+  // Validate target configuration for pull request context (check once for all items)
   if (target !== "*" && target !== "triggering") {
     // If target is a specific number, validate it's a valid pull request number
     const targetNumber = parseInt(target, 10);
@@ -137,118 +135,126 @@ async function main() {
     return;
   }
 
-  // Configure git (required for commits)
-  execSync('git config --global user.email "action@github.com"', {
-    stdio: "inherit",
-  });
-  execSync('git config --global user.name "GitHub Action"', {
-    stdio: "inherit",
-  });
+  // Process all items and make pushes for each
+  for (let i = 0; i < pushItems.length; i++) {
+    const pushItem = pushItems[i];
+    console.log(`Processing push-to-branch item ${i + 1}/${pushItems.length}`);
 
-  // Switch to or create the target branch
-  console.log("Switching to branch:", branchName);
-  try {
-    // Try to checkout existing branch first
-    execSync("git fetch origin", { stdio: "inherit" });
-    execSync(`git checkout ${branchName}`, { stdio: "inherit" });
-    console.log("Checked out existing branch:", branchName);
-  } catch (error) {
-    // Branch doesn't exist, create it
-    console.log("Branch does not exist, creating new branch:", branchName);
-    execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
-  }
+    // Configure git (required for commits) - only do this once
+    if (i === 0) {
+      execSync('git config --global user.email "action@github.com"', {
+        stdio: "inherit",
+      });
+      execSync('git config --global user.name "GitHub Action"', {
+        stdio: "inherit",
+      });
+    }
 
-  // Apply the patch using git CLI (skip if empty)
-  if (!isEmpty) {
-    console.log("Applying patch...");
+    // Switch to or create the target branch
+    console.log("Switching to branch:", branchName);
     try {
-      execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
-      console.log("Patch applied successfully");
+      // Try to checkout existing branch first
+      execSync("git fetch origin", { stdio: "inherit" });
+      execSync(`git checkout ${branchName}`, { stdio: "inherit" });
+      console.log("Checked out existing branch:", branchName);
     } catch (error) {
-      core.error(
-        `Failed to apply patch: ${error instanceof Error ? error.message : String(error)}`
-      );
-      core.setFailed("Failed to apply patch");
-      return;
+      // Branch doesn't exist, create it
+      console.log("Branch does not exist, creating new branch:", branchName);
+      execSync(`git checkout -b ${branchName}`, { stdio: "inherit" });
     }
-  } else {
-    console.log("Skipping patch application (empty patch)");
-  }
 
-  // Commit and push the changes
-  execSync("git add .", { stdio: "inherit" });
-
-  // Check if there are changes to commit
-  let hasChanges = false;
-  try {
-    execSync("git diff --cached --exit-code", { stdio: "ignore" });
-
-    // No changes to commit - apply if-no-changes configuration
-    const message =
-      "No changes to commit - noop operation completed successfully";
-
-    switch (ifNoChanges) {
-      case "error":
-        core.setFailed(
-          "No changes to commit - failing as configured by if-no-changes: error"
+    // Apply the patch using git CLI (skip if empty)
+    if (!isEmpty) {
+      console.log("Applying patch...");
+      try {
+        execSync("git apply /tmp/aw.patch", { stdio: "inherit" });
+        console.log("Patch applied successfully");
+      } catch (error) {
+        core.error(
+          `Failed to apply patch: ${error instanceof Error ? error.message : String(error)}`
         );
+        core.setFailed("Failed to apply patch");
         return;
-      case "ignore":
-        // Silent success - no console output
-        break;
-      case "warn":
-      default:
-        console.log(message);
-        break;
+      }
+    } else {
+      console.log("Skipping patch application (empty patch)");
     }
 
-    hasChanges = false;
-  } catch (error) {
-    // Exit code != 0 means there are changes to commit, which is what we want
-    hasChanges = true;
-  }
+    // Commit and push the changes
+    execSync("git add .", { stdio: "inherit" });
 
-  let commitSha;
-  if (hasChanges) {
-    const commitMessage = pushItem.message || "Apply agent changes";
-    execSync(`git commit -m "${commitMessage}"`, { stdio: "inherit" });
-    execSync(`git push origin ${branchName}`, { stdio: "inherit" });
-    console.log("Changes committed and pushed to branch:", branchName);
-    commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-  } else {
-    // For noop operations, get the current HEAD commit
-    commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
-  }
+    // Check if there are changes to commit
+    let hasChanges = false;
+    try {
+      execSync("git diff --cached --exit-code", { stdio: "ignore" });
 
-  // Get commit SHA and push URL
-  const pushUrl = context.payload.repository
-    ? `${context.payload.repository.html_url}/tree/${branchName}`
-    : `https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName}`;
+      // No changes to commit - apply if-no-changes configuration
+      const message =
+        "No changes to commit - noop operation completed successfully";
 
-  // Set outputs
-  core.setOutput("branch_name", branchName);
-  core.setOutput("commit_sha", commitSha);
-  core.setOutput("push_url", pushUrl);
+      switch (ifNoChanges) {
+        case "error":
+          core.setFailed(
+            "No changes to commit - failing as configured by if-no-changes: error"
+          );
+          return;
+        case "ignore":
+          // Silent success - no console output
+          break;
+        case "warn":
+        default:
+          console.log(message);
+          break;
+      }
 
-  // Write summary to GitHub Actions summary
-  const summaryTitle = hasChanges
-    ? "Push to Branch"
-    : "Push to Branch (No Changes)";
-  const summaryContent = hasChanges
-    ? `
+      hasChanges = false;
+    } catch (error) {
+      // Exit code != 0 means there are changes to commit, which is what we want
+      hasChanges = true;
+    }
+
+    let commitSha;
+    if (hasChanges) {
+      const commitMessage = pushItem.message || "Apply agent changes";
+      execSync(`git commit -m "${commitMessage}"`, { stdio: "inherit" });
+      execSync(`git push origin ${branchName}`, { stdio: "inherit" });
+      console.log("Changes committed and pushed to branch:", branchName);
+      commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    } else {
+      // For noop operations, get the current HEAD commit
+      commitSha = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    }
+
+    // Get commit SHA and push URL
+    const pushUrl = context.payload.repository
+      ? `${context.payload.repository.html_url}/tree/${branchName}`
+      : `https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName}`;
+
+    // Set outputs (will be overwritten for each push, last one wins)
+    core.setOutput("branch_name", branchName);
+    core.setOutput("commit_sha", commitSha);
+    core.setOutput("push_url", pushUrl);
+
+    // Write summary to GitHub Actions summary
+    const summaryTitle = hasChanges
+      ? `Push to Branch ${i + 1}`
+      : `Push to Branch ${i + 1} (No Changes)`;
+    const summaryContent = hasChanges
+      ? `
 ## ${summaryTitle}
 - **Branch**: \`${branchName}\`
 - **Commit**: [${commitSha.substring(0, 7)}](${pushUrl})
 - **URL**: [${pushUrl}](${pushUrl})
 `
-    : `
+      : `
 ## ${summaryTitle}
 - **Branch**: \`${branchName}\`
 - **Status**: No changes to apply (noop operation)
 - **URL**: [${pushUrl}](${pushUrl})
 `;
 
-  await core.summary.addRaw(summaryContent).write();
+    await core.summary.addRaw(summaryContent).write();
+  }
 }
 
 await main();
