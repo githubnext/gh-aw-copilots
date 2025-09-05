@@ -375,7 +375,7 @@ jobs:
           GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'GITHUB_AW_PROMPT_END'
+          cat > $GITHUB_AW_PROMPT << 'EOF'
           If the title of the issue #${{ github.event.issue.number }} is exactly "[claude-test] Hello from Claude" then add the issue labels "claude-safe-output-label-test" to the issue.
           
           
@@ -409,13 +409,13 @@ jobs:
           - Only include output types that are configured for this workflow
           - The content of this file will be automatically processed and executed
           
-          GITHUB_AW_PROMPT_END
+          EOF
       - name: Print prompt to step summary
         run: |
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '``````markdown' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/aw-prompts/prompt.txt >> $GITHUB_STEP_SUMMARY
+          cat $GITHUB_AW_PROMPT >> $GITHUB_STEP_SUMMARY
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Generate agentic run info
         uses: actions/github-script@v7

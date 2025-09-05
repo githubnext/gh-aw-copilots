@@ -169,18 +169,18 @@ jobs:
           GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'GITHUB_AW_PROMPT_END'
+          cat > $GITHUB_AW_PROMPT << 'EOF'
           # Secure Web Research Task
           
           Please research the GitHub API documentation or Stack Overflow and find information about repository topics. Summarize them in a brief report.
           
-          GITHUB_AW_PROMPT_END
+          EOF
       - name: Print prompt to step summary
         run: |
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '``````markdown' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/aw-prompts/prompt.txt >> $GITHUB_STEP_SUMMARY
+          cat $GITHUB_AW_PROMPT >> $GITHUB_STEP_SUMMARY
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Generate agentic run info
         uses: actions/github-script@v7
