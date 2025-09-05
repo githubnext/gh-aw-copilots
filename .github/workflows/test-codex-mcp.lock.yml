@@ -1099,7 +1099,7 @@ jobs:
         if: always() && steps.collect_output.outputs.output != ''
         uses: actions/upload-artifact@v4
         with:
-          name: aw_output.json
+          name: safe_output.jsonl
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           if-no-files-found: warn
       - name: Parse agent logs for step summary

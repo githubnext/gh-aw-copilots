@@ -112,7 +112,7 @@ metrics including duration, token usage, and cost information.
 
 Downloaded artifacts include:
 - aw_info.json: Engine configuration and workflow metadata
-- aw_output.json: Agent's final output content (available when non-empty)
+- safe_output.jsonl: Agent's final output content (available when non-empty)
 - aw.patch: Git patch of changes made during execution
 - Various log files with execution details and metrics
 
@@ -669,14 +669,14 @@ func extractLogMetrics(logDir string, verbose bool) (LogMetrics, error) {
 		}
 	}
 
-	// Check for aw_output.json artifact file
-	awOutputPath := filepath.Join(logDir, "aw_output.json")
+	// Check for safe_output.jsonl artifact file
+	awOutputPath := filepath.Join(logDir, "safe_output.jsonl")
 	if _, err := os.Stat(awOutputPath); err == nil {
 		if verbose {
 			// Report that the agentic output file was found
 			fileInfo, statErr := os.Stat(awOutputPath)
 			if statErr == nil {
-				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agentic output file: aw_output.json (%s)", formatFileSize(fileInfo.Size()))))
+				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agentic output file: safe_output.jsonl (%s)", formatFileSize(fileInfo.Size()))))
 			}
 		}
 	}
@@ -1087,7 +1087,7 @@ func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([
 
 	// Look for the safe output artifact file that contains structured JSON with items array
 	// This file is created by the collect_ndjson_output.cjs script during workflow execution
-	safeOutputPath := filepath.Join(runDir, "aw_output.json")
+	safeOutputPath := filepath.Join(runDir, "safe_output.jsonl")
 	if _, err := os.Stat(safeOutputPath); err == nil {
 		// Read the safe output artifact file
 		content, readErr := os.ReadFile(safeOutputPath)
