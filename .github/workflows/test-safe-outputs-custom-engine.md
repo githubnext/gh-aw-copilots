@@ -2,9 +2,9 @@
 on:
   workflow_dispatch:
   issues:
-    types: [opened, reopened, closed]
+    types: [opened]
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    types: [opened]
   push:
     branches: [main]
   schedule:
