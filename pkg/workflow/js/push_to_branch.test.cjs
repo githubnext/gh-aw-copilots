@@ -93,5 +93,26 @@ describe("push_to_branch.cjs", () => {
       expect(scriptContent).toContain("git fetch");
       expect(scriptContent).toContain("git config");
     });
+
+    it("should handle empty patches as noop operations", () => {
+      const scriptPath = path.join(__dirname, "push_to_branch.cjs");
+      const scriptContent = fs.readFileSync(scriptPath, "utf8");
+
+      // Check that empty patches are handled gracefully
+      expect(scriptContent).toContain("noop operation");
+      expect(scriptContent).toContain("Patch file is empty");
+      expect(scriptContent).toContain(
+        "No changes to commit - noop operation completed successfully"
+      );
+    });
+
+    it("should still fail on actual error conditions", () => {
+      const scriptPath = path.join(__dirname, "push_to_branch.cjs");
+      const scriptContent = fs.readFileSync(scriptPath, "utf8");
+
+      // Check that actual errors still cause failures
+      expect(scriptContent).toContain("Failed to generate patch");
+      expect(scriptContent).toContain("core.setFailed");
+    });
   });
 });
