@@ -28,10 +28,10 @@ func TestLogsPatchArtifactHandling(t *testing.T) {
 		t.Fatalf("Failed to write aw_info.json: %v", err)
 	}
 
-	awOutputFile := filepath.Join(logDir, "aw_output.txt")
+	awOutputFile := filepath.Join(logDir, "aw_output.json")
 	awOutputContent := "Test output from agentic execution"
 	if err := os.WriteFile(awOutputFile, []byte(awOutputContent), 0644); err != nil {
-		t.Fatalf("Failed to write aw_output.txt: %v", err)
+		t.Fatalf("Failed to write aw_output.json: %v", err)
 	}
 
 	awPatchFile := filepath.Join(logDir, "aw.patch")
@@ -83,7 +83,7 @@ func TestLogsCommandHelp(t *testing.T) {
 	// Verify the help text mentions all expected artifacts
 	expectedArtifacts := []string{
 		"aw_info.json",
-		"aw_output.txt",
+		"aw_output.json",
 		"aw.patch",
 	}
 
