@@ -203,18 +203,15 @@ func (c *Compiler) parseWorkflowMarkdownContentWithToolsString(content string) (
 	// Extract and process tools
 	topTools := extractToolsFromFrontmatter(result.Frontmatter)
 	topTools = c.applyDefaultGitHubMCPTools(topTools)
-	tools := engine.applyDefaultClaudeTools(topTools, safeOutputs)
 
 	// Build basic workflow data for testing
 	workflowData := &WorkflowData{
 		Name:        "Test Workflow",
-		Tools:       tools,
+		Tools:       topTools,
 		SafeOutputs: safeOutputs,
 		AI:          "claude",
 	}
-
-	// Compute allowed tools string
-	allowedToolsStr := engine.computeAllowedClaudeToolsString(tools, safeOutputs)
+	allowedToolsStr := engine.computeAllowedClaudeToolsString(topTools, safeOutputs)
 
 	return workflowData, allowedToolsStr, nil
 }

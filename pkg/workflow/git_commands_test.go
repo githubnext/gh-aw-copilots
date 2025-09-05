@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -98,72 +99,42 @@ func TestApplyDefaultGitCommandsForSafeOutputs(t *testing.T) {
 
 			// Apply both default tool functions in sequence
 			tools = compiler.applyDefaultGitHubMCPTools(tools)
-			result := engine.applyDefaultClaudeTools(tools, tt.safeOutputs)
+			result := engine.computeAllowedClaudeToolsString(tools, tt.safeOutputs)
 
-			// Check if claude section exists and has bash tool
-			claudeSection, hasClaudeSection := result["claude"]
-			if !hasClaudeSection {
-				if tt.expectGit {
-					t.Error("Expected claude section to be created with Git commands")
+			// Parse the result string into individual tools
+			resultTools := []string{}
+			if result != "" {
+				resultTools = strings.Split(result, ",")
+			}
+
+			// Check if we have bash tools when expected
+			hasBashTool := false
+			hasGitCommands := false
+
+			for _, tool := range resultTools {
+				tool = strings.TrimSpace(tool)
+				if tool == "Bash" {
+					hasBashTool = true
+					hasGitCommands = true // "Bash" alone means all bash commands are allowed
+					break
 				}
-				return
-			}
-
-			claudeConfig, ok := claudeSection.(map[string]any)
-			if !ok {
-				t.Error("Expected claude section to be a map")
-				return
-			}
-
-			allowed, hasAllowed := claudeConfig["allowed"]
-			if !hasAllowed {
-				if tt.expectGit {
-					t.Error("Expected claude section to have allowed tools")
+				if strings.HasPrefix(tool, "Bash(git ") {
+					hasBashTool = true
+					hasGitCommands = true
+					break
 				}
-				return
 			}
 
-			allowedMap, ok := allowed.(map[string]any)
-			if !ok {
-				t.Error("Expected allowed to be a map")
-				return
-			}
-
-			bashTool, hasBash := allowedMap["Bash"]
-			if !hasBash {
-				if tt.expectGit {
+			if tt.expectGit {
+				if !hasBashTool {
 					t.Error("Expected Bash tool to be present when Git commands are needed")
 				}
-				return
-			}
-
-			// If we don't expect Git commands, just verify no error occurred
-			if !tt.expectGit {
-				return
-			}
-
-			// Check the specific cases for bash tool value
-			if bashCommands, ok := bashTool.([]any); ok {
-				// Should contain Git commands
-				foundGitCommands := false
-				for _, cmd := range bashCommands {
-					if cmdStr, ok := cmd.(string); ok {
-						if cmdStr == "git checkout:*" || cmdStr == "git add:*" || cmdStr == ":*" || cmdStr == "*" {
-							foundGitCommands = true
-							break
-						}
-					}
+				if !hasGitCommands {
+					t.Error("Expected to find Git commands in Bash tool")
 				}
-				if !foundGitCommands {
-					t.Error("Expected to find Git commands in Bash tool commands")
-				}
-			} else if bashTool == nil {
-				// nil value means all bash commands are allowed, which includes Git commands
-				// This is acceptable - nil value already permits all commands
-				_ = bashTool // Keep the nil value as-is
-			} else {
-				t.Errorf("Unexpected Bash tool value type: %T", bashTool)
 			}
+			// If we don't expect git commands, we just verify no error occurred
+			// The result can still contain other tools
 		})
 	}
 }
@@ -225,7 +196,8 @@ func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 		},
 	}
 
-	expectedEditingTools := []string{"Edit", "MultiEdit", "Write", "NotebookEdit"}
+	expectedEditingTools := []string{"Edit", "MultiEdit", "NotebookEdit"}
+	expectedWriteTool := "Write"
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -237,35 +209,33 @@ func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 
 			// Apply both default tool functions in sequence
 			tools = compiler.applyDefaultGitHubMCPTools(tools)
-			result := engine.applyDefaultClaudeTools(tools, tt.safeOutputs)
+			result := engine.computeAllowedClaudeToolsString(tools, tt.safeOutputs)
 
-			// Check if claude section exists
-			claudeSection, hasClaudeSection := result["claude"]
-			if !hasClaudeSection {
-				if tt.expectEditingTools {
-					t.Error("Expected claude section to be created with editing tools")
+			// Parse the result string into individual tools
+			resultTools := []string{}
+			if result != "" {
+				resultTools = strings.Split(result, ",")
+			}
+
+			// Check if we have the expected editing tools
+			foundEditingTools := make(map[string]bool)
+			hasWriteTool := false
+
+			for _, tool := range resultTools {
+				tool = strings.TrimSpace(tool)
+				for _, expectedTool := range expectedEditingTools {
+					if tool == expectedTool {
+						foundEditingTools[expectedTool] = true
+					}
 				}
-				return
-			}
-
-			claudeConfig, ok := claudeSection.(map[string]any)
-			if !ok {
-				t.Error("Expected claude section to be a map")
-				return
-			}
-
-			allowed, hasAllowed := claudeConfig["allowed"]
-			if !hasAllowed {
-				if tt.expectEditingTools {
-					t.Error("Expected claude section to have allowed tools")
+				if tool == expectedWriteTool {
+					hasWriteTool = true
 				}
-				return
 			}
 
-			allowedMap, ok := allowed.(map[string]any)
-			if !ok {
-				t.Error("Expected allowed to be a map")
-				return
+			// Write tool should be present for any SafeOutputs configuration
+			if tt.safeOutputs != nil && !hasWriteTool {
+				t.Error("Expected Write tool to be present when SafeOutputs is configured")
 			}
 
 			// If we don't expect editing tools, verify they aren't there due to this feature
@@ -273,7 +243,7 @@ func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 				// Only check if we started with empty tools - if there were pre-existing tools, they should remain
 				if len(tt.tools) == 0 {
 					for _, tool := range expectedEditingTools {
-						if _, exists := allowedMap[tool]; exists {
+						if foundEditingTools[tool] {
 							t.Errorf("Unexpected editing tool %s found when not expected", tool)
 						}
 					}
@@ -281,9 +251,9 @@ func TestAdditionalClaudeToolsForSafeOutputs(t *testing.T) {
 				return
 			}
 
-			// Check that all expected editing tools are present
+			// Check that all expected editing tools are present (not including Write, which is handled separately)
 			for _, expectedTool := range expectedEditingTools {
-				if _, exists := allowedMap[expectedTool]; !exists {
+				if !foundEditingTools[expectedTool] {
 					t.Errorf("Expected editing tool %s to be present", expectedTool)
 				}
 			}

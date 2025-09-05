@@ -188,8 +188,7 @@ func TestClaudeEngineComputeAllowedTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			claudeTools := engine.applyDefaultClaudeTools(tt.tools, nil)
-			result := engine.computeAllowedClaudeToolsString(claudeTools, nil)
+			result := engine.computeAllowedClaudeToolsString(tt.tools, nil)
 
 			// Parse expected and actual results into sets for comparison
 			expectedTools := make(map[string]bool)
@@ -317,8 +316,7 @@ func TestClaudeEngineComputeAllowedToolsWithSafeOutputs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			claudeTools := engine.applyDefaultClaudeTools(tt.tools, tt.safeOutputs)
-			result := engine.computeAllowedClaudeToolsString(claudeTools, tt.safeOutputs)
+			result := engine.computeAllowedClaudeToolsString(tt.tools, tt.safeOutputs)
 
 			// Split both expected and result into slices and check each tool is present
 			expectedTools := strings.Split(tt.expected, ",")
