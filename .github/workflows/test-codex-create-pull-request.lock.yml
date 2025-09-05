@@ -921,6 +921,13 @@ jobs:
           name: safe_output.jsonl
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
           if-no-files-found: warn
+      - name: Upload agent output JSON
+        if: always() && env.GITHUB_AW_AGENT_OUTPUT
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent_output.json
+          path: ${{ env.GITHUB_AW_AGENT_OUTPUT }}
+          if-no-files-found: warn
       - name: Parse agent logs for step summary
         if: always()
         uses: actions/github-script@v7
