@@ -2720,15 +2720,18 @@ func (c *Compiler) generateUploadAccessLogs(yaml *strings.Builder, tools map[str
 func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, engine CodingAgentEngine) {
 	yaml.WriteString("      - name: Create prompt\n")
 
+	// Add environment variables section - always include GITHUB_AW_PROMPT
+	yaml.WriteString("        env:\n")
+	yaml.WriteString("          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt\n")
+
 	// Only add GITHUB_AW_SAFE_OUTPUTS environment variable if safe-outputs feature is used
 	if data.SafeOutputs != nil {
-		yaml.WriteString("        env:\n")
 		yaml.WriteString("          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}\n")
 	}
 
 	yaml.WriteString("        run: |\n")
 	yaml.WriteString("          mkdir -p /tmp/aw-prompts\n")
-	yaml.WriteString("          cat > /tmp/aw-prompts/prompt.txt << 'EOF'\n")
+	yaml.WriteString("          cat > $GITHUB_AW_PROMPT << 'EOF'\n")
 
 	// Add markdown content with proper indentation
 	for _, line := range strings.Split(data.MarkdownContent, "\n") {
@@ -2967,7 +2970,7 @@ func (c *Compiler) generatePrompt(yaml *strings.Builder, data *WorkflowData, eng
 	yaml.WriteString("          echo \"## Generated Prompt\" >> $GITHUB_STEP_SUMMARY\n")
 	yaml.WriteString("          echo \"\" >> $GITHUB_STEP_SUMMARY\n")
 	yaml.WriteString("          echo '``````markdown' >> $GITHUB_STEP_SUMMARY\n")
-	yaml.WriteString("          cat /tmp/aw-prompts/prompt.txt >> $GITHUB_STEP_SUMMARY\n")
+	yaml.WriteString("          cat $GITHUB_AW_PROMPT >> $GITHUB_STEP_SUMMARY\n")
 	yaml.WriteString("          echo '``````' >> $GITHUB_STEP_SUMMARY\n")
 }
 

@@ -165,9 +165,11 @@ jobs:
           }
           EOF
       - name: Create prompt
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
         run: |
           mkdir -p /tmp/aw-prompts
-          cat > /tmp/aw-prompts/prompt.txt << 'EOF'
+          cat > $GITHUB_AW_PROMPT << 'EOF'
           # Secure Web Research Task
           
           Please research the GitHub API documentation or Stack Overflow and find information about repository topics. Summarize them in a brief report.
@@ -178,7 +180,7 @@ jobs:
           echo "## Generated Prompt" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '``````markdown' >> $GITHUB_STEP_SUMMARY
-          cat /tmp/aw-prompts/prompt.txt >> $GITHUB_STEP_SUMMARY
+          cat $GITHUB_AW_PROMPT >> $GITHUB_STEP_SUMMARY
           echo '``````' >> $GITHUB_STEP_SUMMARY
       - name: Generate agentic run info
         uses: actions/github-script@v7
@@ -283,6 +285,8 @@ jobs:
           prompt_file: /tmp/aw-prompts/prompt.txt
           settings: .claude/settings.json
           timeout_minutes: 5
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
       - name: Capture Agentic Action logs
         if: always()
         run: |
