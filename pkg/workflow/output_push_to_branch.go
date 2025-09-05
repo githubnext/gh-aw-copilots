@@ -19,11 +19,11 @@ func (c *Compiler) buildCreateOutputPushToBranchJob(data *WorkflowData, mainJobN
 
 	// Step 1: Download patch artifact
 	steps = append(steps, "      - name: Download patch artifact\n")
+	steps = append(steps, "        continue-on-error: true\n")
 	steps = append(steps, "        uses: actions/download-artifact@v5\n")
 	steps = append(steps, "        with:\n")
 	steps = append(steps, "          name: aw.patch\n")
 	steps = append(steps, "          path: /tmp/\n")
-	steps = append(steps, "          if-no-artifact-found: warn\n")
 
 	// Step 2: Checkout repository
 	steps = append(steps, "      - name: Checkout repository\n")

@@ -1636,11 +1636,11 @@ jobs:
       push_url: ${{ steps.push_to_branch.outputs.push_url }}
     steps:
       - name: Download patch artifact
+        continue-on-error: true
         uses: actions/download-artifact@v5
         with:
           name: aw.patch
           path: /tmp/
-          if-no-artifact-found: warn
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
