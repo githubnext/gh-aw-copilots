@@ -392,10 +392,10 @@ func processIncludedFile(filePath, sectionName string, extractTools bool) (strin
 		} else {
 			// For non-workflow files, fall back to relaxed validation with warnings
 			if len(result.Frontmatter) > 0 {
-				// Check for unexpected frontmatter fields (anything other than tools)
+				// Check for unexpected frontmatter fields (anything other than tools and engine)
 				unexpectedFields := make([]string, 0)
 				for key := range result.Frontmatter {
-					if key != "tools" {
+					if key != "tools" && key != "engine" {
 						unexpectedFields = append(unexpectedFields, key)
 					}
 				}
@@ -407,12 +407,18 @@ func processIncludedFile(filePath, sectionName string, extractTools bool) (strin
 							filePath, strings.Join(unexpectedFields, ", "))))
 				}
 
-				// Validate the tools section if present
+				// Validate the tools and engine sections if present
+				filteredFrontmatter := map[string]any{}
 				if tools, hasTools := result.Frontmatter["tools"]; hasTools {
-					filteredFrontmatter := map[string]any{"tools": tools}
+					filteredFrontmatter["tools"] = tools
+				}
+				if engine, hasEngine := result.Frontmatter["engine"]; hasEngine {
+					filteredFrontmatter["engine"] = engine
+				}
+				if len(filteredFrontmatter) > 0 {
 					if err := ValidateIncludedFileFrontmatterWithSchemaAndLocation(filteredFrontmatter, filePath); err != nil {
 						fmt.Fprintf(os.Stderr, "%s\n", console.FormatWarningMessage(
-							fmt.Sprintf("Invalid tools configuration in %s: %v", filePath, err)))
+							fmt.Sprintf("Invalid configuration in %s: %v", filePath, err)))
 					}
 				}
 			}
@@ -477,6 +483,28 @@ func extractToolsFromContent(content string) (string, error) {
 	return strings.TrimSpace(string(toolsJSON)), nil
 }
 
+// extractEngineFromContent extracts engine section from frontmatter as JSON string
+func extractEngineFromContent(content string) (string, error) {
+	result, err := ExtractFrontmatterFromContent(content)
+	if err != nil {
+		return "", nil // Return empty string on error
+	}
+
+	// Extract engine section
+	engine, exists := result.Frontmatter["engine"]
+	if !exists {
+		return "", nil
+	}
+
+	// Convert to JSON string
+	engineJSON, err := json.Marshal(engine)
+	if err != nil {
+		return "", nil
+	}
+
+	return strings.TrimSpace(string(engineJSON)), nil
+}
+
 // ExpandIncludes recursively expands @include directives until no more remain
 // This matches the bash expand_includes function behavior
 func ExpandIncludes(content, baseDir string, extractTools bool) (string, error) {
@@ -514,6 +542,95 @@ func ExpandIncludes(content, baseDir string, extractTools bool) (string, error) 
 	}
 
 	return currentContent, nil
+}
+
+// ExpandIncludesForEngines recursively expands @include directives to extract engine configurations
+func ExpandIncludesForEngines(content, baseDir string) ([]string, error) {
+	const maxDepth = 10
+	var engines []string
+	currentContent := content
+
+	for depth := 0; depth < maxDepth; depth++ {
+		// Process includes in current content to extract engines
+		processedEngines, processedContent, err := ProcessIncludesForEngines(currentContent, baseDir)
+		if err != nil {
+			return nil, err
+		}
+
+		// Add found engines to the list
+		engines = append(engines, processedEngines...)
+
+		// Check if content changed
+		if processedContent == currentContent {
+			// No more includes to process
+			break
+		}
+
+		currentContent = processedContent
+	}
+
+	return engines, nil
+}
+
+// ProcessIncludesForEngines processes @include directives to extract engine configurations
+func ProcessIncludesForEngines(content, baseDir string) ([]string, string, error) {
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	var result bytes.Buffer
+	var engines []string
+	includePattern := regexp.MustCompile(`^@include(\?)?\s+(.+)$`)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Check if this line is an @include directive
+		if matches := includePattern.FindStringSubmatch(line); matches != nil {
+			isOptional := matches[1] == "?"
+			includePath := strings.TrimSpace(matches[2])
+
+			// Handle section references (file.md#Section) - for engines, we ignore sections
+			var filePath string
+			if strings.Contains(includePath, "#") {
+				parts := strings.SplitN(includePath, "#", 2)
+				filePath = parts[0]
+				// Note: section references are ignored for engine extraction since engines are in frontmatter
+			} else {
+				filePath = includePath
+			}
+
+			// Resolve file path
+			fullPath, err := resolveIncludePath(filePath, baseDir)
+			if err != nil {
+				if isOptional {
+					// For optional includes, skip engine extraction
+					continue
+				}
+				// For required includes, fail compilation with an error
+				return nil, "", fmt.Errorf("failed to resolve required include '%s': %w", filePath, err)
+			}
+
+			// Extract engine configuration from the included file
+			content, err := os.ReadFile(fullPath)
+			if err != nil {
+				// For any processing errors, fail compilation
+				return nil, "", fmt.Errorf("failed to read included file '%s': %w", fullPath, err)
+			}
+
+			// Extract engine configuration
+			engineJSON, err := extractEngineFromContent(string(content))
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to extract engine from '%s': %w", fullPath, err)
+			}
+
+			if engineJSON != "" {
+				engines = append(engines, engineJSON)
+			}
+		} else {
+			// Regular line, just pass through
+			result.WriteString(line + "\n")
+		}
+	}
+
+	return engines, result.String(), nil
 }
 
 // mergeToolsFromJSON merges multiple JSON tool objects from content
