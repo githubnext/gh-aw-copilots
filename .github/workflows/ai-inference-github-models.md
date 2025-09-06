@@ -41,7 +41,7 @@ engine:
         fi
         
         # Generate safe output for issue comment
-        echo "{\"type\": \"add-issue-comment\", \"issue_number\": \"$ISSUE_NUMBER\", \"body\": \"## 🤖 AI Analysis\\n\\nI've analyzed this issue using GitHub's AI models. Here's my assessment:\\n\\n${{ steps.ai_inference.outputs.response }}\\n\\n---\\n*This response was generated using GitHub Models via the AI Inference action.*\"}" >> $GITHUB_AW_SAFE_OUTPUTS
+        echo "{\"type\": \"add-issue-comment\", \"issue_number\": \"$ISSUE_NUMBER\", \"body\": \"${{ steps.ai_inference.outputs.response }}\"}" >> $GITHUB_AW_SAFE_OUTPUTS
 
 safe-outputs:
   add-issue-comment:
@@ -49,4 +49,8 @@ safe-outputs:
     target: "*"
 ---
 
-Summarize the issue #${{ github.event.issue.number }}
+Summarize the issue inlined below and provide suggestions for next steps.
+
+---
+
+${{ needs.task.outputs.text }}
