@@ -514,6 +514,21 @@ func (c *Compiler) parseWorkflowFile(markdownPath string) (*WorkflowData, error)
 		engineSetting = c.engineOverride
 	}
 
+	// Process @include directives to extract engine configurations and check for conflicts
+	includedEngines, err := parser.ExpandIncludesForEngines(result.Markdown, markdownDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand includes for engines: %w", err)
+	}
+
+	// Validate that only one engine field exists across all files
+	finalEngineSetting, err := c.validateSingleEngineSpecification(engineSetting, includedEngines)
+	if err != nil {
+		return nil, err
+	}
+	if finalEngineSetting != "" {
+		engineSetting = finalEngineSetting
+	}
+
 	// Apply the default AI engine setting if not specified
 	if engineSetting == "" {
 		defaultEngine := c.engineRegistry.GetDefaultEngine()
