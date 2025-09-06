@@ -2459,7 +2459,7 @@ func (c *Compiler) generateSafetyChecks(yaml *strings.Builder, data *WorkflowDat
 }
 
 // generateMCPSetup generates the MCP server configuration setup
-func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any, engine CodingAgentEngine) {
+func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any, engine CodingAgentEngine, safeOutputs *SafeOutputsConfig) {
 	// Collect tools that need MCP server configuration
 	var mcpTools []string
 	var proxyTools []string
@@ -2479,6 +2479,13 @@ func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any,
 				}
 			}
 		}
+	}
+
+	// Add safe-outputs MCP server if safe outputs are configured
+	var hasSafeOutputsMCP bool
+	if safeOutputs != nil {
+		mcpTools = append(mcpTools, "safe-outputs")
+		hasSafeOutputsMCP = true
 	}
 
 	// Sort tools to ensure stable code generation
@@ -2539,6 +2546,11 @@ func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any,
 		}
 	}
 
+	// Generate safe-outputs MCP server setup if needed
+	if hasSafeOutputsMCP {
+		c.generateSafeOutputsMCPServerSetup(yaml, safeOutputs)
+	}
+
 	// If no MCP tools, no configuration needed
 	if len(mcpTools) == 0 {
 		return
@@ -2550,6 +2562,92 @@ func (c *Compiler) generateMCPSetup(yaml *strings.Builder, tools map[string]any,
 
 	// Use the engine's RenderMCPConfig method
 	engine.RenderMCPConfig(yaml, tools, mcpTools)
+}
+
+// generateSafeOutputsMCPServerSetup generates the setup step for the safe-outputs MCP server
+func (c *Compiler) generateSafeOutputsMCPServerSetup(yaml *strings.Builder, safeOutputs *SafeOutputsConfig) {
+	yaml.WriteString("      - name: Install Bun\n")
+	yaml.WriteString("        run: |\n")
+	yaml.WriteString("          set -e\n")
+	yaml.WriteString("          echo \"Installing Bun...\"\n")
+	yaml.WriteString("          curl -fsSL https://bun.sh/install | bash\n")
+	yaml.WriteString("          export PATH=\"$HOME/.bun/bin:$PATH\"\n")
+	yaml.WriteString("          echo \"$HOME/.bun/bin\" >> $GITHUB_PATH\n")
+	yaml.WriteString("          bun --version\n")
+	yaml.WriteString("          echo \"Bun installed successfully\"\n")
+	yaml.WriteString("      - name: Setup Safe Outputs MCP Server\n")
+	yaml.WriteString("        run: |\n")
+	yaml.WriteString("          set -e\n")
+	yaml.WriteString("          echo \"Setting up Safe Outputs MCP Server...\"\n")
+	yaml.WriteString("          \n")
+	yaml.WriteString("          # Create MCP server directory\n")
+	yaml.WriteString("          mkdir -p /tmp/mcp-safe-outputs\n")
+	yaml.WriteString("          \n")
+	yaml.WriteString("          # Write the MCP server script\n")
+	yaml.WriteString("          cat > /tmp/mcp-safe-outputs/server.ts << 'EOF'\n")
+
+	// Write the MCP server script content
+	WriteJavaScriptToYAML(yaml, mcpSafeOutputsServerScript)
+
+	yaml.WriteString("          EOF\n")
+	yaml.WriteString("          \n")
+	yaml.WriteString("          # Make the script executable\n")
+	yaml.WriteString("          chmod +x /tmp/mcp-safe-outputs/server.ts\n")
+	yaml.WriteString("          \n")
+	yaml.WriteString("          # Create safe outputs configuration JSON for the MCP server\n")
+	yaml.WriteString("          cat > /tmp/mcp-safe-outputs/config.json << 'EOF'\n")
+
+	// Generate configuration JSON for the MCP server
+	c.generateSafeOutputsConfigJSON(yaml, safeOutputs)
+
+	yaml.WriteString("          EOF\n")
+	yaml.WriteString("          \n")
+	yaml.WriteString("          echo \"Safe Outputs MCP Server setup completed\"\n")
+}
+
+// generateSafeOutputsConfigJSON generates JSON configuration for the safe outputs MCP server
+func (c *Compiler) generateSafeOutputsConfigJSON(yaml *strings.Builder, safeOutputs *SafeOutputsConfig) {
+	yaml.WriteString("          {\n")
+
+	configs := make([]string, 0)
+
+	if safeOutputs.CreateIssues != nil {
+		configs = append(configs, "            \"create-issue\": true")
+	}
+	if safeOutputs.AddIssueComments != nil {
+		configs = append(configs, "            \"add-issue-comment\": true")
+	}
+	if safeOutputs.CreateDiscussions != nil {
+		configs = append(configs, "            \"create-discussion\": true")
+	}
+	if safeOutputs.CreatePullRequests != nil {
+		configs = append(configs, "            \"create-pull-request\": true")
+	}
+	if safeOutputs.AddIssueLabels != nil {
+		configs = append(configs, "            \"add-issue-label\": true")
+	}
+	if safeOutputs.UpdateIssues != nil {
+		configs = append(configs, "            \"update-issue\": true")
+	}
+	if safeOutputs.PushToBranch != nil {
+		configs = append(configs, "            \"push-to-branch\": true")
+	}
+	if safeOutputs.CreateSecurityReports != nil {
+		configs = append(configs, "            \"create-security-report\": true")
+	}
+	if safeOutputs.MissingTool != nil {
+		configs = append(configs, "            \"missing-tool\": true")
+	}
+
+	for i, config := range configs {
+		yaml.WriteString(config)
+		if i < len(configs)-1 {
+			yaml.WriteString(",")
+		}
+		yaml.WriteString("\n")
+	}
+
+	yaml.WriteString("          }")
 }
 
 func getGitHubDockerImageVersion(githubTool any) string {
@@ -2612,7 +2710,7 @@ func (c *Compiler) generateMainJobSteps(yaml *strings.Builder, data *WorkflowDat
 	}
 
 	// Add MCP setup
-	c.generateMCPSetup(yaml, data.Tools, engine)
+	c.generateMCPSetup(yaml, data.Tools, engine, data.SafeOutputs)
 
 	// Add safety checks before executing agentic tools
 	c.generateSafetyChecks(yaml, data)

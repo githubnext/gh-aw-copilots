@@ -215,6 +215,8 @@ func (e *CodexEngine) RenderMCPConfig(yaml *strings.Builder, tools map[string]an
 		case "github":
 			githubTool := tools["github"]
 			e.renderGitHubCodexMCPConfig(yaml, githubTool)
+		case "safe-outputs":
+			e.renderSafeOutputsCodexMCPConfig(yaml)
 		default:
 			// Handle custom MCP tools (those with MCP-compatible type)
 			if toolConfig, ok := tools[toolName].(map[string]any); ok {
@@ -293,6 +295,18 @@ func (e *CodexEngine) renderGitHubCodexMCPConfig(yaml *strings.Builder, githubTo
 	yaml.WriteString("            \"ghcr.io/github/github-mcp-server:" + githubDockerImageVersion + "\"\n")
 	yaml.WriteString("          ]\n")
 	yaml.WriteString("          env = { \"GITHUB_PERSONAL_ACCESS_TOKEN\" = \"${{ secrets.GITHUB_TOKEN }}\" }\n")
+}
+
+// renderSafeOutputsCodexMCPConfig generates the Safe Outputs MCP server configuration for Codex
+func (e *CodexEngine) renderSafeOutputsCodexMCPConfig(yaml *strings.Builder) {
+	yaml.WriteString("          \n")
+	yaml.WriteString("          [mcp_servers.safe-outputs]\n")
+	yaml.WriteString("          command = \"bun\"\n")
+	yaml.WriteString("          args = [\"/tmp/mcp-safe-outputs/server.ts\"]\n")
+	yaml.WriteString("          env = {\n")
+	yaml.WriteString("            \"MCP_SAFE_OUTPUTS_CONFIG\" = \"$(cat /tmp/mcp-safe-outputs/config.json)\",\n")
+	yaml.WriteString("            \"GITHUB_AW_SAFE_OUTPUTS\" = \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\"\n")
+	yaml.WriteString("          }\n")
 }
 
 // renderCodexMCPConfig generates custom MCP server configuration for a single tool in codex workflow config.toml
