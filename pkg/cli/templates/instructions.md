@@ -85,6 +85,27 @@ The YAML frontmatter supports these fields:
     ```
     The `custom` engine allows you to define your own GitHub Actions steps instead of using an AI processor. Each step in the `steps` array follows standard GitHub Actions step syntax with `name`, `uses`/`run`, `with`, `env`, etc. This is useful for deterministic workflows that don't require AI processing.
 
+    **Environment Variables Available to Custom Engines:**
+    
+    Custom engine steps have access to the following environment variables:
+    
+    - **`$GITHUB_AW_PROMPT`**: Path to the generated prompt file (`/tmp/aw-prompts/prompt.txt`) containing the markdown content from the workflow. This file contains the natural language instructions that would normally be sent to an AI processor. Custom engines can read this file to access the workflow's markdown content programmatically.
+    - **`$GITHUB_AW_SAFE_OUTPUTS`**: Path to the safe outputs file (when safe-outputs are configured). Used for writing structured output that gets processed automatically.
+    - **`$GITHUB_AW_MAX_TURNS`**: Maximum number of turns/iterations (when max-turns is configured in engine config).
+    
+    Example of accessing the prompt content:
+    ```bash
+    # Read the workflow prompt content
+    cat $GITHUB_AW_PROMPT
+    
+    # Process the prompt content in a custom step
+    - name: Process workflow instructions
+      run: |
+        echo "Workflow instructions:"
+        cat $GITHUB_AW_PROMPT
+        # Add your custom processing logic here
+    ```
+
     **Writing Safe Output Entries Manually (Custom Engines):**
     
     Custom engines can write safe output entries by appending JSON objects to the `$GITHUB_AW_SAFE_OUTPUTS` environment variable (a JSONL file). Each line should contain a complete JSON object with a `type` field and the relevant data for that output type.
@@ -139,7 +160,10 @@ The YAML frontmatter supports these fields:
   
 - **`tools:`** - Tool configuration for coding agent
   - `github:` - GitHub API tools
-  - `claude:` - Claude-specific tools  
+  - `edit:` - File editing tools
+  - `web-fetch:` - Web content fetching tools
+  - `web-search:` - Web search tools
+  - `bash:` - Shell command tools
   - Custom tool names for MCP servers
 
 - **`safe-outputs:`** - Safe output processing configuration
@@ -384,21 +408,16 @@ tools:
       - create_issue
 ```
 
-### Claude Tools
+### General Tools
 ```yaml
 tools:
-  claude:
-    allowed:
-      Edit:           # File editing
-      MultiEdit:      # Multiple file editing
-      Write:          # File writing
-      NotebookEdit:   # Notebook editing
-      WebFetch:       # Web content fetching
-      WebSearch:      # Web searching
-      Bash:           # Shell commands
-        - "gh label list:*"
-        - "gh label view:*"
-        - "git status"
+  edit:           # File editing
+  web-fetch:       # Web content fetching
+  web-search:      # Web searching
+  bash:           # Shell commands
+  - "gh label list:*"
+  - "gh label view:*"
+  - "git status"
 ```
 
 ### Custom MCP Tools
@@ -675,10 +694,10 @@ permissions:
 tools:
   github:
     allowed: [create_issue, list_issues, list_commits]
-  claude:
-    allowed:
-      WebFetch:
-      WebSearch:
+  web-fetch:
+  web-search:
+  edit:
+  bash: ["echo", "ls"]
 timeout_minutes: 15
 ---
 

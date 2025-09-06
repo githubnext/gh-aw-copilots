@@ -301,7 +301,7 @@ jobs:
                       print(f"No domains are allowed for WebSearch", file=sys.stderr)
                       sys.exit(2)  # Block under deny-all policy
                   else:
-                      print(f"Network access blocked for WebSearch: no specific domain detected", file=sys.stderr)
+                      print(f"Network access blocked for web-search: no specific domain detected", file=sys.stderr)
                       print(f"Allowed domains: {', '.join(ALLOWED_DOMAINS)}", file=sys.stderr)
                       sys.exit(2)  # Block general searches when domain allowlist is configured
               
@@ -1250,6 +1250,19 @@ jobs:
                 items: parsedItems,
                 errors: errors,
               };
+              // Store validatedOutput JSON in "agent_output.json" file
+              const agentOutputFile = "/tmp/agent_output.json";
+              const validatedOutputJson = JSON.stringify(validatedOutput);
+              try {
+                // Ensure the /tmp directory exists
+                fs.mkdirSync("/tmp", { recursive: true });
+                fs.writeFileSync(agentOutputFile, validatedOutputJson, "utf8");
+                console.log(`Stored validated output to: ${agentOutputFile}`);
+                // Set the environment variable GITHUB_AW_AGENT_OUTPUT to the file path
+                core.exportVariable("GITHUB_AW_AGENT_OUTPUT", agentOutputFile);
+              } catch (error) {
+                console.error(`Failed to write agent output file: ${error.message}`);
+              }
               core.setOutput("output", JSON.stringify(validatedOutput));
               core.setOutput("raw_output", outputContent);
             }
@@ -1278,8 +1291,15 @@ jobs:
         if: always() && steps.collect_output.outputs.output != ''
         uses: actions/upload-artifact@v4
         with:
-          name: aw_output.txt
+          name: safe_output.jsonl
           path: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
+          if-no-files-found: warn
+      - name: Upload agent output JSON
+        if: always() && env.GITHUB_AW_AGENT_OUTPUT
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent_output.json
+          path: ${{ env.GITHUB_AW_AGENT_OUTPUT }}
           if-no-files-found: warn
       - name: Upload engine output files
         uses: actions/upload-artifact@v4

@@ -71,6 +71,10 @@ This workflow tests the agentic output collection functionality.
 		t.Error("Expected 'Upload agentic output file' step to be in generated workflow")
 	}
 
+	if !strings.Contains(lockContent, "- name: Upload agent output JSON") {
+		t.Error("Expected 'Upload agent output JSON' step to be in generated workflow")
+	}
+
 	// Verify job output declaration for GITHUB_AW_SAFE_OUTPUTS
 	if !strings.Contains(lockContent, "outputs:\n      output: ${{ steps.collect_output.outputs.output }}") {
 		t.Error("Expected job output declaration for 'output'")
@@ -164,6 +168,10 @@ This workflow tests that Codex engine gets GITHUB_AW_SAFE_OUTPUTS but not engine
 
 	if !strings.Contains(lockContent, "- name: Upload agentic output file") {
 		t.Error("Codex workflow should have 'Upload agentic output file' step (GITHUB_AW_SAFE_OUTPUTS functionality)")
+	}
+
+	if !strings.Contains(lockContent, "- name: Upload agent output JSON") {
+		t.Error("Codex workflow should have 'Upload agent output JSON' step (GITHUB_AW_SAFE_OUTPUTS functionality)")
 	}
 
 	if !strings.Contains(lockContent, "GITHUB_AW_SAFE_OUTPUTS") {

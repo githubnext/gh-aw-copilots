@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,26 @@ type LogMetrics = workflow.LogMetrics
 type ProcessedRun struct {
 	Run            WorkflowRun
 	AccessAnalysis *DomainAnalysis
+	MissingTools   []MissingToolReport
+}
+
+// MissingToolReport represents a missing tool reported by an agentic workflow
+type MissingToolReport struct {
+	Tool         string `json:"tool"`
+	Reason       string `json:"reason"`
+	Alternatives string `json:"alternatives,omitempty"`
+	Timestamp    string `json:"timestamp"`
+	WorkflowName string `json:"workflow_name,omitempty"` // Added for tracking which workflow reported this
+	RunID        int64  `json:"run_id,omitempty"`        // Added for tracking which run reported this
+}
+
+// MissingToolSummary aggregates missing tool reports across runs
+type MissingToolSummary struct {
+	Tool        string
+	Count       int
+	Workflows   []string // List of workflow names that reported this tool
+	FirstReason string   // Reason from the first occurrence
+	RunIDs      []int64  // List of run IDs where this tool was reported
 }
 
 // ErrNoArtifacts indicates that a workflow run has no artifacts
@@ -58,6 +79,7 @@ type DownloadResult struct {
 	Run            WorkflowRun
 	Metrics        LogMetrics
 	AccessAnalysis *DomainAnalysis
+	MissingTools   []MissingToolReport
 	Error          error
 	Skipped        bool
 	LogsPath       string
@@ -90,7 +112,8 @@ metrics including duration, token usage, and cost information.
 
 Downloaded artifacts include:
 - aw_info.json: Engine configuration and workflow metadata
-- aw_output.txt: Agent's final output content (available when non-empty)
+- safe_output.jsonl: Agent's final output content (available when non-empty)
+- agent_output.json: Full/raw agent output (if the workflow uploaded this artifact)
 - aw.patch: Git patch of changes made during execution
 - Various log files with execution details and metrics
 
@@ -333,6 +356,7 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 			processedRun := ProcessedRun{
 				Run:            run,
 				AccessAnalysis: result.AccessAnalysis,
+				MissingTools:   result.MissingTools,
 			}
 			processedRuns = append(processedRuns, processedRun)
 			batchProcessed++
@@ -372,10 +396,13 @@ func DownloadWorkflowLogs(workflowName string, count int, startDate, endDate, ou
 	for i, pr := range processedRuns {
 		workflowRuns[i] = pr.Run
 	}
-	displayLogsOverview(workflowRuns, outputDir)
+	displayLogsOverview(workflowRuns)
 
 	// Display access log analysis
 	displayAccessLogAnalysis(processedRuns, verbose)
+
+	// Display missing tools analysis
+	displayMissingToolsAnalysis(processedRuns, verbose)
 
 	// Display logs location prominently
 	absOutputDir, _ := filepath.Abs(outputDir)
@@ -447,6 +474,15 @@ func downloadRunArtifactsConcurrent(runs []WorkflowRun, outputDir string, verbos
 					}
 				}
 				result.AccessAnalysis = accessAnalysis
+
+				// Extract missing tools if available
+				missingTools, missingErr := extractMissingToolsFromRun(runOutputDir, run, verbose)
+				if missingErr != nil {
+					if verbose {
+						fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to extract missing tools for run %d: %v", run.DatabaseID, missingErr)))
+					}
+				}
+				result.MissingTools = missingTools
 			}
 
 			return result
@@ -634,14 +670,14 @@ func extractLogMetrics(logDir string, verbose bool) (LogMetrics, error) {
 		}
 	}
 
-	// Check for aw_output.txt artifact file
-	awOutputPath := filepath.Join(logDir, "aw_output.txt")
+	// Check for safe_output.jsonl artifact file
+	awOutputPath := filepath.Join(logDir, "safe_output.jsonl")
 	if _, err := os.Stat(awOutputPath); err == nil {
 		if verbose {
 			// Report that the agentic output file was found
 			fileInfo, statErr := os.Stat(awOutputPath)
 			if statErr == nil {
-				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agentic output file: aw_output.txt (%s)", formatFileSize(fileInfo.Size()))))
+				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agentic output file: safe_output.jsonl (%s)", formatFileSize(fileInfo.Size()))))
 			}
 		}
 	}
@@ -654,6 +690,26 @@ func extractLogMetrics(logDir string, verbose bool) (LogMetrics, error) {
 			fileInfo, statErr := os.Stat(awPatchPath)
 			if statErr == nil {
 				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found git patch file: aw.patch (%s)", formatFileSize(fileInfo.Size()))))
+			}
+		}
+	}
+
+	// Check for agent_output.json artifact (some workflows may store this under a nested directory)
+	agentOutputPath, agentOutputFound := findAgentOutputFile(logDir)
+	if agentOutputFound {
+		if verbose {
+			fileInfo, statErr := os.Stat(agentOutputPath)
+			if statErr == nil {
+				fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found agent output file: %s (%s)", filepath.Base(agentOutputPath), formatFileSize(fileInfo.Size()))))
+			}
+		}
+		// If the file is not already in the logDir root, copy it for convenience
+		if filepath.Dir(agentOutputPath) != logDir {
+			rootCopy := filepath.Join(logDir, "agent_output.json")
+			if _, err := os.Stat(rootCopy); errors.Is(err, os.ErrNotExist) {
+				if copyErr := copyFileSimple(agentOutputPath, rootCopy); copyErr == nil && verbose {
+					fmt.Println(console.FormatInfoMessage("Copied agent_output.json to run root for easy access"))
+				}
 			}
 		}
 	}
@@ -796,7 +852,7 @@ func parseLogFileWithEngine(filePath string, detectedEngine workflow.CodingAgent
 var extractJSONMetrics = workflow.ExtractJSONMetrics
 
 // displayLogsOverview displays a summary table of workflow runs and metrics
-func displayLogsOverview(runs []WorkflowRun, outputDir string) {
+func displayLogsOverview(runs []WorkflowRun) {
 	if len(runs) == 0 {
 		return
 	}
@@ -957,6 +1013,44 @@ func formatFileSize(size int64) string {
 	return fmt.Sprintf("%.1f %s", float64(size)/float64(div), units[exp])
 }
 
+// findAgentOutputFile searches for a file named agent_output.json within the logDir tree.
+// Returns the first path found (depth-first) and a boolean indicating success.
+func findAgentOutputFile(logDir string) (string, bool) {
+	var foundPath string
+	_ = filepath.Walk(logDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		if !info.IsDir() && strings.EqualFold(info.Name(), "agent_output.json") {
+			foundPath = path
+			return errors.New("stop") // sentinel to stop walking early
+		}
+		return nil
+	})
+	if foundPath == "" {
+		return "", false
+	}
+	return foundPath, true
+}
+
+// copyFileSimple copies a file from src to dst using buffered IO.
+func copyFileSimple(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
+}
+
 // dirExists checks if a directory exists
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
@@ -1044,4 +1138,214 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// extractMissingToolsFromRun extracts missing tool reports from a workflow run's artifacts
+func extractMissingToolsFromRun(runDir string, run WorkflowRun, verbose bool) ([]MissingToolReport, error) {
+	var missingTools []MissingToolReport
+
+	// Look for the safe output artifact file that contains structured JSON with items array
+	// This file is created by the collect_ndjson_output.cjs script during workflow execution
+	agentOutputPath := filepath.Join(runDir, "agent_output.json")
+	if _, err := os.Stat(agentOutputPath); err == nil {
+		// Read the safe output artifact file
+		content, readErr := os.ReadFile(agentOutputPath)
+		if readErr != nil {
+			if verbose {
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to read safe output file %s: %v", agentOutputPath, readErr)))
+			}
+			return missingTools, nil // Continue processing without this file
+		}
+
+		// Parse the structured JSON output from the collect script
+		var safeOutput struct {
+			Items  []json.RawMessage `json:"items"`
+			Errors []string          `json:"errors,omitempty"`
+		}
+
+		if err := json.Unmarshal(content, &safeOutput); err != nil {
+			if verbose {
+				fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse safe output JSON from %s: %v", agentOutputPath, err)))
+			}
+			return missingTools, nil // Continue processing without this file
+		}
+
+		// Extract missing-tool entries from the items array
+		for _, itemRaw := range safeOutput.Items {
+			var item struct {
+				Type         string `json:"type"`
+				Tool         string `json:"tool,omitempty"`
+				Reason       string `json:"reason,omitempty"`
+				Alternatives string `json:"alternatives,omitempty"`
+				Timestamp    string `json:"timestamp,omitempty"`
+			}
+
+			if err := json.Unmarshal(itemRaw, &item); err != nil {
+				if verbose {
+					fmt.Println(console.FormatWarningMessage(fmt.Sprintf("Failed to parse item from safe output: %v", err)))
+				}
+				continue // Skip malformed items
+			}
+
+			// Check if this is a missing-tool entry
+			if item.Type == "missing-tool" {
+				missingTool := MissingToolReport{
+					Tool:         item.Tool,
+					Reason:       item.Reason,
+					Alternatives: item.Alternatives,
+					Timestamp:    item.Timestamp,
+					WorkflowName: run.WorkflowName,
+					RunID:        run.DatabaseID,
+				}
+				missingTools = append(missingTools, missingTool)
+
+				if verbose {
+					fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found missing-tool entry: %s (%s)", item.Tool, item.Reason)))
+				}
+			}
+		}
+
+		if verbose && len(missingTools) > 0 {
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("Found %d missing tool reports in safe output artifact for run %d", len(missingTools), run.DatabaseID)))
+		}
+	} else {
+		if verbose {
+			fmt.Println(console.FormatInfoMessage(fmt.Sprintf("No safe output artifact found at %s for run %d", agentOutputPath, run.DatabaseID)))
+		}
+	}
+
+	return missingTools, nil
+}
+
+// displayMissingToolsAnalysis displays a summary of missing tools across all runs
+func displayMissingToolsAnalysis(processedRuns []ProcessedRun, verbose bool) {
+	// Aggregate missing tools across all runs
+	toolSummary := make(map[string]*MissingToolSummary)
+	var totalReports int
+
+	for _, pr := range processedRuns {
+		for _, tool := range pr.MissingTools {
+			totalReports++
+			if summary, exists := toolSummary[tool.Tool]; exists {
+				summary.Count++
+				// Add workflow if not already in the list
+				found := false
+				for _, wf := range summary.Workflows {
+					if wf == tool.WorkflowName {
+						found = true
+						break
+					}
+				}
+				if !found {
+					summary.Workflows = append(summary.Workflows, tool.WorkflowName)
+				}
+				summary.RunIDs = append(summary.RunIDs, tool.RunID)
+			} else {
+				toolSummary[tool.Tool] = &MissingToolSummary{
+					Tool:        tool.Tool,
+					Count:       1,
+					Workflows:   []string{tool.WorkflowName},
+					FirstReason: tool.Reason,
+					RunIDs:      []int64{tool.RunID},
+				}
+			}
+		}
+	}
+
+	if totalReports == 0 {
+		return // No missing tools to display
+	}
+
+	// Display summary header
+	fmt.Printf("\n%s\n", console.FormatListHeader("🛠️  Missing Tools Summary"))
+	fmt.Printf("%s\n\n", console.FormatListHeader("======================="))
+
+	// Convert map to slice for sorting
+	var summaries []*MissingToolSummary
+	for _, summary := range toolSummary {
+		summaries = append(summaries, summary)
+	}
+
+	// Sort by count (descending)
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].Count > summaries[j].Count
+	})
+
+	// Display summary table
+	headers := []string{"Tool", "Occurrences", "Workflows", "First Reason"}
+	var rows [][]string
+
+	for _, summary := range summaries {
+		workflowList := strings.Join(summary.Workflows, ", ")
+		if len(workflowList) > 40 {
+			workflowList = workflowList[:37] + "..."
+		}
+
+		reason := summary.FirstReason
+		if len(reason) > 50 {
+			reason = reason[:47] + "..."
+		}
+
+		rows = append(rows, []string{
+			summary.Tool,
+			fmt.Sprintf("%d", summary.Count),
+			workflowList,
+			reason,
+		})
+	}
+
+	tableConfig := console.TableConfig{
+		Headers: headers,
+		Rows:    rows,
+	}
+
+	fmt.Print(console.RenderTable(tableConfig))
+
+	// Display total summary
+	uniqueTools := len(toolSummary)
+	fmt.Printf("\n📊 %s: %d unique missing tools reported %d times across workflows\n",
+		console.FormatCountMessage("Total"),
+		uniqueTools,
+		totalReports)
+
+	// Verbose mode: Show detailed breakdown by workflow
+	if verbose && totalReports > 0 {
+		displayDetailedMissingToolsBreakdown(processedRuns)
+	}
+}
+
+// displayDetailedMissingToolsBreakdown shows missing tools organized by workflow (verbose mode)
+func displayDetailedMissingToolsBreakdown(processedRuns []ProcessedRun) {
+	fmt.Printf("\n%s\n", console.FormatListHeader("🔍 Detailed Missing Tools Breakdown"))
+	fmt.Printf("%s\n", console.FormatListHeader("===================================="))
+
+	for _, pr := range processedRuns {
+		if len(pr.MissingTools) == 0 {
+			continue
+		}
+
+		fmt.Printf("\n%s (Run %d) - %d missing tools:\n",
+			console.FormatInfoMessage(pr.Run.WorkflowName),
+			pr.Run.DatabaseID,
+			len(pr.MissingTools))
+
+		for i, tool := range pr.MissingTools {
+			fmt.Printf("  %d. %s %s\n",
+				i+1,
+				console.FormatListItem(tool.Tool),
+				console.FormatVerboseMessage(fmt.Sprintf("- %s", tool.Reason)))
+
+			if tool.Alternatives != "" && tool.Alternatives != "null" {
+				fmt.Printf("     %s %s\n",
+					console.FormatWarningMessage("Alternatives:"),
+					tool.Alternatives)
+			}
+
+			if tool.Timestamp != "" {
+				fmt.Printf("     %s %s\n",
+					console.FormatVerboseMessage("Reported at:"),
+					tool.Timestamp)
+			}
+		}
+	}
 }
