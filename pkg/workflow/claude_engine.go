@@ -579,6 +579,8 @@ func (e *ClaudeEngine) RenderMCPConfig(yaml *strings.Builder, tools map[string]a
 		case "github":
 			githubTool := tools["github"]
 			e.renderGitHubClaudeMCPConfig(yaml, githubTool, isLast)
+		case "safe-outputs":
+			e.renderSafeOutputsClaudeMCPConfig(yaml, isLast)
 		default:
 			// Handle custom MCP tools (those with MCP-compatible type)
 			if toolConfig, ok := tools[toolName].(map[string]any); ok {
@@ -615,6 +617,23 @@ func (e *ClaudeEngine) renderGitHubClaudeMCPConfig(yaml *strings.Builder, github
 	yaml.WriteString("                ],\n")
 	yaml.WriteString("                \"env\": {\n")
 	yaml.WriteString("                  \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"${{ secrets.GITHUB_TOKEN }}\"\n")
+	yaml.WriteString("                }\n")
+
+	if isLast {
+		yaml.WriteString("              }\n")
+	} else {
+		yaml.WriteString("              },\n")
+	}
+}
+
+// renderSafeOutputsClaudeMCPConfig generates the Safe Outputs MCP server configuration
+func (e *ClaudeEngine) renderSafeOutputsClaudeMCPConfig(yaml *strings.Builder, isLast bool) {
+	yaml.WriteString("              \"safe-outputs\": {\n")
+	yaml.WriteString("                \"command\": \"npx\",\n")
+	yaml.WriteString("                \"args\": [\"tsx\", \"/tmp/mcp-safe-outputs/server.ts\"],\n")
+	yaml.WriteString("                \"env\": {\n")
+	yaml.WriteString("                  \"MCP_SAFE_OUTPUTS_CONFIG\": \"$(cat /tmp/mcp-safe-outputs/config.json)\",\n")
+	yaml.WriteString("                  \"GITHUB_AW_SAFE_OUTPUTS\": \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\"\n")
 	yaml.WriteString("                }\n")
 
 	if isLast {
