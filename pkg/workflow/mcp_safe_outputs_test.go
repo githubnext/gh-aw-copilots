@@ -13,7 +13,7 @@ func TestSafeOutputsMCPServerIntegration(t *testing.T) {
 		engine          string
 		workflowContent string
 		expectMCPSetup  bool
-		expectBun       bool
+		expectNodeSetup bool
 		expectConfig    []string // expected safe output types in config
 	}{
 		{
@@ -29,9 +29,9 @@ safe-outputs:
 
 # Test Workflow
 Test content`,
-			expectMCPSetup: true,
-			expectBun:      true,
-			expectConfig:   []string{"create-issue", "add-issue-comment", "create-pull-request"},
+			expectMCPSetup:  true,
+			expectNodeSetup: true,
+			expectConfig:    []string{"create-issue", "add-issue-comment", "create-pull-request"},
 		},
 		{
 			name:   "Codex with safe outputs",
@@ -47,9 +47,9 @@ safe-outputs:
 
 # Test Workflow
 Test content`,
-			expectMCPSetup: true,
-			expectBun:      true,
-			expectConfig:   []string{"create-issue", "update-issue", "add-issue-label", "create-discussion"},
+			expectMCPSetup:  true,
+			expectNodeSetup: true,
+			expectConfig:    []string{"create-issue", "update-issue", "add-issue-label", "create-discussion"},
 		},
 		{
 			name:   "Claude without safe outputs",
@@ -60,9 +60,9 @@ engine: claude
 
 # Test Workflow
 Test content`,
-			expectMCPSetup: false,
-			expectBun:      false,
-			expectConfig:   []string{},
+			expectMCPSetup:  false,
+			expectNodeSetup: false,
+			expectConfig:    []string{},
 		},
 		{
 			name:   "Codex without safe outputs",
@@ -73,9 +73,9 @@ engine: codex
 
 # Test Workflow
 Test content`,
-			expectMCPSetup: false,
-			expectBun:      false,
-			expectConfig:   []string{},
+			expectMCPSetup:  false,
+			expectNodeSetup: false,
+			expectConfig:    []string{},
 		},
 	}
 
@@ -111,10 +111,10 @@ Test content`,
 
 			result := string(content)
 
-			// Check if Bun installation is present
-			hasBunInstall := strings.Contains(result, "Install Bun")
-			if hasBunInstall != tt.expectBun {
-				t.Errorf("Expected Bun installation: %v, got: %v", tt.expectBun, hasBunInstall)
+			// Check if Node.js/TypeScript setup is present
+			hasNodeSetup := strings.Contains(result, "Setup Node.js and TypeScript dependencies")
+			if hasNodeSetup != tt.expectNodeSetup {
+				t.Errorf("Expected Node.js setup: %v, got: %v", tt.expectNodeSetup, hasNodeSetup)
 			}
 
 			// Check if MCP server setup is present
@@ -151,14 +151,20 @@ Test content`,
 			if tt.expectMCPSetup {
 				switch tt.engine {
 				case "claude":
-					// Should have JSON format MCP config
-					if !strings.Contains(result, `"command": "bun"`) {
-						t.Error("Expected Claude JSON MCP config not found")
+					// Should have JSON format MCP config with npx tsx
+					if !strings.Contains(result, `"command": "npx"`) {
+						t.Error("Expected Claude JSON MCP config with npx not found")
+					}
+					if !strings.Contains(result, `"tsx"`) {
+						t.Error("Expected tsx argument in Claude MCP config not found")
 					}
 				case "codex":
-					// Should have TOML format MCP config
-					if !strings.Contains(result, `command = "bun"`) {
-						t.Error("Expected Codex TOML MCP config not found")
+					// Should have TOML format MCP config with npx tsx
+					if !strings.Contains(result, `command = "npx"`) {
+						t.Error("Expected Codex TOML MCP config with npx not found")
+					}
+					if !strings.Contains(result, `"tsx"`) {
+						t.Error("Expected tsx argument in Codex MCP config not found")
 					}
 				}
 			}

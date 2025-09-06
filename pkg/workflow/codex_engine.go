@@ -301,8 +301,8 @@ func (e *CodexEngine) renderGitHubCodexMCPConfig(yaml *strings.Builder, githubTo
 func (e *CodexEngine) renderSafeOutputsCodexMCPConfig(yaml *strings.Builder) {
 	yaml.WriteString("          \n")
 	yaml.WriteString("          [mcp_servers.safe-outputs]\n")
-	yaml.WriteString("          command = \"bun\"\n")
-	yaml.WriteString("          args = [\"/tmp/mcp-safe-outputs/server.ts\"]\n")
+	yaml.WriteString("          command = \"npx\"\n")
+	yaml.WriteString("          args = [\"tsx\", \"/tmp/mcp-safe-outputs/server.ts\"]\n")
 	yaml.WriteString("          env = {\n")
 	yaml.WriteString("            \"MCP_SAFE_OUTPUTS_CONFIG\" = \"$(cat /tmp/mcp-safe-outputs/config.json)\",\n")
 	yaml.WriteString("            \"GITHUB_AW_SAFE_OUTPUTS\" = \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\"\n")

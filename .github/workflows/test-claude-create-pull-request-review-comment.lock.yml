@@ -357,15 +357,18 @@ jobs:
               core.setOutput("output_file", outputFile);
             }
             main();
-      - name: Install Bun
+      - name: Setup Node.js and TypeScript dependencies
         run: |
           set -e
-          echo "Installing Bun..."
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
-          bun --version
-          echo "Bun installed successfully"
+          echo "Setting up Node.js with TypeScript execution..."
+          
+          # Ensure Node.js v24+ is available (GitHub Actions runners already have it)
+          node --version
+          
+          # Install tsx globally for TypeScript execution
+          npm install -g tsx
+          
+          echo "TypeScript execution environment ready"
       - name: Setup Safe Outputs MCP Server
         run: |
           set -e
@@ -376,7 +379,7 @@ jobs:
           
           # Write the MCP server script
           cat > /tmp/mcp-safe-outputs/server.ts << 'EOF'
-            #!/usr/bin/env bun
+            #!/usr/bin/env node
             /**
              * MCP Server for Safe Outputs
              * This server exposes MCP tools for each configured safe output type
@@ -389,7 +392,7 @@ jobs:
               jsonrpc: '2.0';
               method: string;
               params?: any;
-              id?: string | number | null;
+              id: string | number | null;
             }
             interface MCPResponse {
               jsonrpc: '2.0';
@@ -695,7 +698,7 @@ jobs:
                 // Set up stdin/stdout communication
                 process.stdin.setEncoding('utf8');
                 for await (const chunk of process.stdin) {
-                  const lines = chunk.toString().split('\n').filter(line => line.trim());
+                  const lines = chunk.toString().split('\n').filter((line: string) => line.trim());
                   for (const line of lines) {
                     try {
                       const request = JSON.parse(line) as MCPRequest;
@@ -754,8 +757,8 @@ jobs:
                 }
               },
               "safe-outputs": {
-                "command": "bun",
-                "args": ["/tmp/mcp-safe-outputs/server.ts"],
+                "command": "npx",
+                "args": ["tsx", "/tmp/mcp-safe-outputs/server.ts"],
                 "env": {
                   "MCP_SAFE_OUTPUTS_CONFIG": "$(cat /tmp/mcp-safe-outputs/config.json)",
                   "GITHUB_AW_SAFE_OUTPUTS": "${{ env.GITHUB_AW_SAFE_OUTPUTS }}"

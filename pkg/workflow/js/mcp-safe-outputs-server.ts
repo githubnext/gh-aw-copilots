@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 /**
  * MCP Server for Safe Outputs
@@ -14,7 +14,7 @@ interface MCPRequest {
   jsonrpc: '2.0';
   method: string;
   params?: any;
-  id?: string | number | null;
+  id: string | number | null;
 }
 
 interface MCPResponse {
@@ -349,7 +349,7 @@ class SafeOutputsMCPServer {
     process.stdin.setEncoding('utf8');
 
     for await (const chunk of process.stdin) {
-      const lines = chunk.toString().split('\n').filter(line => line.trim());
+      const lines = chunk.toString().split('\n').filter((line: string) => line.trim());
       
       for (const line of lines) {
         try {

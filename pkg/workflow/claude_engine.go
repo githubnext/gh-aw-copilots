@@ -629,8 +629,8 @@ func (e *ClaudeEngine) renderGitHubClaudeMCPConfig(yaml *strings.Builder, github
 // renderSafeOutputsClaudeMCPConfig generates the Safe Outputs MCP server configuration
 func (e *ClaudeEngine) renderSafeOutputsClaudeMCPConfig(yaml *strings.Builder, isLast bool) {
 	yaml.WriteString("              \"safe-outputs\": {\n")
-	yaml.WriteString("                \"command\": \"bun\",\n")
-	yaml.WriteString("                \"args\": [\"/tmp/mcp-safe-outputs/server.ts\"],\n")
+	yaml.WriteString("                \"command\": \"npx\",\n")
+	yaml.WriteString("                \"args\": [\"tsx\", \"/tmp/mcp-safe-outputs/server.ts\"],\n")
 	yaml.WriteString("                \"env\": {\n")
 	yaml.WriteString("                  \"MCP_SAFE_OUTPUTS_CONFIG\": \"$(cat /tmp/mcp-safe-outputs/config.json)\",\n")
 	yaml.WriteString("                  \"GITHUB_AW_SAFE_OUTPUTS\": \"${{ env.GITHUB_AW_SAFE_OUTPUTS }}\"\n")
