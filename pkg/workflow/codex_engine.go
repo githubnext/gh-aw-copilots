@@ -251,7 +251,7 @@ func (e *CodexEngine) ParseLogMetrics(logContent string, verbose bool) LogMetric
 				turns++
 				inThinkingSection = true
 			}
-		} else if strings.Contains(line, "] tool ") || strings.Contains(line, "] exec ") || strings.Contains(line, "] codex") {
+		} else if strings.Contains(line, "] tool") || strings.Contains(line, "] exec") || strings.Contains(line, "] codex") {
 			inThinkingSection = false
 		}
 
