@@ -86,7 +86,7 @@ jobs:
         run: |
           mkdir -p /tmp/aw-prompts
           cat > $GITHUB_AW_PROMPT << 'EOF'
-          Summarize the issue #${{ github.event.issue.number }}
+          This workflow will analyze a GitHub issue using AI and post a summary comment.
           
           
           ---
@@ -165,6 +165,22 @@ jobs:
           name: aw_info.json
           path: /tmp/aw_info.json
           if-no-files-found: warn
+      - name: Create Dynamic Prompt
+        run: |
+          mkdir -p /tmp/aw-prompts
+          # Determine issue number based on event type
+          if [ "${{ github.event_name }}" == "issues" ]; then
+            ISSUE_NUMBER="${{ github.event.issue.number }}"
+          else
+            ISSUE_NUMBER="${{ github.event.inputs.issue_number }}"
+          fi
+          echo "Summarize the issue #$ISSUE_NUMBER" > $GITHUB_AW_PROMPT
+          
+        env:
+          GITHUB_AW_PROMPT: /tmp/aw-prompts/prompt.txt
+          GITHUB_AW_SAFE_OUTPUTS: ${{ env.GITHUB_AW_SAFE_OUTPUTS }}
+          GITHUB_AW_MAX_TURNS: 3
+
       - name: Setup AI Inference with GitHub Models
         id: ai_inference
         uses: actions/ai-inference@v1

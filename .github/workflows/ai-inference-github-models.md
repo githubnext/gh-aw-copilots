@@ -17,6 +17,17 @@ engine:
   id: custom
   max-turns: 3
   steps:
+    - name: Create Dynamic Prompt
+      run: |
+        mkdir -p /tmp/aw-prompts
+        # Determine issue number based on event type
+        if [ "${{ github.event_name }}" == "issues" ]; then
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+        else
+          ISSUE_NUMBER="${{ github.event.inputs.issue_number }}"
+        fi
+        echo "Summarize the issue #$ISSUE_NUMBER" > $GITHUB_AW_PROMPT
+
     - name: Setup AI Inference with GitHub Models
       uses: actions/ai-inference@v1
       id: ai_inference
@@ -49,4 +60,4 @@ safe-outputs:
     target: "*"
 ---
 
-Summarize the issue #${{ github.event.issue.number }}
+This workflow will analyze a GitHub issue using AI and post a summary comment.
